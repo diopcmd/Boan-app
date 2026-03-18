@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#1e4a1e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="BOANR">
+<title>BOANR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f1a0f;color:#fff;font-family:'Inter',system-ui,sans-serif}
+#splash{position:fixed;inset:0;background:#0f1a0f;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;animation:splashOut 0.4s ease-in 1s forwards}
+@keyframes splashOut{to{opacity:0;pointer-events:none;visibility:hidden}}
+.splash-logo{width:80px;height:80px;background:#2d6a2d;border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:700;color:#fff;margin-bottom:18px;box-shadow:0 0 40px rgba(45,106,45,0.5)}
+.splash-title{font-size:28px;font-weight:700;letter-spacing:.04em}
+.splash-sub{font-size:13px;color:#88aa88;margin-top:6px}
+.splash-dot{width:6px;height:6px;border-radius:50%;background:#C8A06A;margin-top:24px;animation:pulse 1s infinite}
+#app{min-height:100vh}
+.hdr{background:#1e4a1e;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-b{width:36px;height:36px;background:#2d6a2d;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px}
+.tabs{background:#1a3a1a;display:flex;border-bottom:1px solid #2d4a2d;overflow-x:auto}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:12px 20px;font-size:14px;color:#88bb88;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent}
+.tab.on{color:#fff;border-bottom-color:#fff}
+.cnt{padding:16px;max-width:600px;margin:0 auto}
+.stitle{font-size:11px;font-weight:500;color:#88bb88;letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px}
+.kgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+.kcard{background:#1a2e1a;border-radius:10px;padding:14px;border:1px solid #2a4a2a}
+.card{background:#1a2e1a;border-radius:10px;padding:14px;margin-bottom:14px;border:1px solid #2a4a2a}
+.al{border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px}
+.al-g{background:#1a2e1a;border:1px solid #2d6a2d;color:#88cc88}
+.al-o{background:#2e2010;border:1px solid #8a5a00;color:#ffaa40}
+.al-r{background:#2e1010;border:1px solid #8a0000;color:#ff7070}
+.subtabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.stab{padding:6px 13px;border-radius:16px;font-size:12px;cursor:pointer;border:1px solid #2a4a2a;color:#88aa88;background:transparent}
+.stab.on{background:#2d6a2d;color:#fff;border-color:#2d6a2d}
+.fg{margin-bottom:13px}
+label{font-size:13px;color:#aaa;margin-bottom:5px;display:block}
+input,select,textarea{width:100%;background:#0f1a0f;border:1px solid #2a4a2a;color:#fff;padding:12px;border-radius:8px;font-size:16px;box-sizing:border-box;-webkit-appearance:none;appearance:none;font-family:inherit}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#4caf50}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.rg{display:flex;gap:8px;flex-wrap:wrap}
+.rb{padding:8px 16px;border-radius:8px;border:1px solid #2a4a2a;color:#88aa88;cursor:pointer;font-size:14px;background:transparent}
+.rb.on{background:#2d6a2d;color:#fff;border-color:#2d6a2d}
+button{width:100%;background:#2d6a2d;color:#fff;border:none;padding:14px;border-radius:8px;font-size:16px;font-weight:bold;cursor:pointer;font-family:inherit}
+button:disabled{background:#1a3a1a;color:#445544}
+.msg-ok{background:#1a3a1a;border:1px solid #2d6a2d;color:#88cc88;padding:11px;border-radius:8px;margin-top:10px;font-size:13px;text-align:center}
+.msg-err{background:#3a1a1a;border:1px solid #8a0000;color:#ff7070;padding:11px;border-radius:8px;margin-top:10px;font-size:13px;text-align:center}
+.msg-load{background:#1a2e3a;border:1px solid #005a8a;color:#5ab4ff;padding:11px;border-radius:8px;margin-top:10px;font-size:13px;text-align:center}
+.tw{overflow-x:auto;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#1a3a1a;color:#88bb88;padding:8px 10px;text-align:left;font-weight:500}
+td{padding:8px 10px;border-bottom:1px solid #1a2e1a;color:#ccc}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.5)}}
+.sep{height:1px;background:#1a2e1a;margin:14px 0}
+button:active,.tab:active,.stab:active,.rb:active,.ddi:active{transform:scale(0.97)}
+button,.tab,.stab,.rb,.ddi{transition:transform .1s ease,background .15s ease}
+.kcard-ok{background:#1a2e1a;border-color:#2d4a2d}
+.kcard-warn{background:#2a1f0f;border-color:#6a4a00}
+.kcard-crit{background:#2a0f0f;border-color:#6a0000}
+.gold{color:#C8A06A}
+.kval-ok{color:#4caf50}
+.kval-warn{color:#ff9800}
+.kval-crit{color:#f44336}
+.mkt{background:#1a2e1a;border-radius:10px;padding:12px;margin-bottom:8px;border:1px solid #2a4a2a;display:flex;justify-content:space-between;align-items:center}
+.dd{position:absolute;top:54px;right:12px;background:#1e3a1e;border:1px solid #2d6a2d;border-radius:10px;z-index:100;min-width:190px;overflow:hidden}
+.ddi{padding:11px 16px;cursor:pointer;font-size:13px;border-bottom:1px solid #2a4a2a}
+.ddi.on{background:#2d5a2d}
+.lbg{min-height:100vh;background:#0f1a0f;display:flex;align-items:center;justify-content:center;padding:20px}
+.lcard{background:#1a2e1a;border-radius:16px;padding:32px 24px;width:100%;max-width:360px;border:1px solid #2a4a2a}
+.logob{width:60px;height:60px;background:#2d6a2d;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-size:28px;font-weight:bold;margin-bottom:12px}
+.badge{background:#1a3a5a;color:#5ab4ff;font-size:11px;padding:3px 10px;border-radius:12px}
+.prog-bar{background:#2a4a2a;border-radius:4px;height:6px;flex:1;margin:0 10px}
+.prog-fill{background:#4caf50;border-radius:4px;height:6px}
+.ubtn{background:#2d5a2d;border:none;color:#fff;padding:8px 14px;border-radius:20px;cursor:pointer;font-size:13px;width:auto;font-family:inherit}
+.sim-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1a2a1a;font-size:13px}
+.sim-row:last-child{border-bottom:none}
+.reco-card{background:#1a2e1a;border-radius:10px;padding:13px;margin-bottom:10px;border:1px solid #2a4a2a}
+.act{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #1a2e1a}
+.dot{width:8px;height:8px;border-radius:50%;background:#4caf50;margin-top:5px;flex-shrink:0}
+input[type=range]{padding:0;background:transparent;border:none}
+input[type=range]::-webkit-slider-runnable-track{height:4px;background:#2a4a2a;border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#2d6a2d;margin-top:-9px}
+</style>
+</head>
+<body>
+<div id="splash">
+  <div class="splash-logo">B</div>
+  <div class="splash-title">BOANR</div>
+  <div class="splash-sub">Gestion élevage bovin</div>
+  <div class="splash-dot"></div>
+</div>
+<div id="app"></div>
+<script>
+var SA = {
+  "type": "service_account",
+  "project_id": "boanr-490321",
+  "private_key_id": "5b1cf2721fdf8baae2cf609ef725fbb384185949",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCYhMwFlO9QF8QR\nC72WehfK/Zh4O87Cz4+MDqxaPfVxwCzR4VgEKcTUpAeWE15j4aQ689vJn8jRA1Aw\nEpj7TayUbm50IJXAa7dbgflpE38KEY8Z6oAbK2eANG3uBgVzcrI5PMLupk9iGkR/\nVDQ/aL0cZKSTKg8Lq+UhaQliG5Zrlp/RAgj58YPtK6HJLg9IJs9ImNGobC92Du+y\ncyYAatMr9dcA/Fsn5cCW5lrwlnRwc25EGw6QPyJFpsJNVPOxEgOBm9DAb7tNx6kc\nP+98fe4AlOG7bO0xIZhEcy2EaODz0M1eONtPLPXzSOKF/pWOhgbYg6YhQHrZ8aYa\n9v0175ZfAgMBAAECggEAETaxDX2OYkxsX+giplXH/axlhZxqbOj0MJXaCfgC4wBn\njpXk/dig/cbi5viZ/KKTizvJS0DyGfT1G0KIwEQ3Utar4gYTdhDc3u0VHduKHl7L\nodx/nOa8hbxlHn97egOF7e6CVGEHhfD6WMyYy6yh5g8jK/Y2ldX5bwM7KzbQi/qF\nb5oTapbE08F+qtSCQNHxyG0s9A3IMXFnnSPzLGCa+hwGGnASh/TUSylyz2VkYPBX\nz3SzpQnsEWS7jE+VXQtd7nKc5RCd/1C/5jk1tZ/q+KFl91N5ANGum7h22Izf+/jM\n/l3ZXHYCwR6M4j+pdWKHMoad8AFb/j5XW69ENF4nEQKBgQDIQ9NeNAKX83jhM/q1\nbfvDihooqD3p1dINYBT3pNaEvCnkx3G6egDj6GSwfrcJgJq+4v0jXBjDGWupTRRp\ngf/Ni8pCOCFFr1oNgBaM5bm6TW0cngW+VvbrX96ovAhPyWgakLU2O06d8EbW/4jA\ngFXyHYHDBfz5acKLLIdF6/q3YwKBgQDC9zjC1r9XaQojz31VSKj7pipNT3Vx7kNa\nrVar3bK9U3lV+nnGCMGexqCP53icNdlxkpGSLBbT/opwETHsJ7VgJRmvH5HjtGQs\nxxAfO1Dt7gapeIogvoYoioiR8hSjCpYqd6zFanY9jbQaT4y1Sw5ZutRHJ5An25RR\ntPY88WlL1QKBgC7yD2N+57i9H3ITYEsVnDYrcpRjVBgzwojWJDQlVRBKl7uEsXlY\nTkse2DOzkK7Okff7eAHI/hkGJYHLiuRs0A1cHq7FP695Oq/9fcvLsm0k51YVCR2k\nfz+P+r8tTPl/KkNH9uLepkBJ6iFOR71wmDUoi5mvFq1VCIDdkFxoxB4nAoGBAK9C\nj5rOcsi/2uagIbmljIpTMBm5QQk+tvtvcMckjwWUYTGB7S+xNWRmh3V1Db3WxnZK\n3GM7EPZXDdl6C5ePhoM8Np9vULURty9tbre0maaY3xI/EmQnAPC2v9f6dsStwpnA\nZOY+MrZYiLtSIVnjc64DvcmM7hB2WhktBGF6Xj5VAoGBALhXZ8mP7FIKmI2Ab4SF\nT3/q81ARnmeKoYcZP+m+Uolu2e9ZqoX6dPxqCx78rlAdn2sXj8UyIdUvogvG072W\nuAYIxcUq/bE924b06X73TME6a7wL/5Q5wfW2mB5vke6bf94vz5JevbY+ejmOMmrP\nH1U3ITC51896RNBaZE0tj7FY\n-----END PRIVATE KEY-----\n",
+  "client_email": "boanr-app@boanr-490321.iam.gserviceaccount.com",
+  "client_id": "106244160770962359279",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token"
+};
+
+var USERS = {
+  fondateur: {name:'Fondateur', pwd:'boanr2026', tabs:['dashboard','saisie','livrables','marche']},
+  gerant:    {name:'Gerant terrain', pwd:'terrain2026', tabs:['dashboard','saisie']},
+  rga:       {name:'RGA', pwd:'admin2026', tabs:['dashboard','livrables']},
+  fallou:    {name:'Fallou', pwd:'marche2026', tabs:['dashboard','marche']}
+};
+var SID = {
+  fondateur: '1QgixxPoBANi4tbfRuU-VPMiDHRUt-5u3JPKqmrVYu-E',
+  gerant:    '1NC_xZIcncV-YZXT17cU1s8hzZ5_bQGC4HATg4qyiGG0',
+  rga:       '17iIwFYlZi2mXRhIrw6UFceb6cxqL6XXS7vpPwA2HPyY',
+  fallou:    '17_P6yexo5fHWip_rlw6Iv3i80mWO-1TaAa3-cmVRj1o'
+};
+var MOCK = {betes:4, gmq:1.1, stock:6, treso:680000, sem:4, mois:1};
+
+var S = {
+  page:'login', user:null, tab:'dashboard', sub:'fiche', dd:false,
+  lid:'', lpw:'', lerr:'',
+  sending:false, msg:'', tok:null, tokexp:0,
+  fi:{date:'',nb:'',nourris:'OUI',eau:'OUI',enclos:'OUI',incident:'NON',desc:''},
+  fs:{date:'',net:'OUI',des:'OUI',rat:'OUI',eau:'OUI',stk:'OUI',san:'OUI',prob:''},
+  fst:{date:'',type:'',kg:'',rat:''},
+  fin:{date:'',id:'',type:'',grav:'1',desc:'',act:'',clos:'NON'},
+  fp:{date:'',id:'',race:'Djakoré',poids:'',prev:''},
+  fsa:{date:'',id:'',sym:'',tra:'',cout:'',res:'Gueri',dec:'NON'},
+  fb:{sem:'',nb:'',nou:'OUI',stk:'',inc:'NON',poi:'OUI',msg:''},
+  fm:{date:'',foi:'Thies',bas:'',moy:'',haut:''},
+  sn:4, sp:466, spx:2000
+};
+
+function fmt(n) { return new Intl.NumberFormat('fr-FR').format(Math.round(n)); }
+function today() { var d=new Date(); return d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear(); }
+function gc(t,v) {
+  if(t==='gmq') return v>=1?'#4caf50':v>=0.8?'#ff9800':'#f44336';
+  if(t==='stk') return v>=6?'#4caf50':v>=4?'#ff9800':'#f44336';
+  if(t==='tr')  return v>=600000?'#4caf50':v>=400000?'#ff9800':'#f44336';
+  return '#4caf50';
+}
+
+function r() {
+  var el = document.getElementById('app');
+  if (!el) return;
+  if (S.page==='login') { el.innerHTML = pageLogin(); return; }
+  el.innerHTML = pageApp();
+}
+
+function b64u(str) {
+  var b = btoa(unescape(encodeURIComponent(str)));
+  return b.replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+}
+function b64bin(str) {
+  var b = btoa(str);
+  return b.replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+}
+
+function getTok() {
+  return new Promise(function(resolve) {
+    if (S.tok && Date.now() < S.tokexp-60000) { resolve(S.tok); return; }
+    var sa = SA;
+    var now = Math.floor(Date.now()/1000);
+    var h  = b64u(JSON.stringify({alg:'RS256',typ:'JWT'}));
+    var pl = b64u(JSON.stringify({iss:sa.client_email,scope:'https://www.googleapis.com/auth/spreadsheets',aud:'https://oauth2.googleapis.com/token',exp:now+3600,iat:now}));
+    var si = h+'.'+pl;
+    var kd = sa.private_key.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\n/g,'');
+    var arr = atob(kd).split('').map(function(c){return c.charCodeAt(0);});
+    var kb = new Uint8Array(arr);
+    crypto.subtle.importKey('pkcs8', kb.buffer, {name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'}, false, ['sign'])
+    .then(function(ck) { return crypto.subtle.sign('RSASSA-PKCS1-v1_5', ck, new TextEncoder().encode(si)); })
+    .then(function(sig) {
+      var a = new Uint8Array(sig), s2='';
+      for (var i=0;i<a.length;i++) s2+=String.fromCharCode(a[i]);
+      var jwt = si+'.'+b64bin(s2);
+      return fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion='+jwt});
+    })
+    .then(function(res){return res.json();})
+    .then(function(d){
+      if(d.access_token){S.tok=d.access_token;S.tokexp=Date.now()+3600000;}
+      resolve(S.tok);
+    })
+    .catch(function(){resolve(null);});
+  });
+}
+
+// Plages des tableaux — fins à confirmer avec screenshots des Sheets
+var TABLE_RANGES = {
+  Fiche_Quotidienne: {start:4, end:38},
+  Pesees:            {start:4, end:50},
+  SOP_Check:         {start:4, end:50},
+  Stock_Nourriture:  {start:4, end:50},
+  Incidents:         {start:4, end:50},
+  Sante_Mortalite:   {start:4, end:50},
+  Hebdomadaire:      {start:4, end:50},
+  KPI_Mensuels:      {start:4, end:50},
+  KPI_Hebdo:         {start:4, end:50},
+  Suivi_Marche:      {start:4, end:50}
+};
+
+function appendRow(sid, range, vals) {
+  return getTok().then(function(tk) {
+    if (!tk) return {ok:false, err:'Token invalide'};
+    var sheetName = range.split('!')[0];
+    var tr = TABLE_RANGES[sheetName];
+    if (!tr) {
+      // fallback appendRow classique si feuille inconnue
+      var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+encodeURIComponent(range)+':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS';
+      return fetch(url,{method:'POST',headers:{Authorization:'Bearer '+tk,'Content-Type':'application/json'},body:JSON.stringify({values:[vals]})})
+      .then(function(res){return res.json();})
+      .then(function(d){return d.error?{ok:false,err:d.error.message}:{ok:true};});
+    }
+    // Lire colonne A pour trouver la 1ère ligne vide dans le tableau
+    var readRange = sheetName+'!A'+tr.start+':A'+tr.end;
+    var readUrl = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+encodeURIComponent(readRange);
+    return fetch(readUrl, {headers:{Authorization:'Bearer '+tk}})
+    .then(function(res){return res.json();})
+    .then(function(d){
+      var rows = d.values || [];
+      var targetLine = Math.min(tr.start + rows.length, tr.end);
+      var writeRange = sheetName+'!A'+targetLine;
+      var writeUrl = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+encodeURIComponent(writeRange)+'?valueInputOption=USER_ENTERED';
+      return fetch(writeUrl, {method:'PUT', headers:{Authorization:'Bearer '+tk,'Content-Type':'application/json'}, body:JSON.stringify({values:[vals]})});
+    })
+    .then(function(res){return res.json();})
+    .then(function(d){return d.error?{ok:false,err:d.error.message}:{ok:true};});
+  }).catch(function(e){return{ok:false,err:e.message};});
+}
+
+function doSubmit(type) {
+  S.sending=true; S.msg='load'; r();
+  var td=today(), p;
+  if(type==='fiche'){
+    var f=S.fi;
+    p=appendRow(SID.gerant,'Fiche_Quotidienne!A:G',[f.date||td,f.nb,f.nourris,f.eau,f.enclos,f.incident,f.desc])
+    .then(function(res){if(res.ok)return appendRow(SID.fondateur,'KPI_Mensuels!A:K',[f.date||td,'','','','','','','',f.incident==='OUI'?1:0,'','']);return res;});
+  } else if(type==='sop'){
+    var f=S.fs;
+    p=appendRow(SID.gerant,'SOP_Check!A:H',[f.date||td,f.net,f.des,f.rat,f.eau,f.stk,f.san,f.prob]);
+  } else if(type==='stock'){
+    var f=S.fst;
+    var sem=f.rat>0?(parseFloat(f.kg)/(parseFloat(f.rat)*7)).toFixed(1):0;
+    p=appendRow(SID.gerant,'Stock_Nourriture!A:F',[f.date||td,f.type,f.kg,f.rat,sem,parseFloat(sem)<6?'OUI':'NON'])
+    .then(function(res){if(res.ok)return appendRow(SID.fondateur,'KPI_Mensuels!A:K',[f.date||td,'','',f.kg,'','','','','','','']);return res;});
+  } else if(type==='inc'){
+    var f=S.fin;
+    p=appendRow(SID.gerant,'Incidents!A:G',[f.date||td,f.id,f.type,f.grav,f.desc,f.act,f.clos])
+    .then(function(res){if(res.ok&&parseInt(f.grav)>=2)return appendRow(SID.fondateur,'KPI_Mensuels!A:K',[f.date||td,'','','','','','','',1,'','Incident G'+f.grav]);return res;});
+  } else if(type==='pesee'){
+    var f=S.fp;
+    var gain=f.poids&&f.prev?(parseFloat(f.poids)-parseFloat(f.prev)).toFixed(1):'';
+    p=appendRow(SID.gerant,'Pesees!A:G',[f.date||td,f.id,f.race,f.poids,f.prev,gain,gain&&parseFloat(gain)<0?'ALERTE':'OK'])
+    .then(function(res){if(res.ok)return appendRow(SID.fondateur,'KPI_Mensuels!A:K',[f.date||td,'','','','','',f.poids,'','','','']);return res;});
+  } else if(type==='sante'){
+    var f=S.fsa;
+    p=appendRow(SID.gerant,'Sante_Mortalite!A:G',[f.date||td,f.id,f.sym,f.tra,f.cout,f.res,f.dec])
+    .then(function(res){if(res.ok&&f.dec==='OUI')return appendRow(SID.fondateur,'KPI_Mensuels!A:K',[f.date||td,'DECES','','','','','','',1,'','APPELER FONDATEUR']);return res;});
+  } else if(type==='bilan'){
+    var f=S.fb;
+    var al=f.inc==='OUI'||parseFloat(f.stk)<6?'APPELER CHEIKH':'SEMAINE OK';
+    p=appendRow(SID.gerant,'Hebdomadaire!A:H',['Semaine '+f.sem,f.nb,f.nou,f.stk,f.inc,f.poi,al,f.msg])
+    .then(function(res){if(res.ok)return appendRow(SID.fondateur,'KPI_Hebdo!A:J',['S'+f.sem,f.nb,f.stk,'','',f.inc,'',f.nou,'',al]);return res;});
+  } else if(type==='marche'){
+    var f=S.fm;
+    p=appendRow(SID.fallou,'Suivi_Marche!A:J',[f.date||td,f.foi,f.bas,f.moy,f.haut,'','','-','','']);
+  } else {
+    p=Promise.resolve({ok:false,err:'Type inconnu'});
+  }
+  p.then(function(res){
+    S.sending=false;
+    S.msg=res&&res.ok?'ok':'err:'+(res&&res.err?res.err:'Erreur');
+    r();
+    setTimeout(function(){S.msg='';r();},4000);
+  });
+}
+
+function doLogin() {
+  var id=S.lid.trim().toLowerCase();
+  if(USERS[id]&&USERS[id].pwd===S.lpw){
+    S.user=id; S.lerr=''; S.page='app';
+    S.tab=USERS[id].tabs[0];
+    S.sub=S.tab==='saisie'?'fiche':S.tab==='livrables'?'treso':S.tab==='marche'?'prix':'';
+    r();
+  } else { S.lerr='Identifiant ou mot de passe incorrect'; r(); }
+}
+
+function chTab(t){S.tab=t;S.msg='';S.dd=false;S.sub=t==='saisie'?'fiche':t==='livrables'?'treso':t==='marche'?'prix':'';r();}
+function chSub(s){S.sub=s;S.msg='';r();}
+function swUser(k){if(S.user!=='fondateur')return;S.user=k;S.dd=false;chTab(USERS[k].tabs[0]);}
+
+function yn(val,k,obj){
+  return '<div class="rg">'
+    +'<div class="rb '+(val==='OUI'?'on':'')+'" onclick="S.'+obj+'.'+k+'=\'OUI\';r()">OUI</div>'
+    +'<div class="rb '+(val==='NON'?'on':'')+'" onclick="S.'+obj+'.'+k+'=\'NON\';r()">NON</div>'
+    +'</div>';
+}
+function msgHtml(){
+  if(!S.msg)return'';
+  if(S.msg==='load')return'<div class="msg-load">Envoi vers Google Sheets...</div>';
+  if(S.msg==='ok')return'<div class="msg-ok">Enregistre dans Google Sheets !</div>';
+  return'<div class="msg-err">Erreur : '+S.msg.replace('err:','')+'</div>';
+}
+
+function pageLogin(){
+  return '<div class="lbg"><div class="lcard">'
+    +'<div style="text-align:center;margin-bottom:22px">'
+    +'<div class="logob">B</div>'
+    +'<div style="font-size:22px;font-weight:bold;margin-top:8px">BOANR</div>'
+    +'<div style="font-size:13px;color:#88aa88;margin-top:4px">Gestion elevage bovin</div>'
+    +'</div>'
+    +'<div class="fg"><label>Identifiant</label><input type="text" placeholder="ex: gerant" value="'+S.lid+'" oninput="S.lid=this.value"></div>'
+    +'<div class="fg"><label>Mot de passe</label><input type="password" value="'+S.lpw+'" oninput="S.lpw=this.value" onkeydown="if(event.key===\'Enter\')doLogin()"></div>'
+    +(S.lerr?'<div class="msg-err">'+S.lerr+'</div>':'')
+    +'<button style="margin-top:6px" onclick="doLogin()">Se connecter</button>'
+    +'<div style="margin-top:14px;font-size:11px;color:#445544;text-align:center">fondateur · gerant · rga · fallou</div>'
+    +'</div></div>';
+}
+
+function pageApp(){
+  var tnames={dashboard:'Dashboard',saisie:'Saisie',livrables:'Livrables',marche:'Marche'};
+  var utabs=USERS[S.user].tabs;
+  var tabsHtml=utabs.map(function(t){
+    return'<div class="tab '+(S.tab===t?'on':'')+'" onclick="chTab(\''+t+'\')">'+tnames[t]+'</div>';
+  }).join('');
+  var ddHtml='';
+  if(S.dd){
+    ddHtml='<div class="dd">';
+    if(S.user==='fondateur'){
+    Object.keys(USERS).forEach(function(k){
+      ddHtml+='<div class="ddi '+(S.user===k?'on':'')+'" onclick="swUser(\''+k+'\')">'
+        +USERS[k].name+'<br><span style="font-size:11px;color:#88bb88">'+USERS[k].tabs.join(' · ')+'</span></div>';
+    });
+    }
+    ddHtml+='<div class="ddi" style="color:#ff7070" onclick="S.page=\'login\';S.user=null;S.dd=false;r()">Deconnexion</div></div>';
+  }
+  var content='';
+  if(S.tab==='dashboard')content=viewDash();
+  else if(S.tab==='saisie')content=viewSaisie();
+  else if(S.tab==='livrables')content=viewLiv();
+  else content=viewMarche();
+  return '<div onclick="if(S.dd&&!event.target.closest(\'.ubtn\')&&!event.target.closest(\'.dd\')){S.dd=false;r()}">'
+    +'<div class="hdr">'
+    +'<div class="logo"><div class="logo-b">B</div>'
+    +'<div><div style="font-size:18px;font-weight:bold">BOANR</div>'
+    +'<div style="font-size:11px;color:#88bb88">Cycle 1 — Sem. '+MOCK.sem+'</div></div></div>'
+    +'<div style="position:relative">'
+    +'<button class="ubtn" onclick="S.dd=!S.dd;r()">'+USERS[S.user].name+' &#9660;</button>'
+    +ddHtml+'</div></div>'
+    +'<div class="tabs">'+tabsHtml+'</div>'
+    +content+'</div>';
+}
+
+function animateCounters() {
+  document.querySelectorAll('[data-count]').forEach(function(el) {
+    var target = parseFloat(el.getAttribute('data-count'));
+    var decimals = (target % 1 !== 0) ? 1 : 0;
+    var duration = 900, start = null;
+    function step(ts) {
+      if (!start) start = ts;
+      var p = Math.min((ts - start) / duration, 1);
+      var ease = 1 - Math.pow(1 - p, 3);
+      el.textContent = (target * ease).toFixed(decimals);
+      if (p < 1) requestAnimationFrame(step);
+      else el.textContent = target.toFixed(decimals);
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+function viewDash(){
+  var pct=Math.round((MOCK.sem/35)*100);
+  var gmqC=MOCK.gmq>=1?'kval-ok':MOCK.gmq>=0.8?'kval-warn':'kval-crit';
+  var stkC=MOCK.stock>=6?'kval-ok':MOCK.stock>=4?'kval-warn':'kval-crit';
+  var trC =MOCK.treso>=600000?'kval-ok':MOCK.treso>=400000?'kval-warn':'kval-crit';
+  var gmqBg=MOCK.gmq>=1?'kcard-ok':MOCK.gmq>=0.8?'kcard-warn':'kcard-crit';
+  var stkBg=MOCK.stock>=6?'kcard-ok':MOCK.stock>=4?'kcard-warn':'kcard-crit';
+  var trBg =MOCK.treso>=600000?'kcard-ok':MOCK.treso>=400000?'kcard-warn':'kcard-crit';
+  setTimeout(animateCounters, 50);
+  return '<div class="cnt">'
+    +'<div class="stitle">Indicateurs Cycle</div>'
+    +'<div class="kgrid">'
+    +'<div class="kcard kcard-ok"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">Bêtes actives</div><div class="kval-ok" style="font-size:26px;font-weight:700" data-count="'+MOCK.betes+'">'+MOCK.betes+'</div><div style="font-size:11px;color:#4caf50;margin-top:4px">0% mortalité</div></div>'
+    +'<div class="kcard '+gmqBg+'"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">GMQ moyen</div><div class="'+gmqC+'" style="font-size:26px;font-weight:700" data-count="'+MOCK.gmq+'">'+MOCK.gmq+'</div><div style="font-size:11px;margin-top:4px;color:'+gc('gmq',MOCK.gmq)+'">kg/j — Cible ≥ 1.0</div></div>'
+    +'<div class="kcard '+stkBg+'"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">Stock aliments</div><div class="'+stkC+'" style="font-size:26px;font-weight:700" data-count="'+MOCK.stock+'">'+MOCK.stock+'</div><div style="font-size:11px;margin-top:4px;color:'+gc('stk',MOCK.stock)+'">sem. — Suffisant</div></div>'
+    +'<div class="kcard '+trBg+'"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">Trésorerie</div><div class="'+trC+'" style="font-size:26px;font-weight:700" data-count="'+Math.round(MOCK.treso/1000)+'">'+Math.round(MOCK.treso/1000)+'</div><div style="font-size:11px;margin-top:4px;color:'+gc('tr',MOCK.treso)+'">k FCFA — Min. 600k</div></div>'
+    +'</div>'
+    +'<div class="card">'
+    +'<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:13px;color:#aaa">Avancement cycle</span><span style="font-size:11px;background:#2a1f0a;color:#C8A06A;padding:3px 10px;border-radius:12px">Mois '+MOCK.mois+'/8</span></div>'
+    +'<div style="display:flex;align-items:center"><div class="prog-bar"><div class="prog-fill" style="width:'+pct+'%;background:linear-gradient(90deg,#2d6a2d,#C8A06A)"></div></div><span style="font-size:12px;color:#C8A06A;font-weight:600;margin-left:4px">'+pct+'%</span></div>'
+    +'<div style="margin-top:6px;font-size:11px;color:#665540">Semaine '+MOCK.sem+' / 35</div>'
+    +'</div>'
+    +'<div class="stitle">Alertes</div>'
+    +'<div class="al al-g">Mortalité 0% — objectif respecté</div>'
+    +'<div class="al al-g">GMQ 1.1 kg/j — au-dessus de la cible</div>'
+    +'<div class="al al-g">Stock aliments 6 sem. — suffisant</div>'
+    +'<div class="al al-o">Trésorerie 680k — surveiller (min 600k)</div>'
+    +'<div class="sep"></div>'
+    +'<div class="stitle">Activité récente</div>'
+    +'<div class="act"><div class="dot"></div><div><div style="font-size:13px;color:#ccc">Fiche quotidienne — 4 bêtes nourries</div><div style="font-size:11px;color:#555;margin-top:2px">Aujourd\'hui 07:30</div></div></div>'
+    +'<div class="act"><div class="dot"></div><div><div style="font-size:13px;color:#ccc">Pesée C1-001 : 290 kg</div><div style="font-size:11px;color:#555;margin-top:2px">Hier 16:00</div></div></div>'
+    +'<div class="act"><div class="dot"></div><div><div style="font-size:13px;color:#ccc">Checklist SOP validée</div><div style="font-size:11px;color:#555;margin-top:2px">Hier 07:15</div></div></div>'
+    +'<div class="act"><div class="dot"></div><div><div style="font-size:13px;color:#ccc">Stock vérifié — 6 semaines</div><div style="font-size:11px;color:#555;margin-top:2px">Il y a 3j</div></div></div>'
+    +'</div>';
+}
+
+function viewSaisie(){
+  var subs=[['fiche','Fiche du jour'],['sop','SOP'],['stock','Stock'],['inc','Incident'],['pesee','Pesee'],['sante','Sante'],['bilan','Bilan']];
+  var stabs=subs.map(function(s){return'<div class="stab '+(S.sub===s[0]?'on':'')+'" onclick="chSub(\''+s[0]+'\')">'+s[1]+'</div>';}).join('');
+  var form='';
+  if(S.sub==='fiche'){
+    var f=S.fi;
+    form='<div class="card">'
+      +'<div class="fg"><label>Date *</label><input type="date" value="'+f.date+'" oninput="S.fi.date=this.value"></div>'
+      +'<div class="fg"><label>Nb veaux *</label><input type="number" inputmode="decimal" placeholder="4" value="'+f.nb+'" oninput="S.fi.nb=this.value"></div>'
+      +'<div class="fg"><label>Tous nourris ?</label>'+yn(f.nourris,'nourris','fi')+'</div>'
+      +'<div class="fg"><label>Eau disponible ?</label>'+yn(f.eau,'eau','fi')+'</div>'
+      +'<div class="fg"><label>Enclos propre ?</label>'+yn(f.enclos,'enclos','fi')+'</div>'
+      +'<div class="fg"><label>Incident ?</label>'+yn(f.incident,'incident','fi')+'</div>'
+      +(f.incident==='OUI'?'<div class="fg"><label>Description</label><textarea rows="2" oninput="S.fi.desc=this.value">'+f.desc+'</textarea></div>':'')
+      +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'fiche\')">Envoyer la fiche</button>'+msgHtml()+'</div>';
+  } else if(S.sub==='sop'){
+    var f=S.fs;
+    form='<div class="card">'
+      +'<div class="fg"><label>Date</label><input type="date" value="'+f.date+'" oninput="S.fs.date=this.value"></div>'
+      +'<div class="fg"><label>Nettoyage enclos</label>'+yn(f.net,'net','fs')+'</div>'
+      +'<div class="fg"><label>Desinfection</label>'+yn(f.des,'des','fs')+'</div>'
+      +'<div class="fg"><label>Ration respectee</label>'+yn(f.rat,'rat','fs')+'</div>'
+      +'<div class="fg"><label>Eau OK</label>'+yn(f.eau,'eau','fs')+'</div>'
+      +'<div class="fg"><label>Stock verifie</label>'+yn(f.stk,'stk','fs')+'</div>'
+      +'<div class="fg"><label>Sante check</label>'+yn(f.san,'san','fs')+'</div>'
+      +'<div class="fg"><label>Probleme</label><input placeholder="Laisser vide si aucun" value="'+f.prob+'" oninput="S.fs.prob=this.value"></div>'
+      +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'sop\')">Valider</button>'+msgHtml()+'</div>';
+  } else if(S.sub==='stock'){
+    var f=S.fst;
+    var sem2=f.rat&&f.kg?(parseFloat(f.kg)/(parseFloat(f.rat)*7)).toFixed(1):null;
+    form='<div class="card">'
+      +'<div class="fg"><label>Date</label><input type="date" value="'+f.date+'" oninput="S.fst.date=this.value"></div>'
+      +'<div class="fg"><label>Type aliment</label><input placeholder="Son de ble..." value="'+f.type+'" oninput="S.fst.type=this.value"></div>'
+      +'<div class="frow">'
+      +'<div class="fg"><label>Stock (kg)</label><input type="number" inputmode="decimal" value="'+f.kg+'" oninput="S.fst.kg=this.value"></div>'
+      +'<div class="fg"><label>Ration/j (kg)</label><input type="number" inputmode="decimal" value="'+f.rat+'" oninput="S.fst.rat=this.value"></div>'
+      +'</div>'
+      +(sem2?'<div class="al '+(parseFloat(sem2)>=6?'al-g':parseFloat(sem2)>=4?'al-o':'al-r')+'">Semaines restantes : <strong>'+sem2+'</strong> — '+(parseFloat(sem2)>=6?'Suffisant':parseFloat(sem2)>=4?'Attention':'CRITIQUE')+'</div>':'')
+      +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'stock\')">Enregistrer</button>'+msgHtml()+'</div>';
+  } else if(S.sub==='inc'){
+    var f=S.fin;
+    form='<div class="card">'
+      +'<div class="frow">'
+      +'<div class="fg"><label>Date</label><input type="date" value="'+f.date+'" oninput="S.fin.date=this.value"></div>'
+      +'<div class="fg"><label>ID bete</label><input placeholder="C1-001" value="'+f.id+'" oninput="S.fin.id=this.value"></div>'
+      +'</div>'
+      +'<div class="fg"><label>Type incident</label><input value="'+f.type+'" oninput="S.fin.type=this.value"></div>'
+      +'<div class="fg"><label>Gravite</label><div class="rg">'
+      +'<div class="rb '+(f.grav==='1'?'on':'')+'" onclick="S.fin.grav=\'1\';r()">1 Mineur</div>'
+      +'<div class="rb '+(f.grav==='2'?'on':'')+'" onclick="S.fin.grav=\'2\';r()">2 Important</div>'
+      +'<div class="rb '+(f.grav==='3'?'on':'')+'" onclick="S.fin.grav=\'3\';r()">3 URGENCE</div>'
+      +'</div></div>'
+      +(f.grav==='3'?'<div class="al al-r">URGENCE — Appeler le fondateur immediatement</div>':'')
+      +(f.grav==='2'?'<div class="al al-o">Important — Prevenir le fondateur aujourd\'hui</div>':'')
+      +'<div class="fg"><label>Description</label><textarea rows="2" oninput="S.fin.desc=this.value">'+f.desc+'</textarea></div>'
+      +'<div class="fg"><label>Action effectuee</label><textarea rows="2" oninput="S.fin.act=this.value">'+f.act+'</textarea></div>'
+      +'<div class="fg"><label>Cloture ?</label>'+yn(f.clos,'clos','fin')+'</div>'
+      +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'inc\')">Enregistrer</button>'+msgHtml()+'</div>';
+  } else if(S.sub==='pesee'){
+    var f=S.fp;
+    var gain2=f.poids&&f.prev?(parseFloat(f.poids)-parseFloat(f.prev)).toFixed(1):null;
+    form='<div class="card">'
+      +'<div class="frow">'
+      +'<div class="fg"><label>Date</label><input type="date" value="'+f.date+'" oninput="S.fp.date=this.value"></div>'
+      +'<div class="fg"><label>ID bete</label><input placeholder="C1-001" value="'+f.id+'" oninput="S.fp.id=this.value"></div>'
+      +'</div>'
+      +'<div class="fg"><label>Race</label><select oninput="S.fp.race=this.value"><option>Djakoré</option><option>Gobra</option></select></div>'
+      +'<div class="frow">'
+      +'<div class="fg"><label>Poids (kg)</label><input type="number" inputmode="decimal" value="'+f.poids+'" oninput="S.fp.poids=this.value"></div>'
+      +'<div class="fg"><label>Poids prec. (kg)</label><input type="number" inputmode="decimal" value="'+f.prev+'" oninput="S.fp.prev=this.value"></div>'
+      +'</div>'
+      +(gain2?'<div class="al '+(parseFloat(gain2)>=0?'al-g':'al-r')+'">Gain calcule : <strong>'+gain2+' kg</strong></div>':'')
+      +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'pesee\')">Enregistrer</button>'+msgHtml()+'</div>';
+  } else if(S.sub==='sante'){
+    var f=S.fsa;
+    form='<div class="card">'
+      +'<div class="frow">'
+      +'<div class="fg"><label>Date</label><input type="date" value="'+f.date+'" oninput="S.fsa.date=this.value"></div>'
+      +'<div class="fg"><label>ID bete</label><input placeholder="C1-001" value="'+f.id+'" oninput="S.fsa.id=this.value"></div>'
+      +'</div>'
+      +'<div class="fg"><label>Symptome</label><input value="'+f.sym+'" oninput="S.fsa.sym=this.value"></div>'
+      +'<div class="fg"><label>Traitement</label><input value="'+f.tra+'" oninput="S.fsa.tra=this.value"></div>'
+      +'<div class="frow">'
+      +'<div class="fg"><label>Cout (FCFA)</label><input type="number" inputmode="decimal" value="'+f.cout+'" oninput="S.fsa.cout=this.value"></div>'
+      +'<div class="fg"><label>Resultat</label><select oninput="S.fsa.res=this.value"><option>Gueri</option><option>En cours</option><option>Non gueri</option></select></div>'
+      +'</div>'
+      +'<div class="fg"><label>Deces ?</label>'+yn(f.dec,'dec','fsa')+'</div>'
+      +(f.dec==='OUI'?'<div class="al al-r">Signaler immediatement au fondateur</div>':'')
+      +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'sante\')">Enregistrer</button>'+msgHtml()+'</div>';
+  } else if(S.sub==='bilan'){
+    var f=S.fb;
+    form='<div class="card">'
+      +'<div class="frow">'
+      +'<div class="fg"><label>Semaine N&#176;</label><input type="number" inputmode="decimal" value="'+f.sem+'" oninput="S.fb.sem=this.value"></div>'
+      +'<div class="fg"><label>Nb betes</label><input type="number" inputmode="decimal" value="'+f.nb+'" oninput="S.fb.nb=this.value"></div>'
+      +'</div>'
+      +'<div class="fg"><label>Tous nourris ?</label>'+yn(f.nou,'nou','fb')+'</div>'
+      +'<div class="fg"><label>Stock alim. (semaines)</label><input type="number" inputmode="decimal" step="0.1" value="'+f.stk+'" oninput="S.fb.stk=this.value"></div>'
+      +'<div class="fg"><label>Incidents ?</label>'+yn(f.inc,'inc','fb')+'</div>'
+      +'<div class="fg"><label>Poids verifie ?</label>'+yn(f.poi,'poi','fb')+'</div>'
+      +'<div class="fg"><label>Message au fondateur</label><textarea rows="3" oninput="S.fb.msg=this.value">'+f.msg+'</textarea></div>'
+      +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'bilan\')">Envoyer le bilan</button>'+msgHtml()+'</div>';
+  }
+  return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+form+'</div>';
+}
+
+function viewLiv(){
+  var subs=[['treso','Tresorerie'],['kpi','KPI'],['betes','Betes'],['gonogo','Go/No-Go']];
+  var stabs=subs.map(function(s){return'<div class="stab '+(S.sub===s[0]?'on':'')+'" onclick="chSub(\''+s[0]+'\')">'+s[1]+'</div>';}).join('');
+  var view='';
+  if(S.sub==='treso'){
+    view='<div class="card" style="text-align:center">'
+      +'<div style="font-size:12px;color:#88bb88;margin-bottom:4px">Solde actuel</div>'
+      +'<div style="font-size:34px;font-weight:bold;color:#4caf50">680 000 FCFA</div>'
+      +'<div style="font-size:11px;color:#4caf50;margin-top:4px">Cash Min OK — Min. 600k</div>'
+      +'</div>'
+      +'<div class="stitle">Flux recents</div>'
+      +'<div class="tw"><table>'
+      +'<tr><th>Date</th><th>Libelle</th><th>Entree</th><th>Sortie</th><th>Solde</th></tr>'
+      +'<tr><td>01/03</td><td>Capital</td><td style="color:#4caf50">1 450 000</td><td>—</td><td>1 450 000</td></tr>'
+      +'<tr><td>05/03</td><td>Achat veaux</td><td>—</td><td style="color:#f44336">480 000</td><td>970 000</td></tr>'
+      +'<tr><td>08/03</td><td>Aliments M1</td><td>—</td><td style="color:#f44336">180 000</td><td>790 000</td></tr>'
+      +'<tr><td>12/03</td><td>Veterinaire</td><td>—</td><td style="color:#f44336">110 000</td><td>680 000</td></tr>'
+      +'</table></div>';
+  } else if(S.sub==='kpi'){
+    view='<div class="stitle">KPI Mensuels — Cycle 1</div>'
+      +'<div class="tw"><table>'
+      +'<tr><th>Mois</th><th>Mort.</th><th>GMQ</th><th>Stock</th><th>Alerte</th></tr>'
+      +'<tr><td>M1</td><td style="color:#4caf50">0%</td><td style="color:#4caf50">1 100</td><td style="color:#4caf50">6 sem</td><td style="color:#4caf50">OK</td></tr>'
+      +'<tr><td>M2</td><td style="color:#444">—</td><td style="color:#444">—</td><td style="color:#444">—</td><td style="color:#444">—</td></tr>'
+      +'<tr><td>M3</td><td style="color:#444">—</td><td style="color:#444">—</td><td style="color:#444">—</td><td style="color:#444">—</td></tr>'
+      +'<tr><td>M4</td><td style="color:#444">—</td><td style="color:#444">—</td><td style="color:#444">—</td><td style="color:#444">—</td></tr>'
+      +'</table></div>';
+  } else if(S.sub==='betes'){
+    view='<div class="stitle">Suivi individuel — 4 betes</div>'
+      +'<div class="tw"><table>'
+      +'<tr><th>ID</th><th>Race</th><th>Dep.</th><th>M+2</th><th>GMQ</th></tr>'
+      +'<tr><td style="color:#88cc88">C1-001</td><td>Djakoré</td><td>270</td><td style="color:#444">—</td><td style="color:#4caf50">1.2 kg/j</td></tr>'
+      +'<tr><td style="color:#88cc88">C1-002</td><td>Djakoré</td><td>265</td><td style="color:#444">—</td><td style="color:#4caf50">1.1 kg/j</td></tr>'
+      +'<tr><td style="color:#88cc88">C1-003</td><td>Djakoré</td><td>275</td><td style="color:#444">—</td><td style="color:#4caf50">1.0 kg/j</td></tr>'
+      +'<tr><td style="color:#88cc88">C1-004</td><td>Gobra</td><td>280</td><td style="color:#444">—</td><td style="color:#4caf50">1.1 kg/j</td></tr>'
+      +'</table></div>';
+  } else if(S.sub==='gonogo'){
+    var conds=[['Cash minimum respecte',true],['Contrats vente signes',false],['Infrastructure operationnelle',false],['Assurance CNAAS activee',false],['Veterinaire referent confirme',false],['Securite fonciere validee',false],['KPI cycle precedent analyses',false]];
+    view='<div class="stitle">Go/No-Go — Cycle 1</div>'
+      +conds.map(function(c){
+        return'<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #1a2e1a">'
+          +'<div style="font-size:13px;color:#ccc;flex:1">'+c[0]+'</div>'
+          +'<div style="font-size:12px;font-weight:bold;color:'+(c[1]?'#4caf50':'#f44336')+'">'+(c[1]?'OUI':'NON')+'</div>'
+          +'</div>';
+      }).join('')
+      +'<div style="background:#2e1010;border:1px solid #8a0000;color:#f44336;border-radius:8px;padding:10px;text-align:center;font-weight:bold;margin-top:12px">NO-GO — Conditions manquantes</div>';
+  }
+  return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+view+'</div>';
+}
+
+function viewMarche(){
+  var subs=[['prix','Prix'],['sim','Simulateur'],['reco','Recos']];
+  var stabs=subs.map(function(s){return'<div class="stab '+(S.sub===s[0]?'on':'')+'" onclick="chSub(\''+s[0]+'\')">'+s[1]+'</div>';}).join('');
+  var view='';
+  if(S.sub==='prix'){
+    var fm=S.fm;
+    view='<div class="stitle">Prix observes</div>'
+      +'<div class="mkt"><div><div style="font-size:17px;font-weight:bold">2 000 FCFA/kg</div><div style="font-size:11px;color:#88aa88">Thies — 10/03</div></div><div style="color:#4caf50;font-size:18px">&#8593;</div></div>'
+      +'<div class="mkt"><div><div style="font-size:17px;font-weight:bold">2 050 FCFA/kg</div><div style="font-size:11px;color:#88aa88">Tivaouane — 27/02</div></div><div style="color:#4caf50;font-size:18px">&#8593;</div></div>'
+      +'<div class="mkt"><div><div style="font-size:17px;font-weight:bold">1 950 FCFA/kg</div><div style="font-size:11px;color:#88aa88">Diourbel — 14/02</div></div><div style="color:#f44336;font-size:18px">&#8595;</div></div>'
+      +'<div class="sep"></div>'
+      +'<div class="card">'
+      +'<div class="frow">'
+      +'<div class="fg"><label>Date</label><input type="date" value="'+fm.date+'" oninput="S.fm.date=this.value"></div>'
+      +'<div class="fg"><label>Foirail</label><select oninput="S.fm.foi=this.value"><option>Thies</option><option>Tivaouane</option><option>Diourbel</option><option>Autre</option></select></div>'
+      +'</div>'
+      +'<div class="frow">'
+      +'<div class="fg"><label>Prix bas</label><input type="number" inputmode="decimal" placeholder="FCFA/kg" oninput="S.fm.bas=this.value"></div>'
+      +'<div class="fg"><label>Prix moyen</label><input type="number" inputmode="decimal" placeholder="FCFA/kg" oninput="S.fm.moy=this.value"></div>'
+      +'</div>'
+      +'<div class="fg"><label>Prix haut</label><input type="number" inputmode="decimal" placeholder="FCFA/kg" oninput="S.fm.haut=this.value"></div>'
+      +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'marche\')">Enregistrer</button>'+msgHtml()
+      +'</div>';
+  } else if(S.sub==='sim'){
+    var nb=S.sn, sp=S.sp, px=S.spx;
+    var ca=nb*sp*px, cout=nb*639000, ben=ca-cout, marge=Math.round((ben/ca)*100);
+    var dec,bg,bc,tc;
+    if(px<1600){dec='STOP ACHAT';bg='#2e1010';bc='#8a0000';tc='#f44336';}
+    else if(px<1900){dec="VENTE D'URGENCE";bg='#2e1010';bc='#8a0000';tc='#f44336';}
+    else if(px<2000){dec='ACCEPTABLE';bg='#2e2010';bc='#8a5a00';tc='#ffa040';}
+    else if(px<2200){dec='CIBLE ATTEINTE';bg='#1a3a1a';bc='#2d6a2d';tc='#4caf50';}
+    else{dec='EXCELLENT';bg='#1a3a1a';bc='#2d6a2d';tc='#4caf50';}
+    view='<div class="card">'
+      +'<div class="fg"><label>Nb betes : <strong>'+nb+'</strong></label><input type="range" min="1" max="20" step="1" value="'+nb+'" oninput="S.sn=parseInt(this.value);r()"></div>'
+      +'<div class="fg"><label>Poids moyen : <strong>'+sp+' kg</strong></label><input type="range" min="350" max="550" step="5" value="'+sp+'" oninput="S.sp=parseInt(this.value);r()"></div>'
+      +'<div class="fg"><label>Prix vente : <strong>'+px.toLocaleString()+' FCFA/kg</strong></label><input type="range" min="1500" max="2500" step="50" value="'+px+'" oninput="S.spx=parseInt(this.value);r()"></div>'
+      +'</div>'
+      +'<div class="card">'
+      +'<div class="sim-row"><span style="color:#88aa88">CA total</span><span style="font-weight:bold">'+fmt(ca)+' FCFA</span></div>'
+      +'<div class="sim-row"><span style="color:#88aa88">Cout total</span><span style="font-weight:bold">'+fmt(cout)+' FCFA</span></div>'
+      +'<div class="sim-row"><span style="color:#88aa88">Benefice net</span><span style="font-weight:bold;color:'+(ben>0?'#4caf50':'#f44336')+'">'+fmt(ben)+' FCFA</span></div>'
+      +'<div class="sim-row"><span style="color:#88aa88">Marge</span><span style="font-weight:bold;color:'+(marge>=40?'#4caf50':marge>=25?'#ff9800':'#f44336')+'">'+marge+'%</span></div>'
+      +'<div class="sim-row"><span style="color:#88aa88">Commission Fallou 2%</span><span style="font-weight:bold">'+fmt(ca*0.02)+' FCFA</span></div>'
+      +'</div>'
+      +'<div style="background:'+bg+';border:1px solid '+bc+';color:'+tc+';border-radius:8px;padding:12px;text-align:center;font-size:15px;font-weight:bold">'+dec+'</div>';
+  } else {
+    view='<div class="stitle">Recommandations — Fallou Ndiaye</div>'
+      +'<div class="reco-card"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><div style="font-size:13px;font-weight:bold">Prix / Vente</div><div style="font-size:11px;color:#88bb88;background:#1a3a1a;padding:2px 8px;border-radius:10px">C1</div></div><div style="font-size:12px;color:#aaa;line-height:1.5">Cibler vente oct-dec 2026. Contacter 3 bouchers des aout pour pre-engagement prix.</div><div style="font-size:11px;color:#ffaa40;margin-top:5px">+8-15% CA — <span style="color:#88cc88">En cours</span></div></div>'
+      +'<div class="reco-card"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><div style="font-size:13px;font-weight:bold">Acheteurs</div><div style="font-size:11px;color:#88bb88;background:#1a3a1a;padding:2px 8px;border-radius:10px">C1</div></div><div style="font-size:12px;color:#aaa;line-height:1.5">Signer 1 accord cadre avec boucher Thies avant introduction veaux aout 2026.</div><div style="font-size:11px;color:#ffaa40;margin-top:5px">Securisation CA — <span style="color:#88cc88">En cours</span></div></div>'
+      +'<div class="reco-card"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><div style="font-size:13px;font-weight:bold">Marche</div><div style="font-size:11px;color:#88bb88;background:#1a3a1a;padding:2px 8px;border-radius:10px">C1-C2</div></div><div style="font-size:12px;color:#aaa;line-height:1.5">Priorite Tivaouane pour vente C1 — prix 5-8% superieurs a Thies sur Djakoré.</div><div style="font-size:11px;color:#ffaa40;margin-top:5px">+5% CA — <span style="color:#88cc88">A initier</span></div></div>';
+  }
+  return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+view+'</div>';
+}
+
+r();
+</script>
+</body>
+</html>
