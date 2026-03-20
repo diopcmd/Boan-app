@@ -951,6 +951,8 @@ function getTok() {
   });
 }
 
+var TABLE_RANGES = {};
+
 function appendRow(sid, range, vals) {
   return getTok().then(function(tk) {
     if (!tk) return {ok:false, err:'Token invalide'};
