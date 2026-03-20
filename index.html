@@ -31,19 +31,21 @@ body{background:#0f1a0f;color:#fff;font-family:'Inter',system-ui,sans-serif}
 .cnt{padding:16px;max-width:600px;margin:0 auto;overflow:hidden}
 .stitle{font-size:11px;font-weight:500;color:#88bb88;letter-spacing:.04em;text-transform:uppercase;margin-bottom:12px;padding-left:1px}
 .kgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
-.kcard{background:#1a2e1a;border-radius:10px;padding:14px;border:1px solid #2a4a2a}
-.card{background:#1a2e1a;border-radius:10px;padding:14px;margin-bottom:14px;border:1px solid #2a4a2a}
-.al{border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px}
+.kcard{background:#1a2e1a;border-radius:10px;padding:14px;border:1px solid #2a4a2a;transition:transform .18s ease,box-shadow .18s ease}
+.kcard:active{transform:scale(0.97);box-shadow:0 0 0 2px #2d6a2d44}
+.card{background:#1a2e1a;border-radius:10px;padding:14px;margin-bottom:14px;border:1px solid #2a4a2a;transition:box-shadow .2s ease}
+.al{border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px;animation:fadeInUp .25s ease both}
 .al-g{background:#1a2e1a;border:1px solid #2d6a2d;color:#88cc88}
 .al-o{background:#2e2010;border:1px solid #8a5a00;color:#ffaa40}
 .al-r{background:#2e1010;border:1px solid #8a0000;color:#ff7070}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .subtabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
 .stab{padding:6px 13px;border-radius:16px;font-size:12px;cursor:pointer;border:1px solid #2a4a2a;color:#88aa88;background:transparent}
 .stab.on{background:#2d6a2d;color:#fff;border-color:#2d6a2d}
 .fg{margin-bottom:13px}
 label{font-size:13px;color:#aaa;margin-bottom:5px;display:block}
-input,select,textarea{width:100%;background:#0f1a0f;border:1px solid #2a4a2a;color:#fff;padding:12px;border-radius:8px;font-size:16px;box-sizing:border-box;-webkit-appearance:none;appearance:none;font-family:inherit}
-input:focus,select:focus,textarea:focus{outline:none;border-color:#4caf50}
+input,select,textarea{width:100%;background:#0f1a0f;border:1px solid #2a4a2a;color:#fff;padding:12px;border-radius:8px;font-size:16px;box-sizing:border-box;-webkit-appearance:none;appearance:none;font-family:inherit;transition:border-color .18s ease}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#4caf50;box-shadow:0 0 0 3px rgba(76,175,80,0.12)}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .rg{display:flex;gap:8px;flex-wrap:wrap}
 .rb{padding:8px 16px;border-radius:8px;border:1px solid #2a4a2a;color:#88aa88;cursor:pointer;font-size:14px;background:transparent}
@@ -1008,11 +1010,22 @@ function loadLiveData() {
   }
 
   // 1. Bêtes actives — garder MOCK.betes si lecture invalide
-  readSheet(sid, 'Sante_Mortalite!G4:G50').then(function(rows) {
+  readSheet(sid, 'Sante_Mortalite!A4:G50').then(function(rows) {
     if (!rows) return;
-    var deces = rows.filter(function(r){ return r[0] && r[0].toString().toUpperCase()==='OUI'; }).length;
+    var deces = rows.filter(function(r){ return r[6] && r[6].toString().toUpperCase()==='OUI'; }).length;
     var val = Math.max(0, (CYCLE.nbBetes||4) - deces);
-    if (!isNaN(val)) { MOCK.betes = val; r(); }
+    if (!isNaN(val)) {
+      MOCK.betes = val;
+      // Alimenter SPARK.betes : historique des bêtes actives par ligne
+      var actives = (CYCLE.nbBetes||4);
+      var sparkBetes = [];
+      rows.slice(-7).forEach(function(r) {
+        if (r[6] && r[6].toString().toUpperCase()==='OUI') actives = Math.max(0, actives - 1);
+        sparkBetes.push(actives);
+      });
+      if (sparkBetes.length > 0) SPARK.betes = sparkBetes;
+      r();
+    }
   });
 
   // 2. GMQ moyen — garder MOCK.gmq si pas de données valides
@@ -3011,8 +3024,15 @@ function buildSidebar(){
 
   // ── GÉRANT TERRAIN ──
   if(u==='gerant'){
-    var sante = Math.round((MOCK.gmq/1.2)*50 + (MOCK.stock>=6?30:MOCK.stock>=4?15:0) + 20);
-    sante = Math.min(100, sante);
+    // Score santé : GMQ (50pts) + Stock (30pts) + Bêtes actives (20pts)
+    var _mort = CYCLE.nbBetes>0 ? Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100) : 0;
+    var _scoreBetes = _mort===0 ? 20 : _mort<=5 ? 12 : _mort<=10 ? 5 : 0;
+    var sante = Math.round(
+      Math.min(50, (MOCK.gmq/1.2)*50) +
+      (MOCK.stock>=6?30:MOCK.stock>=4?15:MOCK.stock>0?5:0) +
+      _scoreBetes
+    );
+    sante = Math.min(100, Math.max(0, sante));
     var santeCol = sante>=70?'#4caf50':sante>=40?'#ff9800':'#f44336';
 
     if(SB.tab==='today'){
@@ -3276,7 +3296,7 @@ function buildSidebar(){
       body='<div class="sb-card">'
         +(function(){ var dep=Math.round(((CYCLE.capital||1450000)-MOCK.treso)/1000); return '<div class="sb-row"><span class="sb-lbl">Dépenses cumulées</span><span style="font-size:12px;color:#f44336">-'+dep+'k FCFA</span></div>'; })()
         +'<div class="sb-row"><span class="sb-lbl">Solde actuel</span><span class="sb-val '+(MOCK.treso>=600000?'kval-ok':'kval-crit')+'">'+Math.round(MOCK.treso/1000)+'k FCFA</span></div>'
-        +(function(){ var gmqL=LIVE.loaded&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq; var sem=calcSemaine(); var joursR=(35-sem)*7; var poidsF=Math.round((CYCLE.poidsDepart||270)+gmqL*sem*7+gmqL*joursR); var caProj=Math.round((CYCLE.nbBetes||4)*poidsF*(CYCLE.objectifPrix||2000)/1000000*10)/10; return '<div class="sb-row"><span class="sb-lbl">Projection vente</span><span style="font-size:12px;color:#C8A06A">~'+caProj+'M FCFA</span></div>'; })()
+        +(function(){ var gmqL=LIVE.loaded&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq; var sem=calcSemaine(); var totalSem=Math.round((CYCLE.dureeMois||8)*4.33); var joursR=(totalSem-sem)*7; var poidsF=Math.round((CYCLE.poidsDepart||270)+gmqL*sem*7+gmqL*joursR); var caProj=Math.round((CYCLE.nbBetes||4)*poidsF*(CYCLE.objectifPrix||2000)/1000000*10)/10; return '<div class="sb-row"><span class="sb-lbl">Projection vente</span><span style="font-size:12px;color:#C8A06A">~'+caProj+'M FCFA</span></div>'; })()
         +'</div>';
     } else {
       var histHtml2 = HISTORY.length
@@ -3287,9 +3307,9 @@ function buildSidebar(){
           }).join('')
         : '<div style="color:#445544;font-size:12px;padding:8px 0">Aucune saisie récente</div>';
       body='<div class="sb-card">'
-        +'<div class="sb-row"><span class="sb-lbl">Avancement</span><span class="sb-val gold">Sem. '+calcSemaine()+'/35</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">Avancement</span><span class="sb-val gold">Sem. '+calcSemaine()+'/'+Math.round((CYCLE.dureeMois||8)*4.33)+'</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Capital investi</span><span style="font-size:12px;color:#ccc">'+fmt(CYCLE.capital||1450000)+' FCFA</span></div>'+'<div class="sb-row"><span class="sb-lbl">Rappel pesée</span><span style="font-size:12px;color:#88aa88">Tous les '+(CYCLE.peseeFreq||30)+' jours</span></div>'
-        +(function(){          var sem=calcSemaine();          var gmqL=LIVE.loaded&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq;          var poidsF=Math.round((CYCLE.poidsDepart||270)+gmqL*35*7);          var caProj=(CYCLE.nbBetes||4)*poidsF*(CYCLE.objectifPrix||2000);          var roiCalc=CYCLE.capital>0?Math.round((caProj-CYCLE.capital)/CYCLE.capital*100):0;          return '<div class="sb-row"><span class="sb-lbl">ROI projeté</span><span style="font-size:12px;color:#C8A06A">'+roiCalc+'%</span></div>';        })()
+        +(function(){          var sem=calcSemaine();          var totalSem=Math.round((CYCLE.dureeMois||8)*4.33);          var gmqL=LIVE.loaded&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq;          var poidsF=Math.round((CYCLE.poidsDepart||270)+gmqL*totalSem*7);          var caProj=(CYCLE.nbBetes||4)*poidsF*(CYCLE.objectifPrix||2000);          var roiCalc=CYCLE.capital>0?Math.round((caProj-CYCLE.capital)/CYCLE.capital*100):0;          return '<div class="sb-row"><span class="sb-lbl">ROI projeté</span><span style="font-size:12px;color:#C8A06A">'+roiCalc+'%</span></div>';        })()
         +'</div>'
         +'<div class="sb-section-title">Activité récente</div>'
         +(function(){
@@ -3419,7 +3439,8 @@ function viewDash(){
   // ── SYNC MOCK.stock EN PREMIER (avant toute utilisation) ──
   var stkLocal = calcStockLocal();
   if(stkLocal > 0) MOCK.stock = stkLocal;
-  var pct=Math.round((semActuelle/35)*100);
+  var totalSemCycle = Math.round((CYCLE.dureeMois||8)*4.33);
+  var pct=Math.round((semActuelle/totalSemCycle)*100);
   var gmqC=MOCK.gmq>=1?'kval-ok':MOCK.gmq>=0.8?'kval-warn':'kval-crit';
   var stkC=MOCK.stock>=6?'kval-ok':MOCK.stock>=4?'kval-warn':'kval-crit';
   var trC =MOCK.treso>=600000?'kval-ok':MOCK.treso>=400000?'kval-warn':'kval-crit';
@@ -3449,7 +3470,7 @@ function viewDash(){
     +'<div class="card">'
     +'<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:13px;color:#aaa">Avancement cycle</span><span style="font-size:11px;background:#2a1f0a;color:#C8A06A;padding:3px 10px;border-radius:12px">Mois '+MOCK.mois+'/'+(CYCLE.dureeMois||8)+'</span></div>'
     +'<div style="display:flex;align-items:center"><div class="prog-bar"><div class="prog-fill" style="width:'+pct+'%;background:linear-gradient(90deg,#2d6a2d,#C8A06A)"></div></div><span style="font-size:12px;color:#C8A06A;font-weight:600;margin-left:4px">'+pct+'%</span></div>'
-    +'<div style="margin-top:6px;font-size:11px;color:#665540">Semaine '+semActuelle+' / 35</div>'
+    +'<div style="margin-top:6px;font-size:11px;color:#665540">Semaine '+semActuelle+' / '+totalSemCycle+'</div>'
     +'</div>'
     +'<button type="button" onclick="exportKpiPDF()" style="width:100%;padding:10px;border-radius:8px;background:#1a3a6a;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer;margin-bottom:6px">📄 Télécharger le rapport KPI en PDF</button>'+'<div class="stitle">Alertes</div>'
     +(function(){
