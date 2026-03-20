@@ -434,14 +434,13 @@ function beteBlurHandler(inp) {
 }
 function selectBeteId(el) {
   var id    = el.getAttribute('data-id');
-  var key   = el.getAttribute('data-key');
-  var inpId = el.getAttribute('data-inp');
-  var dropId= el.getAttribute('data-drop');
-  var extra = el.getAttribute('data-extra');
+  var key   = el.getAttribute('data-statekey');
+  var inpId = el.getAttribute('data-inpid');
+  var dropId= el.getAttribute('data-dropid');
+  var extra = el.getAttribute('data-extra') || '';
   var inp   = document.getElementById(inpId);
   if(inp) inp.value = id;
-  // Évaluer l'assignation d'état
-  try { eval(extra + key + "='" + id.replace(/'/g,"\'") + "'"); } catch(e){}
+  try { eval(extra + key + "='" + id.replace(/'/g,"\\'") + "'"); } catch(e){}
   var drop  = document.getElementById(dropId);
   if(drop) drop.style.display = 'none';
   r();
@@ -1779,7 +1778,7 @@ function beteSelect(val, stateKey, extra) {
 
   // Items dropdown custom (mobile iOS)
   var dropItems = beteIds.map(function(id){
-    return '<div class="bete-drop-item" data-statekey="'+stateKey+'" data-inpid="'+inpId+'" data-dropid="'+dropId+'" data-extra="'+extraJs+'" data-id="'+id+'" style="padding:10px 14px;font-size:14px;font-weight:700;cursor:pointer;border-bottom:1px solid #0f2a0f;color:#fff">'+id+'</div>';
+    return '<div class="bete-drop-item" onclick="selectBeteId(this)" data-statekey="'+stateKey+'" data-inpid="'+inpId+'" data-dropid="'+dropId+'" data-extra="'+extraJs+'" data-id="'+id+'" style="padding:10px 14px;font-size:14px;font-weight:700;cursor:pointer;border-bottom:1px solid #0f2a0f;color:#fff">'+id+'</div>';
   }).join('');
 
   var dropHtml = beteIds.length
