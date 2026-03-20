@@ -838,6 +838,7 @@ var S = {
   _resetPwdOpen:false, _resetPwd:'', _resetPwdError:'', _resetGoCheck:false,
   _pwdMgrOpen:false, _pwdMgrStep:'auth', _pwdMgrError:'', _pwdMgrSuccess:'',
   _pwdMgrCurrent:'', _pwdMgrRole:'', _pwdMgrNew:'', _pwdMgrConfirm:'', _pwdMgrNewLogin:'',
+  _guideOpen: false,,
   _aiOpen:false, _aiLoading:false, _aiResult:'', _aiError:'', _aiQuestion:'',
   selectedBete: null
 };
@@ -872,6 +873,7 @@ function r() {
   if (S._resetPwdOpen) html += pageResetPwd();
   if (S._aiOpen) html += pageAI();
   if (S._pwdMgrOpen) html += pagePwdManager();
+  if (S._guideOpen)   html += pageGuide();
   el.innerHTML = html;
 }
 
@@ -3472,7 +3474,9 @@ function viewDash(){
     +'<div style="display:flex;align-items:center"><div class="prog-bar"><div class="prog-fill" style="width:'+pct+'%;background:linear-gradient(90deg,#2d6a2d,#C8A06A)"></div></div><span style="font-size:12px;color:#C8A06A;font-weight:600;margin-left:4px">'+pct+'%</span></div>'
     +'<div style="margin-top:6px;font-size:11px;color:#665540">Semaine '+semActuelle+' / '+totalSemCycle+'</div>'
     +'</div>'
-    +'<button type="button" onclick="exportKpiPDF()" style="width:100%;padding:10px;border-radius:8px;background:#1a3a6a;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer;margin-bottom:6px">📄 Télécharger le rapport KPI en PDF</button>'+'<div class="stitle">Alertes</div>'
+    +'<button type="button" onclick="exportKpiPDF()" style="width:100%;padding:10px;border-radius:8px;background:#1a3a6a;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer;margin-bottom:6px">📄 Télécharger le rapport KPI en PDF</button>'
+    +(S.user==='gerant'?'<button type="button" onclick="S._guideOpen=true;r()" style="width:100%;padding:10px;border-radius:8px;background:#1a3a2a;color:#88ee88;font-size:13px;font-weight:700;border:1px solid #2d6a2d;cursor:pointer;margin-bottom:6px">📖 Mon guide — Quoi faire et quand</button>':'')
+    +'<div class="stitle">Alertes</div>'
     +(function(){
       var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;
       if(mort===0) return '<div class="al al-g">✅ Mortalité 0% — aucune perte ce cycle</div>';
@@ -4381,6 +4385,90 @@ function viewMarche(){
       +'<div class="reco-card"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><div style="font-size:13px;font-weight:bold">Marché</div><div style="font-size:11px;color:#88bb88;background:#1a3a1a;padding:2px 8px;border-radius:10px">C1-C2</div></div><div style="font-size:12px;color:#aaa;line-height:1.5">Priorité Tivaouane pour vente C1 — prix 5-8% supérieurs à Thiès sur Djakoré.</div><div style="font-size:11px;color:#ffaa40;margin-top:5px">+5% CA — <span style="color:#88cc88">À initier</span></div></div>';
   }
   return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+view+'</div>';
+}
+
+// ══════════════════════════════════════════════════════════════
+// GUIDE GÉRANT — Modal "Quoi faire et quand"
+// ══════════════════════════════════════════════════════════════
+function pageGuide() {
+  if (!S._guideOpen) return '';
+
+  function bloc(couleur, bordure, emoji, titre, sousTitre, taches) {
+    var lignes = taches.map(function(t) {
+      return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06)">'
+        +'<div style="font-size:22px;flex-shrink:0;margin-top:1px">'+t[0]+'</div>'
+        +'<div>'
+        +'<div style="font-size:14px;font-weight:600;color:#fff;line-height:1.3">'+t[1]+'</div>'
+        +(t[2]?'<div style="font-size:12px;color:#aaa;margin-top:3px;line-height:1.4">'+t[2]+'</div>':'')
+        +(t[3]?'<button type="button" onclick="'+t[3]+';S._guideOpen=false;r()" style="margin-top:7px;padding:6px 14px;background:#2d6a2d;color:#fff;border:none;border-radius:16px;font-size:12px;font-weight:600;cursor:pointer;width:auto">→ Aller saisir</button>':'')
+        +'</div>'
+        +'</div>';
+    }).join('');
+    return '<div style="background:'+couleur+';border:1px solid '+bordure+';border-radius:12px;padding:14px 16px;margin-bottom:12px">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'
+      +'<div style="font-size:26px">'+emoji+'</div>'
+      +'<div>'
+      +'<div style="font-size:15px;font-weight:700;color:#fff">'+titre+'</div>'
+      +'<div style="font-size:11px;color:#aaa;margin-top:1px">'+sousTitre+'</div>'
+      +'</div>'
+      +'</div>'
+      +lignes
+      +'</div>';
+  }
+
+  var peseeFreq = CYCLE.peseeFreq || 30;
+
+  var body = '<div style="padding:16px 20px;overflow-y:auto;max-height:calc(90vh - 60px)">'
+
+    // ── CHAQUE JOUR ──
+    +bloc('#0d2a0d','#2d6a2d','☀️','CHAQUE JOUR','Matin et soir — tous les jours sans exception',[
+      ['🌅','Matin : Fiche du jour','Comptez les bêtes. Vérifiez eau, nourriture, enclos. Signalez si problème.','chTab(\'saisie\');chSub(\'fiche\')'],
+      ['🌙','Soir : Checklist SOP','Vérifiez nettoyage, désinfection, rations, eau, stock, santé, problèmes.','chTab(\'saisie\');chSub(\'sop\')'],
+      ['⚡','Si un animal est malade','Saisir tout de suite dans Santé. N\'attendez pas le lendemain.','chTab(\'saisie\');chSub(\'sante\')'],
+      ['🚨','Si accident ou problème grave','Saisir dans Incident. Appeler la Direction immédiatement.','chTab(\'saisie\');chSub(\'inc\')'],
+    ])
+
+    // ── CHAQUE SEMAINE ──
+    +bloc('#1a1a08','#6a6a00','📅','CHAQUE VENDREDI SOIR','1 fois par semaine — avant 20h',[
+      ['📊','Bilan hebdomadaire','Résumé de la semaine : nombre de bêtes, nourriture, incidents, commentaires.','chTab(\'saisie\');chSub(\'bilan\')'],
+    ])
+
+    // ── QUAND ON REÇOIT DE LA NOURRITURE ──
+    +bloc('#0d1a2a','#005a8a','🌾','QUAND ON LIVRE DE LA NOURRITURE','Chaque fois qu\'un sac / camion arrive',[
+      ['📦','Saisir le stock reçu','Entrez le type et le poids reçu. L\'app calcule automatiquement les semaines restantes.','chTab(\'saisie\');chSub(\'stock\')'],
+    ])
+
+    // ── PESÉE ──
+    +bloc('#1a0d2a','#5a008a','⚖️','PESÉE DES BÊTES','Tous les '+peseeFreq+' jours — l\'app vous rappelle',[
+      ['🐄','Peser chaque bête','Entrez le numéro, la race et le poids actuel. L\'app calcule le gain.','chTab(\'saisie\');chSub(\'pesee\')'],
+    ])
+
+    // ── RAPPEL IMPORTANT ──
+    +'<div style="background:#2a0d0d;border:1px solid #8a0000;border-radius:10px;padding:14px 16px;margin-bottom:8px">'
+    +'<div style="font-size:15px;font-weight:700;color:#ff7070;margin-bottom:8px">⚠️ IMPORTANT</div>'
+    +'<div style="font-size:13px;color:#ffaaaa;line-height:1.7">'
+    +'• Si un animal <strong>meurt</strong> → Saisir dans Santé (décoché = décès)<br>'
+    +'• Si stock < 4 semaines → Appeler Direction <strong>immédiatement</strong><br>'
+    +'• En cas de doute → appeler avant d\'agir'
+    +'</div>'
+    +'</div>'
+
+    +'</div>';
+
+  return '<div class="modal-overlay" onclick="if(event.target===this){S._guideOpen=false;r()}">'
+    +'<div style="background:#0f1a0f;border:1px solid #2a4a2a;border-radius:16px 16px 0 0;'
+    +'width:100%;max-width:500px;max-height:90vh;display:flex;flex-direction:column;'
+    +'animation:modalUp .25s cubic-bezier(.2,.8,.3,1)">'
+    +'<div style="padding:16px 20px;border-bottom:1px solid #1a3a1a;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">'
+    +'<div>'
+    +'<div style="font-size:17px;font-weight:700;color:#fff">📖 Mon guide de travail</div>'
+    +'<div style="font-size:12px;color:#88aa88;margin-top:2px">Gérant terrain — ce que je dois faire et quand</div>'
+    +'</div>'
+    +'<button onclick="S._guideOpen=false;r()" style="background:none;border:none;color:#88aa88;font-size:26px;cursor:pointer;line-height:1;padding:4px;width:auto">×</button>'
+    +'</div>'
+    +body
+    +'</div>'
+    +'</div>';
 }
 
 r();
