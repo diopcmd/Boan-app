@@ -428,7 +428,7 @@ function beteInputHandler(inp) {
 function beteFocusHandler(inp) {
   rebuildBeteList();
   var drop = document.getElementById(inp.getAttribute('data-dropid'));
-  if(drop && drop.children.length > 0) drop.style.display = 'block';
+  if(drop) drop.style.display = 'block'; // toujours visible au focus
 }
 function beteBlurHandler(inp) {
   setTimeout(function(){
@@ -1761,33 +1761,41 @@ function confirmResetWithPwd() {
 
 // Helper : champ ID bête avec autocomplete robuste
 function beteSelect(val, stateKey, extra) {
+  // Sources d'IDs : CYCLE.betes > LIVE.beteIds > fallback B01..BNN
   var beteIds = CYCLE.betes&&CYCLE.betes.length
     ? CYCLE.betes.map(function(b){return b.id;})
-    : (LIVE.beteIds||[]);
+    : LIVE.beteIds&&LIVE.beteIds.length
+      ? LIVE.beteIds
+      : (function(){
+          var n = CYCLE.nbBetes||MOCK.betes||4;
+          var fallback=[];
+          for(var i=1;i<=n;i++) fallback.push('B'+('0'+i).slice(-2));
+          return fallback;
+        })();
   var extraJs = extra ? extra+';' : '';
   var safeKey = stateKey.replace(/[^a-zA-Z0-9]/g,'_');
   var dlId   = 'bete-dl-'+safeKey;
   var dropId = 'bete-drop-'+safeKey;
   var inpId  = dlId+'-inp';
 
-  // Datalist standard (desktop)
-  setTimeout(function(){
-    var dl = document.getElementById(dlId);
-    if(!dl){ dl=document.createElement('datalist'); dl.id=dlId; document.body.appendChild(dl); }
-    dl.innerHTML = beteIds.map(function(id){ return '<option value="'+id+'">'; }).join('');
-  }, 0);
-
   var hasVal = !!(val && val.length);
-  var lbl = 'ID bête'+(beteIds.length?' ('+beteIds.length+')':'');
+  var lbl = 'ID bete ('+beteIds.length+')';
 
-  // Items dropdown custom (mobile iOS)
+  // Items dropdown — onmousedown+preventDefault bloque le blur avant la selection
   var dropItems = beteIds.map(function(id){
-    return '<div class="bete-drop-item" onclick="selectBeteId(this)" data-statekey="'+stateKey+'" data-inpid="'+inpId+'" data-dropid="'+dropId+'" data-extra="'+extraJs+'" data-id="'+id+'" style="padding:10px 14px;font-size:14px;font-weight:700;cursor:pointer;border-bottom:1px solid #0f2a0f;color:#fff">'+id+'</div>';
+    return '<div class="bete-drop-item"'
+      +' onmousedown="event.preventDefault();selectBeteId(this)"'
+      +' ontouchend="event.preventDefault();selectBeteId(this)"'
+      +' data-statekey="'+stateKey+'"'
+      +' data-inpid="'+inpId+'"'
+      +' data-dropid="'+dropId+'"'
+      +' data-extra="'+extraJs+'"'
+      +' data-id="'+id+'"'
+      +' style="padding:12px 16px;font-size:15px;font-weight:700;cursor:pointer;border-bottom:1px solid #0f2a0f;color:#fff;-webkit-tap-highlight-color:rgba(76,175,80,0.2)">'
+      +id+'</div>';
   }).join('');
 
-  var dropHtml = beteIds.length
-    ? '<div id="'+dropId+'" style="display:none;position:absolute;z-index:1000;background:#1a2e1a;border:1px solid #2d6a2d;border-radius:8px;max-height:200px;overflow-y:auto;width:100%;left:0;top:calc(100% + 2px);box-shadow:0 4px 20px rgba(0,0,0,.6)">'+dropItems+'</div>'
-    : '';
+  var dropHtml = '<div id="'+dropId+'" style="display:none;position:absolute;z-index:1000;background:#1a2e1a;border:1px solid #2d6a2d;border-radius:8px;max-height:220px;overflow-y:auto;width:100%;left:0;top:calc(100% + 2px);box-shadow:0 4px 20px rgba(0,0,0,.7)">'+dropItems+'</div>';
 
   var inputHtml = '<div style="position:relative">'
     +'<input id="'+inpId+'" type="text" list="'+dlId+'"'
