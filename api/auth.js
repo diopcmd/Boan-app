@@ -1,14 +1,15 @@
 // api/auth.js — Vercel Serverless Function v2
 // Vérifie les credentials et retourne les infos du rôle
 
-const USERS = {
-  fondateur: { name:'Direction',      pwd: process.env.PWD_FONDATEUR, tabs:['dashboard','saisie','livrables','marche'], sid: process.env.SID_FONDATEUR },
-  gerant:    { name:'Gerant terrain', pwd: process.env.PWD_GERANT,    tabs:['dashboard','saisie'],                      sid: process.env.SID_GERANT    },
-  rga:       { name:'RGA',            pwd: process.env.PWD_RGA,       tabs:['dashboard','livrables'],                   sid: process.env.SID_RGA       },
-  fallou:    { name:'Commerciale',    pwd: process.env.PWD_FALLOU,    tabs:['dashboard','marche'],                      sid: process.env.SID_FALLOU    },
-};
-
 export default async function handler(req, res) {
+  // Lire les env vars à l'intérieur de la fonction (pas au niveau module)
+  // pour garantir leur disponibilité dans tous les contextes Vercel
+  const USERS = {
+    fondateur: { name:'Direction',      pwd: process.env.PWD_FONDATEUR, tabs:['dashboard','saisie','livrables','marche'], sid: process.env.SID_FONDATEUR },
+    gerant:    { name:'Gerant terrain', pwd: process.env.PWD_GERANT,    tabs:['dashboard','saisie'],                      sid: process.env.SID_GERANT    },
+    rga:       { name:'RGA',            pwd: process.env.PWD_RGA,       tabs:['dashboard','livrables'],                   sid: process.env.SID_RGA       },
+    fallou:    { name:'Commerciale',    pwd: process.env.PWD_FALLOU,    tabs:['dashboard','marche'],                      sid: process.env.SID_FALLOU    },
+  };
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -66,7 +67,8 @@ export default async function handler(req, res) {
 
     // Debug : vérifier que les env vars sont chargées
     if (!user.pwd && !expectedPwd) {
-      return res.status(500).json({ ok:false, error: 'Config serveur manquante — vérifiez les variables Vercel' });
+      const missing = ['FONDATEUR','GERANT','RGA','FALLOU'].filter(k => !process.env['PWD_'+k]);
+      return res.status(500).json({ ok:false, error: 'Config serveur manquante — variables manquantes : PWD_' + (missing.join(', PWD_') || '?') });
     }
 
     if (password !== (expectedPwd || user.pwd)) {
