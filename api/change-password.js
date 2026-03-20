@@ -12,19 +12,25 @@ export default async function handler(req, res) {
   // 1. Vérifier session token
   const sessionToken = req.headers['x-session-token'];
   const sessionPayload = verifySession(sessionToken);
-  if (!sessionPayload || sessionPayload.login !== 'fondateur') {
+  if (!sessionPayload || (sessionPayload.login !== 'fondateur' && sessionPayload.role !== 'fondateur')) {
     return res.status(403).json({ error: 'Réservé au fondateur' });
   }
 
-  const { founderPassword, role, newPassword } = req.body || {};
+  const { founderPassword, role, newPassword, newLogin } = req.body || {};
 
   // 2. Vérifier champs
   const validRoles = ['fondateur', 'gerant', 'rga', 'fallou'];
   if (!role || !validRoles.includes(role)) {
     return res.status(400).json({ error: 'Rôle invalide' });
   }
-  if (!newPassword || newPassword.length < 6) {
+  if (!newPassword && !newLogin) {
+    return res.status(400).json({ error: 'Saisir un nouvel identifiant et/ou un nouveau mot de passe' });
+  }
+  if (newPassword && newPassword.length < 6) {
     return res.status(400).json({ error: 'Nouveau mot de passe trop court (6 car. min)' });
+  }
+  if (newLogin && !/^[a-z0-9_]{3,}$/.test(newLogin)) {
+    return res.status(400).json({ error: 'Identifiant invalide (3+ caractères, minuscules/chiffres/_)' });
   }
   if (!founderPassword) {
     return res.status(400).json({ error: 'Mot de passe fondateur requis' });
@@ -52,31 +58,47 @@ export default async function handler(req, res) {
 
     // Trouver la ligne existante pour ce rôle
     let targetRow = -1;
-    rows.forEach((row, i) => { if (row[0] === role) targetRow = i; });
+    let existingPwdEncoded = '';
+    let existingLoginOverride = '';
+    rows.forEach((row, i) => {
+      if (row[0] === role) {
+        targetRow = i;
+        existingPwdEncoded = row[1] || '';
+        existingLoginOverride = row[3] || '';
+      }
+    });
 
     const timestamp = new Date().toISOString();
-    const pwdHashed = Buffer.from(newPassword).toString('base64'); // encodage basique
-    
+    const pwdEncoded = newPassword
+      ? Buffer.from(newPassword).toString('base64')
+      : existingPwdEncoded;
+    const loginOverride = newLogin !== undefined ? newLogin : existingLoginOverride;
+
+    const rowData = [role, pwdEncoded, timestamp, loginOverride];
+
     if (targetRow >= 0) {
       // Mettre à jour la ligne existante
       const row = targetRow + 1; // Sheets est 1-indexé
-      const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SID_FONDATEUR}/values/Config_Passwords!A${row}:C${row}?valueInputOption=USER_ENTERED`;
+      const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SID_FONDATEUR}/values/Config_Passwords!A${row}:D${row}?valueInputOption=USER_ENTERED`;
       await fetch(writeUrl, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values: [[role, pwdHashed, timestamp]] }),
+        body: JSON.stringify({ values: [rowData] }),
       });
     } else {
       // Ajouter une nouvelle ligne
-      const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SID_FONDATEUR}/values/Config_Passwords!A:C:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+      const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SID_FONDATEUR}/values/Config_Passwords!A:D:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
       await fetch(appendUrl, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values: [[role, pwdHashed, timestamp]] }),
+        body: JSON.stringify({ values: [rowData] }),
       });
     }
 
-    return res.status(200).json({ ok: true, message: `Mot de passe ${role} mis à jour` });
+    const parts = [];
+    if (newPassword) parts.push('mot de passe mis à jour');
+    if (newLogin)    parts.push(`identifiant → ${newLogin}`);
+    return res.status(200).json({ ok: true, message: `${role} : ${parts.join(' + ')}` });
 
   } catch (e) {
     return res.status(500).json({ error: 'Erreur serveur : ' + e.message });

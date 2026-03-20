@@ -24,41 +24,58 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok:false, error: 'Identifiants manquants' });
     }
 
-    const user = USERS[login];
+    // Lookup direct par login canonique, ou via override dans Config_Passwords
+    let role = login;
+    let user = USERS[login];
+    let expectedPwd = user ? user.pwd : null;
+
+    // Toujours lire Config_Passwords (password overrides + login overrides)
+    try {
+      const token = await getGoogleToken();
+      if (token && process.env.SID_FONDATEUR) {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${process.env.SID_FONDATEUR}/values/Config_Passwords!A:D`;
+        const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        const d = await r.json();
+        const rows = d.values || [];
+
+        if (!user) {
+          // Login inconnu → chercher si c'est un identifiant overridé (colonne D)
+          const overrideRow = rows.find(row => row[3] && row[3] === login);
+          if (overrideRow) {
+            role = overrideRow[0];
+            user = USERS[role];
+            if (!user) return res.status(401).json({ ok:false, error: 'Identifiant inconnu' });
+            expectedPwd = user.pwd;
+            if (overrideRow[1]) expectedPwd = Buffer.from(overrideRow[1], 'base64').toString();
+          }
+        } else {
+          // Login canonique → chercher override de mot de passe (colonne B)
+          const override = rows.find(row => row[0] === login);
+          if (override && override[1]) {
+            expectedPwd = Buffer.from(override[1], 'base64').toString();
+          }
+        }
+      }
+    } catch(e) {
+      // Fallback silencieux
+    }
+
     if (!user) {
       return res.status(401).json({ ok:false, error: 'Identifiant inconnu' });
     }
 
     // Debug : vérifier que les env vars sont chargées
-    if (!user.pwd) {
+    if (!user.pwd && !expectedPwd) {
       return res.status(500).json({ ok:false, error: 'Config serveur manquante — vérifiez les variables Vercel' });
     }
 
-    // Vérifier d'abord les overrides Config_Passwords dans Sheets
-    let expectedPwd = user.pwd;
-    try {
-      const token = await getGoogleToken();
-      if (token && process.env.SID_FONDATEUR) {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${process.env.SID_FONDATEUR}/values/Config_Passwords!A:B`;
-        const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-        const d = await r.json();
-        const rows = d.values || [];
-        const override = rows.find(row => row[0] === login);
-        if (override && override[1]) {
-          expectedPwd = Buffer.from(override[1], 'base64').toString();
-        }
-      }
-    } catch(e) {
-      // Fallback silencieux sur env var
-    }
-
-    if (password !== expectedPwd) {
+    if (password !== (expectedPwd || user.pwd)) {
       return res.status(401).json({ ok:false, error: 'Mot de passe incorrect' });
     }
 
     // Générer session token
     const crypto = await import('node:crypto');
-    const payload = JSON.stringify({ login, exp: Date.now() + 8 * 3600 * 1000 });
+    const payload = JSON.stringify({ login, role, exp: Date.now() + 8 * 3600 * 1000 });
     const hmac = crypto.createHmac('sha256', process.env.SESSION_SECRET || 'boanr_dev_secret')
       .update(payload).digest('hex');
     const sessionToken = Buffer.from(payload).toString('base64') + '.' + hmac;

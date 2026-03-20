@@ -835,7 +835,7 @@ var S = {
   sn:null, sp:null, spx:null, sveau:null, salim:180000, svet:20000, ssec:50000, simpMode:'pct', simpPct:5, simpFix:100000,
   _resetPwdOpen:false, _resetPwd:'', _resetPwdError:'', _resetGoCheck:false,
   _pwdMgrOpen:false, _pwdMgrStep:'auth', _pwdMgrError:'', _pwdMgrSuccess:'',
-  _pwdMgrCurrent:'', _pwdMgrRole:'', _pwdMgrNew:'', _pwdMgrConfirm:'',
+  _pwdMgrCurrent:'', _pwdMgrRole:'', _pwdMgrNew:'', _pwdMgrConfirm:'', _pwdMgrNewLogin:'',
   _aiOpen:false, _aiLoading:false, _aiResult:'', _aiError:'', _aiQuestion:'',
   selectedBete: null
 };
@@ -2101,8 +2101,9 @@ function openPwdManager() {
   S._pwdMgrSuccess = '';
   S._pwdMgrCurrent = '';
   S._pwdMgrRole    = '';
-  S._pwdMgrNew     = '';
-  S._pwdMgrConfirm = '';
+  S._pwdMgrNew      = '';
+  S._pwdMgrConfirm  = '';
+  S._pwdMgrNewLogin = '';
   r();
 }
 
@@ -2128,31 +2129,45 @@ function pwdMgrVerifyFounder() {
 }
 
 function pwdMgrSelectRole(role) {
-  S._pwdMgrRole    = role;
-  S._pwdMgrStep    = 'change';
-  S._pwdMgrNew     = '';
-  S._pwdMgrConfirm = '';
-  S._pwdMgrError   = '';
+  S._pwdMgrRole     = role;
+  S._pwdMgrStep     = 'change';
+  S._pwdMgrNew      = '';
+  S._pwdMgrConfirm  = '';
+  S._pwdMgrNewLogin = '';
+  S._pwdMgrError    = '';
   r();
 }
 
 function pwdMgrApply() {
-  var elNew  = document.getElementById('pwd-mgr-new-inp');
-  var elConf = document.getElementById('pwd-mgr-conf-inp');
-  if(elNew)  S._pwdMgrNew     = elNew.value;
-  if(elConf) S._pwdMgrConfirm = elConf.value;
+  var elNew   = document.getElementById('pwd-mgr-new-inp');
+  var elConf  = document.getElementById('pwd-mgr-conf-inp');
+  var elLogin = document.getElementById('pwd-mgr-login-inp');
+  if(elNew)   S._pwdMgrNew      = elNew.value;
+  if(elConf)  S._pwdMgrConfirm  = elConf.value;
+  if(elLogin) S._pwdMgrNewLogin = elLogin.value.trim();
 
-  if (!S._pwdMgrNew || S._pwdMgrNew.length < 6) {
+  var hasNewPwd   = S._pwdMgrNew && S._pwdMgrNew.length > 0;
+  var hasNewLogin = S._pwdMgrNewLogin && S._pwdMgrNewLogin.length > 0;
+
+  if (!hasNewPwd && !hasNewLogin) {
+    S._pwdMgrError = 'Saisir un nouvel identifiant et/ou un nouveau mot de passe';
+    r(); return;
+  }
+  if (hasNewPwd && S._pwdMgrNew.length < 6) {
     S._pwdMgrError = 'Mot de passe trop court (6 caractères min)';
     r(); return;
   }
-  if (S._pwdMgrNew !== S._pwdMgrConfirm) {
+  if (hasNewPwd && S._pwdMgrNew !== S._pwdMgrConfirm) {
     S._pwdMgrError = 'Les mots de passe ne correspondent pas';
+    r(); return;
+  }
+  if (hasNewLogin && !/^[a-z0-9_]{3,}$/.test(S._pwdMgrNewLogin)) {
+    S._pwdMgrError = 'Identifiant invalide (3+ caractères, lettres minuscules/chiffres/_)';
     r(); return;
   }
   S._pwdMgrError = '';
 
-  // Appel API pour changer le mot de passe
+  // Appel API pour changer le mot de passe et/ou l'identifiant
   fetch('/api/change-password', {
     method: 'POST',
     headers: {
@@ -2162,24 +2177,29 @@ function pwdMgrApply() {
     body: JSON.stringify({
       founderPassword: S._pwdMgrCurrent,
       role: S._pwdMgrRole,
-      newPassword: S._pwdMgrNew
+      newPassword: hasNewPwd ? S._pwdMgrNew : undefined,
+      newLogin: hasNewLogin ? S._pwdMgrNewLogin : undefined
     })
   })
   .then(function(res){ return res.json(); })
   .then(function(data){
     if (!data.ok) { S._pwdMgrError = data.error || 'Erreur serveur'; r(); return; }
     var roleLabel = PWD_ROLES.find(function(p){ return p.key===S._pwdMgrRole; });
-    S._pwdMgrSuccess = (roleLabel ? roleLabel.label : S._pwdMgrRole) + ' : mot de passe changé ✓';
+    var label = roleLabel ? roleLabel.label : S._pwdMgrRole;
+    var parts = [];
+    if (hasNewPwd)   parts.push('mot de passe changé');
+    if (hasNewLogin) parts.push('identifiant → ' + S._pwdMgrNewLogin);
+    S._pwdMgrSuccess = label + ' : ' + parts.join(' + ') + ' ✓';
     S._pwdMgrStep    = 'done';
     // Si le fondateur change son propre mot de passe → déconnecter
-    if (S._pwdMgrRole === 'fondateur') {
+    if (S._pwdMgrRole === 'fondateur' && hasNewPwd) {
       setTimeout(function(){
         S._pwdMgrOpen = false;
         S.page = 'login';
         S.user = null;
         S.tok  = null;
         S.sessionToken = null;
-        S.msg  = 'ok:Mot de passe changé — reconnectez-vous';
+        S.msg  = 'ok:Identifiant/mot de passe changé — reconnectez-vous';
         r();
       }, 2000);
     }
@@ -2243,16 +2263,22 @@ function pagePwdManager() {
     body = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;padding:10px 12px;background:'+bg1+';border-radius:8px;border:1px solid '+bd1+'">'
       +'<span style="font-size:20px">'+(roleInfo?roleInfo.icon:'👤')+'</span>'
       +'<div><div style="font-weight:600;color:'+txtH+'">'+(roleInfo?roleInfo.label:S._pwdMgrRole)+'</div>'
-      +'<div style="font-size:11px;color:'+txtS+'">Nouveau mot de passe</div></div>'
+      +'<div style="font-size:11px;color:'+txtS+'">Modifier identifiant et/ou mot de passe</div></div>'
       +'</div>'
       +'<div style="margin-bottom:10px">'
-      +'<label style="font-size:12px;color:'+txtS+';display:block;margin-bottom:5px">Nouveau mot de passe (6 car. min)</label>'
+      +'<label style="font-size:12px;color:'+txtS+';display:block;margin-bottom:5px">Nouvel identifiant <span style="opacity:.6">(optionnel)</span></label>'
+      +'<input id="pwd-mgr-login-inp" type="text" placeholder="ex: mamadou" autocomplete="off" '
+      +'style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;border:1px solid '+bd1+';background:'+bgInp+';color:'+txtI+';font-size:14px" '
+      +'oninput="S._pwdMgrNewLogin=this.value.trim()">'
+      +'</div>'
+      +'<div style="margin-bottom:10px">'
+      +'<label style="font-size:12px;color:'+txtS+';display:block;margin-bottom:5px">Nouveau mot de passe <span style="opacity:.6">(optionnel)</span></label>'
       +'<input id="pwd-mgr-new-inp" type="password" placeholder="Nouveau mot de passe" '
       +'style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;border:1px solid '+bd1+';background:'+bgInp+';color:'+txtI+';font-size:14px" '
       +'onchange="S._pwdMgrNew=this.value">'
       +'</div>'
       +'<div style="margin-bottom:12px">'
-      +'<label style="font-size:12px;color:'+txtS+';display:block;margin-bottom:5px">Confirmer</label>'
+      +'<label style="font-size:12px;color:'+txtS+';display:block;margin-bottom:5px">Confirmer le mot de passe</label>'
       +'<input id="pwd-mgr-conf-inp" type="password" placeholder="Confirmer le mot de passe" '
       +'style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;border:1px solid '+bd1+';background:'+bgInp+';color:'+txtI+';font-size:14px" '
       +'onchange="S._pwdMgrConfirm=this.value" '
