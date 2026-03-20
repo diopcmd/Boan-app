@@ -37,7 +37,7 @@ export default async function handler(req, res) {
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${process.env.SID_FONDATEUR}/values/Config_Passwords!A:D`;
         const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
         const d = await r.json();
-        const rows = d.values || [];
+        const rows = (d.values || []).filter(row => row[0] && row[0] !== 'role'); // ignorer en-tête
 
         if (!user) {
           // Login inconnu → chercher si c'est un identifiant overridé (colonne D)

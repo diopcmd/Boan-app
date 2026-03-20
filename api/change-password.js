@@ -50,19 +50,41 @@ export default async function handler(req, res) {
     const token = await getGoogleToken();
     const SID_FONDATEUR = process.env.SID_FONDATEUR;
 
+    // Auto-créer la feuille Config_Passwords si elle n'existe pas encore
+    const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID_FONDATEUR}?fields=sheets.properties.title`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const meta = await metaRes.json();
+    const sheets = (meta.sheets || []).map(s => s.properties.title);
+    if (!sheets.includes('Config_Passwords')) {
+      // Créer la feuille
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID_FONDATEUR}:batchUpdate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: 'Config_Passwords' } } }] }),
+      });
+      // Ajouter la ligne d'en-tête
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID_FONDATEUR}/values/Config_Passwords!A1:D1?valueInputOption=USER_ENTERED`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: [['role', 'pwd_encoded', 'updated_at', 'login_override']] }),
+      });
+    }
+
     // Lire les overrides existants
-    const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SID_FONDATEUR}/values/Config_Passwords!A:B`;
+    const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SID_FONDATEUR}/values/Config_Passwords!A:D`;
     const readRes = await fetch(readUrl, { headers: { Authorization: `Bearer ${token}` } });
     const readData = await readRes.json();
-    const rows = readData.values || [];
+    const rows = (readData.values || []).filter(r => r[0] !== 'role'); // ignorer l'en-tête
 
     // Trouver la ligne existante pour ce rôle
-    let targetRow = -1;
+    // rows est sans l'en-tête, mais dans Sheets la ligne 1 = en-tête, données à partir de ligne 2
+    let targetSheetRow = -1;
     let existingPwdEncoded = '';
     let existingLoginOverride = '';
     rows.forEach((row, i) => {
       if (row[0] === role) {
-        targetRow = i;
+        targetSheetRow = i + 2; // +1 pour index 1-based, +1 pour l'en-tête
         existingPwdEncoded = row[1] || '';
         existingLoginOverride = row[3] || '';
       }
@@ -76,10 +98,9 @@ export default async function handler(req, res) {
 
     const rowData = [role, pwdEncoded, timestamp, loginOverride];
 
-    if (targetRow >= 0) {
+    if (targetSheetRow >= 0) {
       // Mettre à jour la ligne existante
-      const row = targetRow + 1; // Sheets est 1-indexé
-      const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SID_FONDATEUR}/values/Config_Passwords!A${row}:D${row}?valueInputOption=USER_ENTERED`;
+      const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SID_FONDATEUR}/values/Config_Passwords!A${targetSheetRow}:D${targetSheetRow}?valueInputOption=USER_ENTERED`;
       await fetch(writeUrl, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
