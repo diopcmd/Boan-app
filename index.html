@@ -207,7 +207,7 @@ body.light .sb-head *{color:#1a2e1a}
 body.light .sb-tab{color:#557755;background:transparent}
 body.light .sb-tab.on{background:#e8f0e8;color:#1a2e1a}
 body.light .sb-body{background:#f8faf8;color:#1a2e1a}
-body.light .sb-body *{color:#1a2e1a}
+body.light .sb-body *{color:#1a2e1a !important}
 body.light .sb-row{border-color:#e8f0e8;color:#1a2e1a}
 body.light .stock-item{background:#f0f7f0;border-color:#b8d8b8}
 body.light .sb-shortcut{background:#fff;border-color:#c8dcc8;color:#1a2e1a}
@@ -258,16 +258,20 @@ body.light .mkt div div:first-child{color:#1a2e1a}
 body.light .mkt div div:last-child{color:#88aa88}
 body.light .tw table td{color:#334433}
 body.light .tw table th{color:#2d6a2d}
-body.light .act div div:first-child{color:#1a2e1a}
-body.light .act div div:last-child{color:#778877}
+body.light .act div div:first-child{color:#1a2e1a !important}
+body.light .act div div:last-child{color:#556655 !important}
 body.light .gold{color:#a07020}
 body.light .prog-fill{background:linear-gradient(90deg,#2d6a2d,#a07020)}
 body.light .msg-load{background:#e0eef8;border-color:#2060a0;color:#1a4080}
 body.light .lcard label{color:#334433}
 body.light input::placeholder,body.light textarea::placeholder{color:#99aa99}
+/* textes inline clairs -> forces en mode clair */
+body.light [style*="color:#ccc"]{color:#445544 !important}
+body.light [style*="color:#aaa"]{color:#557755 !important}
+body.light [style*="color:#888aa88"]{color:#2d6a2d !important}
 body.light .sb-lbl{color:#334433}
 body.light .sb-val{color:#1a2e1a}
-body.light .sb-ok{color:#1a7a1a}
+body.light .sb-ok{color:#1a7a1a !important}
 body.light .sb-ko{color:#c82020}
 body.light .hist-item div{color:#334433}
 body.light .form-progress{background:#c8dcc8}
@@ -430,7 +434,7 @@ function beteBlurHandler(inp) {
   setTimeout(function(){
     var drop = document.getElementById(inp.getAttribute('data-dropid'));
     if(drop) drop.style.display = 'none';
-  }, 200);
+  }, 400); // 400ms > delai tap iOS 300ms
 }
 function selectBeteId(el) {
   var id    = el.getAttribute('data-id');
