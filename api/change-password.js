@@ -113,7 +113,7 @@ function verifySession(token) {
     const [payloadB64, hmac] = token.split('.');
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64').toString());
     if (payload.exp < Date.now()) return null;
-    const expected = crypto.createHmac('sha256', process.env.SESSION_SECRET || 'boanr_secret_dev')
+    const expected = crypto.createHmac('sha256', process.env.SESSION_SECRET || 'boanr_dev_secret')
       .update(JSON.stringify(payload)).digest('hex');
     try { if(!crypto.timingSafeEqual(Buffer.from(hmac), Buffer.from(expected))) return null; }
     catch { if(hmac !== expected) return null; }
