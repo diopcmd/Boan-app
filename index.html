@@ -27,17 +27,17 @@ body{background:#0f1a0f;color:#fff;font-family:'Inter',system-ui,sans-serif}
 .tabs{background:#1a3a1a;display:flex;border-bottom:1px solid #2d4a2d;overflow-x:auto}
 .tabs::-webkit-scrollbar{display:none}
 .tab{padding:12px 20px;font-size:14px;color:#88bb88;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent}
-.tab.on{color:#fff;border-bottom-color:#fff}
+.tab.on{color:#fff;border-bottom-color:#4caf50;background:rgba(76,175,80,0.09)}
 .cnt{padding:16px;max-width:600px;margin:0 auto;overflow:hidden}
-.stitle{font-size:11px;font-weight:500;color:#88bb88;letter-spacing:.04em;text-transform:uppercase;margin-bottom:12px;padding-left:1px}
+.stitle{font-size:11px;font-weight:600;color:#88bb88;letter-spacing:.05em;text-transform:uppercase;margin-bottom:12px;padding-left:9px;border-left:3px solid #2d6a2d}
 .kgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
 .kcard{background:#1a2e1a;border-radius:10px;padding:14px;border:1px solid #2a4a2a;transition:transform .18s ease,box-shadow .18s ease}
 .kcard:active{transform:scale(0.97);box-shadow:0 0 0 2px #2d6a2d44}
 .card{background:#1a2e1a;border-radius:10px;padding:14px;margin-bottom:14px;border:1px solid #2a4a2a;transition:box-shadow .2s ease}
 .al{border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px;animation:fadeInUp .25s ease both}
-.al-g{background:#1a2e1a;border:1px solid #2d6a2d;color:#88cc88}
-.al-o{background:#2e2010;border:1px solid #8a5a00;color:#ffaa40}
-.al-r{background:#2e1010;border:1px solid #8a0000;color:#ff7070}
+.al-g{background:#1a2e1a;border:1px solid #2d6a2d;border-left:3px solid #4caf50;color:#88cc88}
+.al-o{background:#2e2010;border:1px solid #8a5a00;border-left:3px solid #ff9800;color:#ffaa40}
+.al-r{background:#2e1010;border:1px solid #8a0000;border-left:3px solid #f44336;color:#ff7070}
 @keyframes fadeInUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .subtabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
 .stab{padding:6px 13px;border-radius:16px;font-size:12px;cursor:pointer;border:1px solid #2a4a2a;color:#88aa88;background:transparent}
@@ -63,9 +63,9 @@ td{padding:8px 10px;border-bottom:1px solid #1a2e1a;color:#ccc}
 .sep{height:1px;background:#1a2e1a;margin:14px 0}
 button:active,.tab:active,.stab:active,.rb:active,.ddi:active{transform:scale(0.97)}
 button,.tab,.stab,.rb,.ddi{transition:transform .1s ease,background .15s ease}
-.kcard-ok{background:#1a2e1a;border-color:#2d4a2d}
-.kcard-warn{background:#2a1f0f;border-color:#6a4a00}
-.kcard-crit{background:#2a0f0f;border-color:#6a0000}
+.kcard-ok{background:#1a2e1a;border-color:#2d4a2d;border-top:3px solid #4caf50}
+.kcard-warn{background:#2a1f0f;border-color:#6a4a00;border-top:3px solid #ff9800}
+.kcard-crit{background:#2a0f0f;border-color:#6a0000;border-top:3px solid #f44336}
 .gold{color:#C8A06A}
 .kval-ok{color:#4caf50}
 .kval-warn{color:#ff9800}
@@ -173,6 +173,8 @@ body.light .act div div[style*="color:#555"]{color:#778877 !important}
 .slide-right{animation:slideRight .28s cubic-bezier(.4,0,.2,1) forwards}
 .slide-in-left{animation:slideInLeft .28s cubic-bezier(.4,0,.2,1) forwards}
 .slide-in-right{animation:slideInRight .28s cubic-bezier(.4,0,.2,1) forwards}
+.tab-fade-in{animation:tabFadeIn .22s ease both}
+@keyframes tabFadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideLeft{to{transform:translateX(-100%);opacity:0}}
 @keyframes slideRight{to{transform:translateX(100%);opacity:0}}
 @keyframes slideInLeft{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
@@ -188,7 +190,7 @@ body.light .hdr{background:#2d6a2d}
 body.light .logo-b{background:#1a4a1a;color:#fff}
 body.light .tabs{background:#e8f0e8;border-color:#c8dcc8}
 body.light .tab{color:#557755}
-body.light .tab.on{color:#fff;border-bottom-color:#fff}
+body.light .tab.on{color:#fff;border-bottom-color:#2d6a2d;background:rgba(45,106,45,0.14)}
 body.light .kcard,body.light .card,body.light .reco-card,body.light .mkt{background:#fff;border-color:#c8dcc8}
 body.light .kcard-warn{background:#fff8ee;border-color:#e8a840}
 body.light .kcard-crit{background:#fff0f0;border-color:#e84040}
@@ -1478,7 +1480,7 @@ function chTabSwipe(t, dir) {
   setTimeout(function(){
     SWIPE.dir = dir==='left' ? -1 : 1;
     chTab(t);
-  }, 120);
+  }, 290); // must match animation duration (.28s = 280ms)
 }
 
 function chTab(t){
@@ -1488,9 +1490,13 @@ function chTab(t){
   // Animer entrée après rendu
   setTimeout(function(){
     var wrap = document.getElementById('tab-content');
-    if (wrap && SWIPE.dir !== 0) {
-      wrap.classList.add(SWIPE.dir===-1 ? 'slide-in-left' : 'slide-in-right');
-      SWIPE.dir = 0;
+    if (wrap) {
+      if (SWIPE.dir !== 0) {
+        wrap.classList.add(SWIPE.dir===-1 ? 'slide-in-left' : 'slide-in-right');
+        SWIPE.dir = 0;
+      } else {
+        wrap.classList.add('tab-fade-in'); // fade doux pour les clics directs
+      }
     }
     initSwipe();
   }, 10);
@@ -3450,7 +3456,18 @@ function viewDash(){
   var stkBg=MOCK.stock>=6?'kcard-ok':MOCK.stock>=4?'kcard-warn':'kcard-crit';
   var trBg =MOCK.treso>=600000?'kcard-ok':MOCK.treso>=400000?'kcard-warn':'kcard-crit';
   setTimeout(animateCounters, 50);
+  var _roleLabel = S.user==='gerant' ? 'Tableau de bord gérant' : S.user==='fondateur' ? 'Vue d\'ensemble fondateur' : 'Tableau de bord';
   return '<div class="cnt">'
+    +'<div style="background:linear-gradient(135deg,#142714,#0d1f0d);border-radius:14px;padding:16px 18px;margin-bottom:18px;border:1px solid #2a5a2a;position:relative;overflow:hidden">'
+    +'<div style="position:absolute;right:-28px;top:-28px;width:120px;height:120px;border-radius:50%;background:rgba(45,106,45,0.12)"></div>'
+    +'<div style="font-size:11px;color:#88aa88;letter-spacing:.05em;text-transform:uppercase;margin-bottom:5px">'+_roleLabel+'</div>'
+    +'<div style="font-size:20px;font-weight:800;color:#fff;margin-bottom:12px">Cycle 1 · Mois '+MOCK.mois+' <span style="font-size:13px;color:#88aa88;font-weight:400">/ '+(CYCLE.dureeMois||8)+'</span></div>'
+    +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
+    +'<div style="background:rgba(76,175,80,0.15);border:1px solid rgba(76,175,80,0.3);border-radius:20px;padding:5px 13px;font-size:12px;color:#4caf50;font-weight:600">🐄 '+MOCK.betes+' bêtes</div>'
+    +'<div style="background:rgba(200,160,106,0.12);border:1px solid rgba(200,160,106,0.3);border-radius:20px;padding:5px 13px;font-size:12px;color:#C8A06A;font-weight:600">📅 Sem. '+semActuelle+' / '+totalSemCycle+'</div>'
+    +'<div style="background:rgba(90,180,255,0.08);border:1px solid rgba(90,180,255,0.2);border-radius:20px;padding:5px 13px;font-size:12px;color:#5ab4ff;font-weight:600">'+pct+'% avancement</div>'
+    +'</div>'
+    +'</div>'
     +'<div class="stitle">Indicateurs Cycle</div>'
     +'<div class="kgrid">'
     +'<div class="kcard kcard-ok"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">Bêtes actives</div><div class="kval-ok" style="font-size:26px;font-weight:700" data-count="'+MOCK.betes+'">'+MOCK.betes+'</div>'+(function(){var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;var col=mort===0?'#4caf50':mort<=5?'#ff9800':'#f44336';var ico=mort===0?' ✓':mort<=5?' ⚠':' 🔴';return '<div style="font-size:11px;margin-top:4px;color:'+col+'">'+mort+'% mortalité'+ico+'</div><div class="sparkline-wrap">'+sparkline(SPARK.betes,col)+'</div></div>';})()
