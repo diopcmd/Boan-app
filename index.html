@@ -108,7 +108,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 .hbg-badge{position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%;background:#f44336;animation:pulse 1.2s infinite}
 .sb-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;opacity:0;animation:fadeIn .2s ease forwards}
 @keyframes fadeIn{to{opacity:1}}
-.sb{position:fixed;top:0;right:0;bottom:0;width:300px;max-width:88vw;background:#0f1a0f;border-left:1px solid #2a4a2a;z-index:201;display:flex;flex-direction:column;transform:translateX(100%);animation:slideIn .25s cubic-bezier(.2,.8,.3,1) forwards}
+.sb{position:fixed;top:0;right:0;bottom:0;width:300px;max-width:88vw;background:#0f1a0f;border-left:1px solid #2a4a2a;z-index:201;display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;transform:translateX(100%);animation:slideIn .25s cubic-bezier(.2,.8,.3,1) forwards}
 @keyframes slideIn{to{transform:translateX(0)}}
 .sb.closing{animation:slideOut .2s ease forwards}
 @keyframes slideOut{to{transform:translateX(100%)}}
@@ -865,21 +865,43 @@ function closeSB() {
 function r() {
   var el = document.getElementById('app');
   if (!el) return;
-  if (S.page==='login') {
-    var loginHtml = pageLogin();
-    // Si la modale init est ouverte (fondateur première connexion), l'afficher sur le login aussi
-    if (MODAL.open) loginHtml += pageModal();
-    el.innerHTML = loginHtml;
-    return;
+  // Sauvegarder focus avant re-render (évite disparition clavier mobile)
+  var _ae = document.activeElement;
+  var _aid = _ae && _ae.id ? _ae.id : null;
+  var _atag = _ae ? _ae.tagName : '';
+  var _asel0 = null, _asel1 = null;
+  if (_aid && _ae.selectionStart !== undefined) {
+    try { _asel0 = _ae.selectionStart; _asel1 = _ae.selectionEnd; } catch(e) {}
   }
-  var html = pageApp();
-  if (MODAL.open) html += pageModal();
-  if (CONFIRM.open) html += pageConfirm();
-  if (S._resetPwdOpen) html += pageResetPwd();
-  if (S._aiOpen) html += pageAI();
-  if (S._pwdMgrOpen) html += pagePwdManager();
-  if (S._guideOpen)   html += pageGuide();
+  // Verrou scroll : bloque le défilement du fond quand un overlay est actif (iOS/Android)
+  var _ov = SB.open || MODAL.open || CONFIRM.open ||
+    S._resetPwdOpen || S._aiOpen || S._pwdMgrOpen || S._guideOpen;
+  document.body.style.overflow = _ov ? 'hidden' : '';
+  var html;
+  if (S.page==='login') {
+    html = pageLogin();
+    // Si la modale init est ouverte (fondateur première connexion), l'afficher sur le login aussi
+    if (MODAL.open) html += pageModal();
+  } else {
+    html = pageApp();
+    if (MODAL.open) html += pageModal();
+    if (CONFIRM.open) html += pageConfirm();
+    if (S._resetPwdOpen) html += pageResetPwd();
+    if (S._aiOpen) html += pageAI();
+    if (S._pwdMgrOpen) html += pagePwdManager();
+    if (S._guideOpen)   html += pageGuide();
+  }
   el.innerHTML = html;
+  // Restaurer focus sur les inputs avec ID (maintient le clavier mobile ouvert)
+  if (_aid && (_atag === 'INPUT' || _atag === 'TEXTAREA')) {
+    var _re = document.getElementById(_aid);
+    if (_re) {
+      _re.focus({preventScroll: true});
+      if (_asel0 !== null && _re.setSelectionRange) {
+        try { _re.setSelectionRange(_asel0, _asel1); } catch(e) {}
+      }
+    }
+  }
 }
 
 function doLogin() {
@@ -1542,11 +1564,26 @@ function fl(label, inputHtml, val) {
 }
 
 function yn(val,k,obj){
-  return '<div class="rg">'
-    +'<div class="rb '+(val==='OUI'?'on':'')+'" onclick="S.'+obj+'.'+k+'=\'OUI\';r()">OUI</div>'
-    +'<div class="rb '+(val==='NON'?'on':'')+'" onclick="S.'+obj+'.'+k+'=\'NON\';r()">NON</div>'
+  var id = 'yn-'+obj+'-'+k;
+  return '<div id="'+id+'" class="rg">'
+    +'<div class="rb '+(val==='OUI'?'on':'')+'" onclick="ynPick(\''+id+'\',\''+obj+'\',\''+k+'\',\'OUI\')">OUI</div>'
+    +'<div class="rb '+(val==='NON'?'on':'')+'" onclick="ynPick(\''+id+'\',\''+obj+'\',\''+k+'\',\'NON\')">NON</div>'
     +'</div>'
-    +(val===''?'<div style="font-size:10px;color:#f44336;margin-top:2px">⚠ Requis</div>':'');
+    +(val===''?'<div id="ynw-'+obj+'-'+k+'" style="font-size:10px;color:#f44336;margin-top:2px">⚠ Requis</div>':'');
+}
+// Met à jour OUI/NON sans reconstruire tout le DOM (évite la disparition du clavier)
+function ynPick(cid, obj, k, val) {
+  if (S[obj]) S[obj][k] = val;
+  var c = document.getElementById(cid);
+  if (c) {
+    var bs = c.querySelectorAll('.rb');
+    if (bs[0]) bs[0].classList.toggle('on', val==='OUI');
+    if (bs[1]) bs[1].classList.toggle('on', val==='NON');
+  }
+  var w = document.getElementById('ynw-'+obj+'-'+k);
+  if (w) w.style.display = 'none';
+  // Re-rendu complet seulement si l'affichage change structurellement (incident → textarea, dec → details)
+  if ((obj==='fi' && k==='incident') || (obj==='fsa' && k==='dec')) r();
 }
 function msgHtml(){
   if(!S.msg)return'';
@@ -1871,6 +1908,8 @@ function addStockLigne(mode){
   if(kEl) kEl.value = '';
   if(typeEl) typeEl.value = '';
   r();
+  // Refocaliser sur le champ type pour permettre d'ajouter la prochaine ligne sans fermer le clavier
+  setTimeout(function(){ var e=document.getElementById('stk-type-inp'); if(e) e.focus(); }, 30);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2743,6 +2782,8 @@ function addModalStock(){
   MODAL.data._msi = '';
   MODAL.data._msk = '';
   r();
+  // Refocaliser sur le champ type pour permettre d'ajouter la prochaine ligne sans fermer le clavier
+  setTimeout(function(){ var inp=document.querySelector('.modal-overlay input[oninput*="_msi"]'); if(inp) inp.focus(); }, 30);
 }
 
 function addBeteModal(){
@@ -2799,6 +2840,9 @@ function saveCycle(){
   }
   // Réinitialiser les valeurs du simulateur pour refléter le nouveau cycle
   S.sn = null; S.sp = null; S.spx = null; S.sveau = null;
+  // Réinitialiser l'onglet actif pour éviter un état incohérent après reset cycle
+  S.tab = USERS[S.user] && USERS[S.user].tabs ? USERS[S.user].tabs[0] : 'dashboard';
+  S.sub = '';
   MODAL.open = false;
   // Passer à l'app après validation
   S.page = 'app';
