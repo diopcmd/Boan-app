@@ -1053,7 +1053,10 @@ function appendRow(sid, range, vals) {
 function readSheet(sid, range) {
   return getTok().then(function(tk) {
     if (!tk) return null;
-    var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+encodeURIComponent(range);
+    // ⚠️ encodeURIComponent(':') = '%3A' que l'API Sheets rejette — on encode uniquement le nom de la feuille
+    var _rParts = range.split('!');
+    var _rEnc = encodeURIComponent(_rParts[0]) + (_rParts[1] ? '!' + _rParts[1] : '');
+    var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+_rEnc;
     return fetch(url, {headers:{Authorization:'Bearer '+tk}})
       .then(function(res){ return res.json(); })
       .then(function(d){ return d.values || []; })
@@ -3483,7 +3486,6 @@ function buildSidebar(){
 
   // ── FALLOU ──
   } else if(u==='fallou'){
-  } else if(u==='fallou'){
     var lastPrix = LIVE.prix && LIVE.prix.length ? LIVE.prix[LIVE.prix.length-1] : null;
     var prixAff  = lastPrix ? fmt(lastPrix.moy)+' FCFA/kg' : 'Aucune saisie';
     var foirailAff = lastPrix ? lastPrix.foi : (CYCLE.foirail||'Thiès');
@@ -3502,7 +3504,6 @@ function buildSidebar(){
       body='<div class="sb-card">'
         +'<div class="sb-row"><span class="sb-lbl">Dernier prix observé</span><span class="sb-val">'+prixAff+'</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Commission estimée</span><span style="font-size:12px;color:#C8A06A">'+commAff+'</span></div>'
-        +'</div>';
         +'</div>';
     }
   }
@@ -4148,7 +4149,6 @@ function viewLiv(){
       +(caProj>=caObj?'✅ Trajectoire conforme aux objectifs':'⚠️ Trajectoire en dessous — améliorer le GMQ')
       +'</div>'
       +'</div>';
-      +'</table></div>';
   } else if(S.sub==='betes'){
     var poidsDepart = CYCLE.poidsDepart || 270;
     var semCourante = calcSemaine();

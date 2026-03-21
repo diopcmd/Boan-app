@@ -1,6 +1,8 @@
 // api/token.js — Vercel Serverless Function
 // Signe le JWT RS256 avec la clé SA et retourne l'access_token Google
 
+import { createSign, createHmac, timingSafeEqual } from 'node:crypto';
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -8,7 +10,6 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Vérifier le session token
   const sessionToken = req.headers['x-session-token'];
   if (!verifySession(sessionToken)) {
     return res.status(401).json({ error: 'Session invalide' });
@@ -19,7 +20,6 @@ export default async function handler(req, res) {
     const clientEmail = process.env.SA_CLIENT_EMAIL;
     const now = Math.floor(Date.now() / 1000);
 
-    // Construire le JWT
     const header  = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
     const payload = base64url(JSON.stringify({
       iss: clientEmail,
@@ -28,18 +28,14 @@ export default async function handler(req, res) {
       exp: now + 3600,
       iat: now,
     }));
-    const sigInput = header + '.' + payload;
 
-    // Signer avec la clé privée (Node.js crypto)
-    const crypto = await import('crypto');
-    const sign = crypto.createSign('RSA-SHA256');
-    sign.update(sigInput);
+    const sign = createSign('RSA-SHA256');
+    sign.update(header + '.' + payload);
     const signature = sign.sign(privateKey, 'base64')
       .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 
-    const jwt = sigInput + '.' + signature;
+    const jwt = header + '.' + payload + '.' + signature;
 
-    // Échanger contre un access_token
     const response = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -63,15 +59,12 @@ function base64url(str) {
 function verifySession(token) {
   if (!token) return false;
   try {
-    const crypto = require('crypto');
     const [payloadB64, hmac] = token.split('.');
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64').toString());
     if (payload.exp < Date.now()) return false;
-    const expected = crypto.createHmac('sha256', process.env.SESSION_SECRET || 'boanr_dev_secret')
+    const expected = createHmac('sha256', process.env.SESSION_SECRET || 'boanr_dev_secret')
       .update(JSON.stringify(payload)).digest('hex');
-    // Comparaison timing-safe
-    try {
-      return crypto.timingSafeEqual(Buffer.from(hmac), Buffer.from(expected));
-    } catch { return hmac === expected; }
+    try { return timingSafeEqual(Buffer.from(hmac), Buffer.from(expected)); }
+    catch { return hmac === expected; }
   } catch { return false; }
 }

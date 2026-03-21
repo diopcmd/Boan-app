@@ -1,6 +1,8 @@
 // api/ai.js — Vercel Serverless Function
 // Proxy Anthropic API : clé cachée côté serveur
 
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -8,7 +10,6 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Vérifier session (seul le fondateur appelle l'IA, mais on vérifie quand même)
   const sessionToken = req.headers['x-session-token'];
   if (!verifySession(sessionToken)) {
     return res.status(401).json({ error: 'Session invalide' });
@@ -41,13 +42,12 @@ export default async function handler(req, res) {
 function verifySession(token) {
   if (!token) return false;
   try {
-    const crypto = require('crypto');
     const [payloadB64, hmac] = token.split('.');
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64').toString());
     if (payload.exp < Date.now()) return false;
-    const expected = crypto.createHmac('sha256', process.env.SESSION_SECRET || 'boanr_dev_secret')
+    const expected = createHmac('sha256', process.env.SESSION_SECRET || 'boanr_dev_secret')
       .update(JSON.stringify(payload)).digest('hex');
-    try { return crypto.timingSafeEqual(Buffer.from(hmac), Buffer.from(expected)); }
+    try { return timingSafeEqual(Buffer.from(hmac), Buffer.from(expected)); }
     catch { return hmac === expected; }
   } catch { return false; }
 }

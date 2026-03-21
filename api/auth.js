@@ -1,16 +1,16 @@
 // api/auth.js — Vercel Serverless Function v2
 // Vérifie les credentials et retourne les infos du rôle
 
+import { createHmac, createSign, timingSafeEqual } from 'node:crypto';
+
 export default async function handler(req, res) {
-  // Lire les env vars à l'intérieur de la fonction (pas au niveau module)
-  // pour garantir leur disponibilité dans tous les contextes Vercel
   const USERS = {
     fondateur: { name:'Direction',      pwd: process.env.PWD_FONDATEUR, tabs:['dashboard','saisie','livrables','marche'], sid: process.env.SID_FONDATEUR },
     gerant:    { name:'Gerant terrain', pwd: process.env.PWD_GERANT,    tabs:['dashboard','saisie'],                      sid: process.env.SID_GERANT    },
     rga:       { name:'RGA',            pwd: process.env.PWD_RGA,       tabs:['dashboard','livrables'],                   sid: process.env.SID_RGA       },
     fallou:    { name:'Commerciale',    pwd: process.env.PWD_FALLOU,    tabs:['dashboard','marche'],                      sid: process.env.SID_FALLOU    },
   };
-  // CORS
+
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -19,28 +19,26 @@ export default async function handler(req, res) {
 
   try {
     const { login, password } = req.body || {};
-
-    // Vérif basique
     if (!login || !password) {
       return res.status(400).json({ ok:false, error: 'Identifiants manquants' });
     }
 
-    // Lookup direct par login canonique, ou via override dans Config_Passwords
     let role = login;
     let user = USERS[login];
     let expectedPwd = user ? user.pwd : null;
 
-    // Toujours lire Config_Passwords (password overrides + login overrides)
+    // Lire Config_Passwords (overrides login + password)
     try {
       const token = await getGoogleToken();
       if (token && process.env.SID_FONDATEUR) {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${process.env.SID_FONDATEUR}/values/Config_Passwords!A:D`;
+        const sheetName = 'Config_Passwords';
+        const enc = encodeURIComponent(sheetName);
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${process.env.SID_FONDATEUR}/values/${enc}!A:D`;
         const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
         const d = await r.json();
-        const rows = (d.values || []).filter(row => row[0] && row[0] !== 'role'); // ignorer en-tête
+        const rows = (d.values || []).filter(row => row[0] && row[0] !== 'role');
 
         if (!user) {
-          // Login inconnu → chercher si c'est un identifiant overridé (colonne D)
           const overrideRow = rows.find(row => row[3] && row[3] === login);
           if (overrideRow) {
             role = overrideRow[0];
@@ -50,7 +48,6 @@ export default async function handler(req, res) {
             if (overrideRow[1]) expectedPwd = Buffer.from(overrideRow[1], 'base64').toString();
           }
         } else {
-          // Login canonique → chercher override de mot de passe (colonne B)
           const override = rows.find(row => row[0] === login);
           if (override && override[1]) {
             expectedPwd = Buffer.from(override[1], 'base64').toString();
@@ -58,14 +55,13 @@ export default async function handler(req, res) {
         }
       }
     } catch(e) {
-      // Fallback silencieux
+      // Fallback silencieux sur env vars
     }
 
     if (!user) {
       return res.status(401).json({ ok:false, error: 'Identifiant inconnu' });
     }
 
-    // Debug : vérifier que les env vars sont chargées
     if (!user.pwd && !expectedPwd) {
       const missing = ['FONDATEUR','GERANT','RGA','FALLOU'].filter(k => !process.env['PWD_'+k]);
       return res.status(500).json({ ok:false, error: 'Config serveur manquante — variables manquantes : PWD_' + (missing.join(', PWD_') || '?') });
@@ -76,9 +72,8 @@ export default async function handler(req, res) {
     }
 
     // Générer session token
-    const crypto = await import('node:crypto');
     const payload = JSON.stringify({ login, role, exp: Date.now() + 8 * 3600 * 1000 });
-    const hmac = crypto.createHmac('sha256', process.env.SESSION_SECRET || 'boanr_dev_secret')
+    const hmac = createHmac('sha256', process.env.SESSION_SECRET || 'boanr_dev_secret')
       .update(payload).digest('hex');
     const sessionToken = Buffer.from(payload).toString('base64') + '.' + hmac;
 
@@ -94,7 +89,7 @@ export default async function handler(req, res) {
   }
 }
 
-// ── Google Token (pour lire Config_Passwords) ──
+// ── Google Token ──
 let _tokenCache = { token: null, exp: 0 };
 async function getGoogleToken() {
   if (_tokenCache.token && Date.now() < _tokenCache.exp - 60000) return _tokenCache.token;
@@ -104,16 +99,15 @@ async function getGoogleToken() {
   const clientEmail = process.env.SA_CLIENT_EMAIL;
   if (!clientEmail) return null;
   const now = Math.floor(Date.now() / 1000);
-  const { createSign, createHmac } = await import('node:crypto');
   const b64u = s => Buffer.from(s).toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
-  const h = b64u(JSON.stringify({alg:'RS256',typ:'JWT'}));
-  const p = b64u(JSON.stringify({iss:clientEmail,scope:'https://www.googleapis.com/auth/spreadsheets',aud:'https://oauth2.googleapis.com/token',exp:now+3600,iat:now}));
+  const h = b64u(JSON.stringify({ alg:'RS256', typ:'JWT' }));
+  const p = b64u(JSON.stringify({ iss:clientEmail, scope:'https://www.googleapis.com/auth/spreadsheets', aud:'https://oauth2.googleapis.com/token', exp:now+3600, iat:now }));
   const sign = createSign('RSA-SHA256');
   sign.update(h+'.'+p);
   const sig = sign.sign(privateKey,'base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
   const jwt = h+'.'+p+'.'+sig;
-  const r = await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:`grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`});
+  const r = await fetch('https://oauth2.googleapis.com/token', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:`grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}` });
   const d = await r.json();
-  if (d.access_token) { _tokenCache={token:d.access_token,exp:Date.now()+(d.expires_in*1000)}; return d.access_token; }
+  if (d.access_token) { _tokenCache = { token:d.access_token, exp:Date.now()+(d.expires_in*1000) }; return d.access_token; }
   return null;
 }
