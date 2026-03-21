@@ -963,6 +963,7 @@ function getTok() {
 var TABLE_RANGES = {};
 
 function appendRow(sid, range, vals) {
+  if (!sid) return Promise.resolve({ok:false, err:'SID spreadsheet non configuré — vérifier les variables SID_* dans Vercel'});
   return getTok().then(function(tk) {
     if (!tk) return {ok:false, err:'Token invalide'};
     var sheetName = range.split('!')[0];
@@ -1195,16 +1196,40 @@ function _submitActual(type) {
 
   // Écriture simultanée dans plusieurs sheets avec indicateur
   function writeAll(sids, range, vals) {
-    S._sendCount = sids.length;
+    var validSids = sids.filter(function(s){ return !!s; }); // ignorer SIDs non définis
+    if (!validSids.length) {
+      // Aucun SID valide — probablement SID_GERANT ou SID_FONDATEUR non configuré dans Vercel
+      console.warn('writeAll: aucun SID valide pour la plage', range, '— vérifier les variables SID_* dans Vercel');
+      return Promise.resolve({ok:false, err:'SID non configuré — contacter l\'administrateur'});
+    }
+    S._sendCount = validSids.length;
     S._sendSheet = range.split('!')[0];
-    return Promise.all(sids.map(function(sid){ return appendRow(sid, range, vals); }))
-      .then(function(results){ return results.find(function(r){return r&&r.ok;})||results[0]; });
+    return Promise.all(validSids.map(function(sid){ return appendRow(sid, range, vals); }))
+      .then(function(results){
+        var ok = results.find(function(r){return r&&r.ok;});
+        if(ok) return ok;
+        // Toutes les écritures ont échoué — enrichir le message d'erreur
+        var first = results[0];
+        if(first && first.err && first.err.indexOf('not found') !== -1) {
+          first.err = 'Onglet introuvable : "'+range.split('!')[0]+'" — vérifier les onglets du Google Sheet';
+        }
+        return first;
+      });
+  }
+  function kpiAppend(vals) {
+    // Écrire dans KPI_Mensuels seulement si SID.fondateur est disponible
+    if (!SID.fondateur) return Promise.resolve({ok:true});
+    return appendRow(SID.fondateur, 'KPI_Mensuels!A:K', vals);
+  }
+  function kpiHebdoAppend(vals) {
+    if (!SID.fondateur) return Promise.resolve({ok:true});
+    return appendRow(SID.fondateur, 'KPI_Hebdo!A:J', vals);
   }
 
   if(type==='fiche'){
     var f=S.fi; var td=isoToFr(f.date);
     p=writeAll([SID.gerant,SID.fondateur],'Fiche_Quotidienne!A:G',[td,f.nb,f.nourris,f.eau,f.enclos,f.incident,f.desc])
-    .then(function(res){if(res.ok)return appendRow(SID.fondateur,'KPI_Mensuels!A:K',[td,'','','','','','','',f.incident==='OUI'?1:0,'','']);return res;});
+    .then(function(res){if(res.ok)return kpiAppend([td,'','','','','','','',f.incident==='OUI'?1:0,'','']);return res;});
   } else if(type==='sop'){
     var f=S.fs; var td=isoToFr(f.date);
     p=writeAll([SID.gerant,SID.fondateur,SID.rga],'SOP_Check!A:H',[td,f.net,f.des,f.rat,f.eau,f.stk,f.san,f.prob]);
@@ -1235,29 +1260,30 @@ function _submitActual(type) {
     if(sheetsPromises.length === 0) sheetsPromises = [Promise.resolve({ok:true})];
     p = Promise.all(sheetsPromises)
     .then(function(results){ return results[results.length-1]||{ok:true}; })
-    .then(function(res){if(res.ok)return appendRow(SID.fondateur,'KPI_Mensuels!A:K',[td,'','',totalNet,'','','','','','','']);return res;});
+    .then(function(res){if(res.ok)return kpiAppend([td,'','',totalNet,'','','','','','','']);return res;});
   } else if(type==='inc'){
     var f=S.fin; var td=isoToFr(f.date);
     p=writeAll([SID.gerant,SID.fondateur,SID.rga],'Incidents!A:G',[td,f.id,f.type,f.grav,f.desc,f.act,f.clos])
-    .then(function(res){if(res.ok&&parseInt(f.grav)>=2)return appendRow(SID.fondateur,'KPI_Mensuels!A:K',[td,'','','','','','','',1,'','Incident G'+f.grav]);return res;});
+    .then(function(res){if(res.ok&&parseInt(f.grav)>=2)return kpiAppend([td,'','','','','','','',1,'','Incident G'+f.grav]);return res;});
   } else if(type==='pesee'){
     var f=S.fp; var td=isoToFr(f.date);
     var gain=f.poids&&f.prev?(parseFloat(f.poids)-parseFloat(f.prev)).toFixed(1):'';
     p=writeAll([SID.gerant,SID.fondateur],'Pesees!A:G',[td,f.id,(f.race==='Autre'&&f.raceCustom?f.raceCustom:f.race),f.poids,f.prev,gain,gain&&parseFloat(gain)<0?'ALERTE':'OK'])
-    .then(function(res){if(res.ok)return appendRow(SID.fondateur,'KPI_Mensuels!A:K',[td,'','','','','',f.poids,'','','','']);return res;});
+    .then(function(res){if(res.ok)return kpiAppend([td,'','','','','',f.poids,'','','','']);return res;});
   } else if(type==='sante'){
     var f=S.fsa; var td=isoToFr(f.date);
     p=writeAll([SID.gerant,SID.fondateur,SID.rga],'Sante_Mortalite!A:G',[td,f.id,f.sym,f.tra,f.cout,f.res,f.dec])
-    .then(function(res){if(res.ok&&f.dec==='OUI')return appendRow(SID.fondateur,'KPI_Mensuels!A:K',[td,'DECES','','','','','','',1,'','APPELER FONDATEUR']);return res;});
+    .then(function(res){if(res.ok&&f.dec==='OUI')return kpiAppend([td,'DECES','','','','','','',1,'','APPELER FONDATEUR']);return res;});
   } else if(type==='bilan'){
     var f=S.fb;
     var al=f.inc==='OUI'||parseFloat(f.stk)<6?'APPELER '+(CYCLE.contactUrgence||'Direction').toUpperCase():'SEMAINE OK';
     p=writeAll([SID.gerant,SID.fondateur,SID.rga],'Hebdomadaire!A:H',['Semaine '+f.sem,f.nb,f.nou,f.stk,f.inc,f.poi,al,f.msg])
-    .then(function(res){if(res.ok)return appendRow(SID.fondateur,'KPI_Hebdo!A:J',['S'+f.sem,f.nb,f.stk,'','',f.inc,'',f.nou,'',al]);return res;});
+    .then(function(res){if(res.ok)return kpiHebdoAppend(['S'+f.sem,f.nb,f.stk,'','',f.inc,'',f.nou,'',al]);return res;});
   } else if(type==='marche'){
     var f=S.fm; var td=isoToFr(f.date);
     var foirail = (f.foi==='Autre' && f.foiCustom) ? f.foiCustom : f.foi;
-    p=appendRow(SID.fallou,'Suivi_Marche!A:J',[td,foirail,f.bas,f.moy,f.haut,'','','-','','']);
+    // writeAll pour que fondateur puisse aussi écrire si SID.fallou absent
+    p=writeAll([SID.fallou,SID.fondateur],'Suivi_Marche!A:J',[td,foirail,f.bas,f.moy,f.haut,'','','-','','']);
   } else {
     p=Promise.resolve({ok:false,err:'Type inconnu'});
   }
