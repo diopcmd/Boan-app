@@ -3,6 +3,247 @@
 
 ---
 
+## Contexte projet
+
+Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bovin pour la Ferme BOAN au Sénégal (région de Thiès). L'app est une **SPA vanilla HTML/CSS/JS** déployée sur **Vercel**. Le pilotage est effectué à distance depuis la France.
+
+- **Production** : https://boan-app-9u5e.vercel.app
+- **GitHub** : https://github.com/diopcmd/Boan-app (branche `main`)
+- **Dossier local** : `C:\Users\sg54378\Downloads\Boan-app\`
+- **Langue** : Tout est en français (code, UI, communications)
+
+---
+
+## Stack technique
+
+| Couche | Technologie |
+|---|---|
+| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` |
+| Backend | Vercel Serverless Functions (ES Module `export default`) |
+| Auth | Session token custom HMAC-SHA256 (`base64(payload).hmac_hex`) |
+| Données | Google Sheets API v4 via Service Account RS256 JWT |
+| Déploiement | GitHub → Vercel (auto sur push `main`) |
+| IA | Anthropic Claude claude-sonnet-4-20250514 |
+| Météo | Open-Meteo API (Thiès 14.79°N, -16.93°E) |
+
+---
+
+## Fichiers du projet
+
+```
+Boan-app/
+├── index.html              SPA complète (~290 Ko, ~4400 lignes)
+├── vercel.json             Rewrites /api/:path
+├── api/
+│   ├── auth.js             Login → session token HMAC + SID
+│   ├── token.js            RS256 JWT → access_token Google
+│   ├── sheets.js           Proxy CRUD Sheets (peu utilisé en pratique)
+│   ├── change-password.js  Override mots de passe dans Config_Passwords
+│   └── ai.js               Proxy Anthropic Claude
+├── DOCUMENTATION_TECHNIQUE.md
+└── AI_RESUMPTION_PROMPT.md (ce fichier)
+```
+
+---
+
+## Variables d'environnement Vercel
+
+```
+PWD_FONDATEUR, PWD_GERANT, PWD_RGA, PWD_FALLOU
+SID_FONDATEUR, SID_GERANT, SID_RGA, SID_FALLOU
+SA_PRIVATE_KEY (clé RSA avec \n escapés en \\n)
+SA_CLIENT_EMAIL
+SESSION_SECRET (≥ 32 chars)
+ANTHROPIC_API_KEY (optionnel)
+```
+
+---
+
+## Rôles et accès
+
+| Rôle | Login canonique | Onglets |
+|---|---|---|
+| Fondateur | `fondateur` | Dashboard, Saisie, Livrables, Marché |
+| Gérant | `gerant` | Dashboard, Saisie |
+| RGA | `rga` | Dashboard, Livrables |
+| Commerciale | `fallou` | Dashboard, Marché |
+
+Les logins peuvent être overridés dans `Config_Passwords` (Sheets fondateur).  
+`SID[role]` est retourné par `/api/auth` au login et stocké dans `var SID = {}`.
+
+---
+
+## Architecture index.html
+
+### CSS (lignes ~14–280)
+- Thème dark : `#0f1a0f` fond, `#1a2e1a` cartes, `#2d6a2d` vert accent, `#C8A06A` or
+- Mode clair `body.light` complet
+- Animations : `fadeInUp`, `slideLeft/Right/InLeft/InRight`, `tabFadeIn`, `pulse`, `spin`
+
+### Variables globales JS (extraits clés)
+
+```js
+var S = {
+  page:'login', user:null, tab:'dashboard', sub:'fiche',
+  tok:null, tokexp:0, sessionToken:null,   // Google token + session HMAC
+  sending:false, msg:'', _sendCount:0, _sendSheet:'',
+  fi:{date,nb,nourris,eau,enclos,incident,desc},  // Fiche quotidienne
+  fs:{date,net,des,rat,eau,stk,san,prob},          // SOP
+  fst:{date,mvts:[],stockInput,stockKg,rat},       // Stock
+  fin:{date,id,type,grav,desc,act,clos},           // Incident
+  fp:{date,id,race,raceCustom,poids,prev,datePrev},// Pesée
+  fsa:{date,id,sym,tra,cout,res,dec},              // Santé
+  fb:{sem,nb,nou,stk,inc,poi,msg},                 // Bilan hebdo
+  fm:{date,foi,foiCustom,bas,moy,haut},            // Marché
+  _guideOpen:false, _aiOpen:false, _pwdMgrOpen:false, _resetPwdOpen:false
+};
+var MOCK = {betes:4, gmq:1.1, stock:6, treso:680000, sem:1, mois:1};
+var CYCLE = lsGet('cycle') || {nbBetes:4, dateDebut:'', dureeMois:8, ration:12,
+  capital:1450000, objectifPrix:2000, budgetSante:200000, veterinaire:'',
+  foirail:'Thiès', commission:2, betes:[], alimentTypes:[], initialized:false, ...};
+var SID = {};             // {fondateur, gerant, rga, fallou} — rempli au login
+var TABLE_RANGES = {};    // ⚠️ Doit être déclaré AVANT appendRow()
+var STOCK_MVTS = [];      // [{date,type,mode:'ajouter'|'consommer',kg,cycleDebut}]
+var HISTORY = [];         // 20 dernières saisies
+var LIVE = {pesees:[],beteIds:[],prix:[],loaded:false};
+var SPARK = {gmq:[],stk:[],treso:[],betes:[]};  // 7 points pour sparklines
+var OFFLINE_QUEUE = lsGet('offline_queue') || [];
+```
+
+### Fonctions réseau
+
+```js
+function getTok()                    // Promise<access_token Google> — cache S.tok/tokexp
+function readSheet(sid, range)       // Lit Sheets directement avec Google token
+function appendRow(sid, range, vals) // Écrit une ligne — guard si sid undefined
+function writeAll(sids[], range, vals)// Écrit dans plusieurs SIDs en parallèle
+                                     // Guard si aucun SID valide — erreur explicite
+```
+
+> **Important** : Le frontend appelle l'API Google DIRECTEMENT avec l'access_token de `/api/token`.  
+> Il ne passe PAS par `/api/sheets` (qui est un proxy alternatif non utilisé en pratique).
+
+### Cycle de soumission
+
+```
+doSubmit(type)       ← validation + anti-doublons + confirmations sécurité
+  └── _submitActual(type)
+        ├── writeAll(sids, onglet, vals)     ← écriture multi-sheets
+        ├── kpiAppend(vals)                  ← KPI_Mensuels si SID.fondateur dispo
+        └── kpiHebdoAppend(vals)             ← KPI_Hebdo si SID.fondateur dispo
+```
+
+### Navigation
+
+```
+S.tab = 'dashboard'  → viewDash()
+S.tab = 'saisie'     → viewSaisie()
+  S.sub: fiche | sop | stock | inc | pesee | sante | bilan
+S.tab = 'livrables'  → viewLiv()
+  S.sub: treso | sim | proj | pw
+S.tab = 'marche'     → viewMarche()
+  S.sub: prix | reco
+```
+
+---
+
+## Google Sheets — Noms d'onglets EXACTS
+
+> ⚠️ "Requested entity was not found" = nom d'onglet incorrect ou SID_* mal configuré dans Vercel.
+
+### Spreadsheet GÉRANT (SID_GERANT) — requis
+
+| Onglet exact | Colonnes |
+|---|---|
+| `Fiche_Quotidienne` | Date, NbBetes, Nourris, Eau, Enclos, Incident, Description |
+| `SOP_Check` | Date, Net, Des, Rat, Eau, Stk, San, Prob |
+| `Stock_Nourriture` | Date, TypeAliment, kg(±), Ration, Semaines, Alerte |
+| `Incidents` | Date, IdBete, Type, Gravite(1-3), Description, Action, Cloture |
+| `Pesees` | Date, IdBete, Race, Poids, PoidsPrec, Gain, Statut |
+| `Sante_Mortalite` | Date, IdBete, Symptome, Traitement, Cout, Resultat, Deces |
+| `Hebdomadaire` | Semaine, NbBetes, Nourriture, Stock, Incidents, Poids, Alerte, Msg |
+
+### Spreadsheet FONDATEUR (SID_FONDATEUR) — requis en plus
+
+| Onglet exact | Usage |
+|---|---|
+| Mêmes 7 onglets que GÉRANT | writeAll écrit aussi dans fondateur |
+| `KPI_Mensuels` | kpiAppend — col H = trésorerie |
+| `KPI_Hebdo` | kpiHebdoAppend |
+| `Config_Passwords` | role \| pwd_b64 \| updated_at \| login_override |
+
+### Spreadsheet FALLOU (SID_FALLOU)
+
+| Onglet exact | Usage |
+|---|---|
+| `Suivi_Marche` | writeAll([SID.fallou, SID.fondateur], ...) |
+
+---
+
+## Authentification
+
+```js
+// Session token format : base64(JSON.stringify(payload)) + '.' + hmac_sha256_hex
+// Payload : { login:"fondateur", role:"fondateur", exp: Date.now() + 8*3600*1000 }
+// Durée : 8h — auto-déconnexion si inactivité (setInterval 60s)
+// Non persisté : rechargement page = reconnexion obligatoire
+```
+
+---
+
+## Conventions strictes à respecter
+
+1. **`var` uniquement** — Pas de `let`/`const` dans le JS de `index.html`
+2. **Pas d'emojis dans les strings JS** — utiliser `\u26A0`, `\u2705`, etc. ou texte
+3. **Pas de double virgule `,,`** dans les objets — erreur JS fatale silencieuse (page blanche)
+4. **`TABLE_RANGES = {}`** — déclaré AVANT `function appendRow()`
+5. **`USERS` dans `handler()`** — PAS au niveau module (cold start Vercel)
+6. **Swipe timeout : 290ms** — durée animation `.28s` — ne jamais réduire
+7. **PowerShell** — utiliser `;` pour chaîner, jamais `&&`
+
+---
+
+## Commandes de déploiement
+
+```powershell
+Set-Location "C:\Users\sg54378\Downloads\Boan-app"
+git add index.html      # (ou api/fichier.js selon la modification)
+git commit -m "type: description"
+git push origin main
+# Vercel déploie automatiquement en 30-60 secondes
+```
+
+---
+
+## État actuel et derniers commits
+
+```
+fix: writeAll erreur si SID absent, marche via writeAll, guard appendRow sid
+  - appendRow() retourne {ok:false} si sid undefined
+  - writeAll() retourne erreur explicite si aucun SID valide
+  - Soumission marché : writeAll([SID.fallou,SID.fondateur], ...) au lieu de appendRow direct
+
+fix: double virgule dans S{} (_guideOpen: false,,)
+ux: dashboard hero + bordures KPI/alertes + onglet actif vert
+feat: guide gerant — modal quoi faire et quand
+feat: auto-creation Config_Passwords
+fix: projection vente dynamique (CYCLE.dureeMois)
+fix: env vars dans handler() — cold start Vercel
+feat: modification identifiants + mots de passe fondateur
+fix: TABLE_RANGES declaration avant appendRow
+```
+
+---
+
+## Problème connu résolu (référence)
+
+**Symptôme** : "Requested entity was not found" sur le téléphone d'un tiers, pas sur le tien.  
+**Cause** : Le spreadsheet `SID_GERANT` dans Vercel n'a pas les onglets avec les noms exacts attendus par le code (ex: `Stock_Nourriture` et non `Stock_Aliments`, `SOP_Check` et non `Saisie_SOP`, etc.).  
+**Fix code** : `appendRow` et `writeAll` protégés contre les SID undefined avec messages d'erreur clairs.  
+**Fix opérationnel** : Renommer les onglets du Google Sheet gérant pour correspondre exactement aux noms listés ci-dessus.
+
+---
+
 ## Contexte du projet
 
 Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bovin pour la ferme BOAN au Sénégal (région de Thiès). L'application est une **SPA (Single Page Application)** en vanilla HTML/CSS/JS sans framework, déployée sur **Vercel**.
