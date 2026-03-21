@@ -993,19 +993,18 @@ function getTok() {
   });
 }
 
-// Plages des tableaux formatés dans chaque onglet Google Sheets
-// start = 1ère ligne de données (sous l'en-tête), end = dernière ligne réservée
+// Plages des tableaux formatés — start = 1ère ligne de saisie (après en-tête), end = dernière ligne réservée
 var TABLE_RANGES = {
-  'Fiche_Quotidienne': { start: 2, end: 1002 },
-  'SOP_Check':         { start: 2, end: 1002 },
-  'Stock_Nourriture':  { start: 2, end: 1002 },
-  'Incidents':         { start: 2, end: 1002 },
-  'Pesees':            { start: 2, end: 1002 },
-  'Sante_Mortalite':   { start: 2, end: 1002 },
-  'Hebdomadaire':      { start: 2, end: 1002 },
-  'Suivi_Marche':      { start: 2, end: 1002 },
-  'KPI_Mensuels':      { start: 2, end: 1002 },
-  'KPI_Hebdo':         { start: 2, end: 1002 }
+  'Fiche_Quotidienne': { start: 4, end: 500 },
+  'SOP_Check':         { start: 4, end: 200 },
+  'Stock_Nourriture':  { start: 4, end: 500 },
+  'Incidents':         { start: 4, end: 200 },
+  'Pesees':            { start: 4, end: 200 },
+  'Sante_Mortalite':   { start: 4, end: 200 },
+  'Hebdomadaire':      { start: 4, end: 200 },
+  'Suivi_Marche':      { start: 4, end: 200 },
+  'KPI_Mensuels':      { start: 4, end: 50  },
+  'KPI_Hebdo':         { start: 4, end: 50  }
 };
 
 function appendRow(sid, range, vals) {
@@ -1014,20 +1013,34 @@ function appendRow(sid, range, vals) {
     if (!tk) return {ok:false, err:'Token invalide'};
     var sheetName = range.split('!')[0];
     var tr = TABLE_RANGES[sheetName];
-    var apiRange;
-    if (tr) {
-      // Borner la plage dans le tableau formaté : l'API cherche la 1ère ligne vide entre start et end
-      var colPart = (range.split('!')[1] || 'A').split(':');
-      var colEnd = colPart[1] || colPart[0];
-      apiRange = sheetName + '!A' + tr.start + ':' + colEnd + tr.end;
-    } else {
-      apiRange = range;
+    if (!tr) {
+      // Feuille non référencée — append classique hors tableau formaté
+      var fbUrl = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+encodeURIComponent(range)+':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS';
+      return fetch(fbUrl, {method:'POST', headers:{Authorization:'Bearer '+tk,'Content-Type':'application/json'}, body:JSON.stringify({values:[vals]})})
+        .then(function(res){return res.json();})
+        .then(function(d){return d.error?{ok:false,err:d.error.message}:{ok:true};});
     }
-    // OVERWRITE = remplace la 1ère ligne vide dans la plage (ne insère pas de lignes dans le tableau)
-    var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+encodeURIComponent(apiRange)+':append?valueInputOption=USER_ENTERED&insertDataOption=OVERWRITE';
-    return fetch(url, {method:'POST', headers:{Authorization:'Bearer '+tk,'Content-Type':'application/json'}, body:JSON.stringify({values:[vals]})})
-    .then(function(res){return res.json();})
-    .then(function(d){return d.error?{ok:false,err:d.error.message}:{ok:true};});
+    // 1. Lire colonne A pour compter les lignes déjà saisies dans le tableau
+    var readUrl = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid
+      +'/values/'+encodeURIComponent(sheetName+'!A'+tr.start+':A'+tr.end);
+    return fetch(readUrl, {headers:{Authorization:'Bearer '+tk}})
+      .then(function(res){return res.json();})
+      .then(function(d){
+        var rows = d.values || [];
+        // 2. Première ligne vide dans le tableau (sans dépasser la fin)
+        var targetLine = Math.min(tr.start + rows.length, tr.end);
+        // 3. Écrire exactement à cette ligne (PUT — aucune insertion de ligne)
+        var writeUrl = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid
+          +'/values/'+encodeURIComponent(sheetName+'!A'+targetLine)+'?valueInputOption=USER_ENTERED';
+        return fetch(writeUrl, {
+          method: 'PUT',
+          headers: {Authorization:'Bearer '+tk, 'Content-Type':'application/json'},
+          body: JSON.stringify({values:[vals]})
+        });
+      })
+      .then(function(res){return res.json();})
+      .then(function(d){return d.error?{ok:false,err:d.error.message}:{ok:true};})
+      .catch(function(e){return{ok:false,err:e.message};});
   }).catch(function(e){return{ok:false,err:e.message};});
 }
 
