@@ -3614,8 +3614,8 @@ function buildSidebar(){
     if(SB.tab==='today'){
       body='<div class="sb-card">'
         +'<div class="sb-row"><span class="sb-lbl">Trésorerie</span><span class="sb-val '+(MOCK.treso>=600000?'kval-ok':'kval-crit')+'">'+Math.round(MOCK.treso/1000)+'k FCFA</span></div>'
-        +'<div class="sb-row"><span class="sb-lbl">Bêtes actives</span><span class="sb-val kval-ok">'+MOCK.betes+'</span></div>'
-        +'<div class="sb-row"><span class="sb-lbl">GMQ</span><span class="sb-val kval-ok">'+MOCK.gmq+' kg/j</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">Bêtes actives</span><span class="sb-val '+(MOCK.betes>=(CYCLE.nbBetes||4)?'kval-ok':MOCK.betes>0?'kval-warn':'kval-crit')+'">'+MOCK.betes+' / '+(CYCLE.nbBetes||4)+'</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">GMQ</span><span class="sb-val '+(MOCK.gmq>=1?'kval-ok':MOCK.gmq>=0.8?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
         +(function(){
           var td2=today();
           var fOk    = HISTORY.some(function(h){return h.type==='fiche'&&h.date===td2;});
@@ -3652,10 +3652,27 @@ function buildSidebar(){
         +'</div>';
     } else if(SB.tab==='week'){
       body='<div class="sb-card">'
-        +(function(){ var td2=today(); var bOk=HISTORY.some(function(h){return h.type==='bilan'&&h.date===td2;}); return '<div class="sb-row"><span class="sb-lbl">Bilan reçu</span><span class="'+(bOk?'sb-ok':'sb-ko')+'">'+(bOk?'✓ Reçu':'✗ En attente')+'</span></div>'; })()
-        +(function(){ var td2=today(); var nbInc=HISTORY.filter(function(h){return h.type==='inc'&&h.date===td2;}).length; return '<div class="sb-row"><span class="sb-lbl">Incidents signalés</span><span class="sb-val '+(nbInc>0?'kval-crit':'kval-ok')+'">'+nbInc+'</span></div>'; })()
-        +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val kval-ok">'+MOCK.gmq+' kg/j</span></div>'
-        +'</div>';
+        +(function(){
+          var bilOk = bilanDejaFaitCetteSemaine();
+          return '<div class="sb-row"><span class="sb-lbl">Bilan sem. '+calcSemaine()+' reçu</span><span class="'+(bilOk?'sb-ok':'sb-ko')+'">'+(bilOk?'✓ Reçu':'✗ En attente')+'</span></div>';
+        })()
+        +(function(){
+          // Incidents de la semaine (pas seulement aujourd'hui)
+          var _n2=_nowDakar();
+          var _wd2=_n2.weekday;
+          var _mOff2=(_wd2===0)?-6:1-_wd2;
+          var _mon2=new Date(_n2.year,_n2.month-1,_n2.day+_mOff2);
+          var _sun2=new Date(_mon2.getTime()+6*86400000);
+          var nbInc=HISTORY.filter(function(h){
+            var p=h.date.split('/');if(p.length!==3)return false;
+            var hd=new Date(p[2],p[1]-1,p[0]);
+            return h.type==='inc'&&hd>=_mon2&&hd<=_sun2;
+          }).length;
+          return '<div class="sb-row"><span class="sb-lbl">Incidents cette semaine</span><span class="sb-val '+(nbInc>0?'kval-crit':'kval-ok')+'">'+nbInc+'</span></div>';
+        })()
+        +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val '+(MOCK.gmq>=1?'kval-ok':MOCK.gmq>=0.8?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">Pesée à jour</span><span class="sb-val '+(joursSince('pesee')<=(CYCLE.peseeFreq||30)?'kval-ok':'kval-warn')+'">'+((function(){var j=joursSince('pesee');return j<999?('Il y a '+j+'j'):'Aucune';})())+'</span></div>'
+        +'</div>'
     } else if(SB.tab==='month'){
       body='<div class="sb-card">'
         +(function(){ var dep=Math.round(((CYCLE.capital||1450000)-MOCK.treso)/1000); return '<div class="sb-row"><span class="sb-lbl">Dépenses cumulées</span><span style="font-size:12px;color:#f44336">-'+dep+'k FCFA</span></div>'; })()
@@ -3699,8 +3716,7 @@ function buildSidebar(){
         +'</div>';
     } else {
       body='<div class="sb-card">'
-        +'<div class="sb-row"><span class="sb-lbl">GMQ moyen</span><span class="sb-val kval-ok">'+MOCK.gmq+' kg/j</span></div>'
-        +'<div class="sb-row"><span class="sb-lbl">Mortalité</span><span class="sb-val kval-ok">0%</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">GMQ moyen</span><span class="sb-val '+(MOCK.gmq>=1?'kval-ok':MOCK.gmq>=0.8?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
         +(function(){ var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0; return '<div class="sb-row"><span class="sb-lbl">Mortalité</span><span class="sb-val '+(mort>8?'kval-crit':mort>0?'kval-warn':'kval-ok')+'">'+mort+'%</span></div>'; })()
         +(function(){ var nbSop=HISTORY.filter(function(h){return h.type==='sop';}).length; var sem=calcSemaine(); var joursTotal=Math.max(sem*7,1); var pct=Math.min(100,Math.round(nbSop/joursTotal*100*7)); return '<div class="sb-row"><span class="sb-lbl">Conformité SOP</span><span class="sb-val '+(pct>=80?'kval-ok':pct>=50?'kval-warn':'kval-crit')+'">'+pct+'%</span></div>'; })()+(function(){ var freq=CYCLE.peseeFreq||30; var _dernP=0; var hp=HISTORY.filter(function(h){return h.type==='pesee';}); if(hp.length){var p=hp[0].date.split('/');if(p.length===3)_dernP=(function(){var _nd=_nowDakar();return Math.round((new Date(_nd.year,_nd.month-1,_nd.day)-new Date(p[2],p[1]-1,p[0]))/86400000);})();} var pesOk=_dernP<=freq; return '<div class="sb-row"><span class="sb-lbl">Dernière pesée</span><span class="sb-val '+(pesOk?'kval-ok':'kval-crit')+'">'+(_dernP===0?'Aucune':_dernP+' jours')+'</span></div>'; })()
     }
@@ -3742,7 +3758,7 @@ function buildSidebar(){
     +circSvg
     +'<div style="flex:1;padding-left:14px">'
     +'<div style="font-size:12px;color:#88bb88">Avancement cycle</div>'
-    +'<div style="font-size:20px;font-weight:700;color:#C8A06A;margin-top:2px">Sem. '+calcSemaine()+' / 35</div>'
+    +'<div style="font-size:20px;font-weight:700;color:#C8A06A;margin-top:2px">Sem. '+calcSemaine()+' / '+Math.round((CYCLE.dureeMois||8)*4.33)+'</div>'
     +'<div style="font-size:11px;color:#665540;margin-top:2px">Mois '+(Math.ceil(calcSemaine()/4.33)|0)+' / '+(CYCLE.dureeMois||8)+'</div>'
     +'</div></div>'
     +'</div>'
