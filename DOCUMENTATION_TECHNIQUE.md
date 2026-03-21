@@ -326,7 +326,21 @@ var SB = { open:false, tab:'today', closing:false };
 var MODAL = { open:false, step:1, data:{} };   // Modale init cycle
 var CONFIRM = { open:false, msg:'', cb:null }; // Dialogue confirmation
 var LIGHT_MODE = lsGet('light_mode') || false;
-var TABLE_RANGES = {};  // Doit être déclaré avant appendRow()
+var TABLE_RANGES = {
+  // start = 1ère ligne de données (après 3 lignes d'en-têtes)
+  // end   = dernière ligne possible (jamais dépassée — PUT exact)
+  'Fiche_Quotidienne': { start: 4, end: 500 },
+  'SOP_Check':         { start: 4, end: 200 },
+  'Stock_Nourriture':  { start: 4, end: 500 },
+  'Incidents':         { start: 4, end: 200 },
+  'Pesees':            { start: 4, end: 200 },
+  'Sante_Mortalite':   { start: 4, end: 200 },
+  'Hebdomadaire':      { start: 4, end: 200 },
+  'Suivi_Marche':      { start: 4, end: 200 },
+  'KPI_Mensuels':      { start: 4, end: 50  },
+  'KPI_Hebdo':         { start: 4, end: 50  }
+};  // ⚠️ Déclaré AVANT appendRow() — ordre JS impératif
+
 var OFFLINE_QUEUE = lsGet('offline_queue') || [];
 var LAST_ACTIVITY = Date.now();  // Pour déconnexion auto 8h
 ```
@@ -359,9 +373,20 @@ function getTok() → Promise<string|null>
 // Lire une plage Sheets directement via access_token Google
 function readSheet(sid, range) → Promise<string[][]|null>
 
-// Écrire une ligne Sheets — choisit entre INSERT_ROWS ou PUT selon TABLE_RANGES
-function appendRow(sid, range, vals) → Promise<{ok:bool, err?:string}>
+// Écrire une ligne dans un tableau Sheets formaté — pattern read-then-PUT
+// ⚠️ JAMAIS d'INSERT_ROWS (casserait la mise en forme des tableaux)
 // ⚠️ Guard : retourne {ok:false} si sid est undefined/null
+// ⚠️ encodeURIComponent sur sheetName UNIQUEMENT (pas sur la plage A1, ':' → '%3A' rejeté)
+function appendRow(sid, range, vals) {
+  // 1. Lit colonne A entre tr.start et tr.end
+  var enc = encodeURIComponent(sheetName);
+  var readUrl = base + enc + '!A' + tr.start + ':A' + tr.end;
+  // 2. Calcule la première ligne vide : targetLine = start + nb_lignes_déjà_remplies
+  var targetLine = Math.min(tr.start + rows.length, tr.end);
+  // 3. PUT exact à targetLine (aucune insertion de ligne)
+  var writeUrl = base + enc + '!A' + targetLine + '?valueInputOption=USER_ENTERED';
+  return fetch(writeUrl, {method:'PUT', ...});
+}
 
 // Écrire dans plusieurs SIDs simultanément — filtre les SIDs undefined
 function writeAll(sids[], range, vals) → Promise<{ok:bool, err?:string}>
@@ -655,6 +680,44 @@ vercel dev   # Lance un serveur local sur http://localhost:3000
 ---
 
 ## 11. Historique des bugs et corrections
+
+### Session 1 — Erreur "Requested entity was not found" (téléphones tiers)
+- **Cause** : Noms d'onglets Google Sheets ne correspondant pas aux noms attendus + `appendRow(SID.fallou, ...)` appelé sans guard sur `SID` indéfini
+- **Fix** :
+  - `appendRow()` : guard `if (!sid) return {ok:false}`
+  - `writeAll()` : filtre les SIDs `undefined`, message d'erreur enrichi si "not found"
+  - Soumission marché : `writeAll([SID.fallou, SID.fondateur], ...)` au lieu de `appendRow(SID.fallou, ...)`
+
+### Session 2 — 3 bugs UX (scroll, onglets, clavier)
+- **Bug scroll** : `body.style.overflow = 'hidden'` dans `r()` quand un overlay est ouvert ; `overscroll-behavior:contain` sur `.sb`
+- **Bug onglets instables** : `saveCycle()` réinitialise `S.tab` et `S.sub` avant la fermeture de MODAL
+- **Bug clavier mobile** : `r()` sauvegarde/restaure l'`id` + curseur du champ actif après re-render ; `yn()` refactorisé en `ynPick()` (mise à jour DOM directe, sans `r()`) ; `addStockLigne()` et `addModalStock()` refocoalisent le champ type après ajout
+
+### Session 3 — Écriture Google Sheets dans tableaux formatés
+- **Problème** : `append?insertDataOption=INSERT_ROWS` ajoutait des lignes hors du tableau, cassant le formatage
+- **Fix** : `TABLE_RANGES` configuré avec `{start:4, end:N}` pour chaque onglet. `appendRow` lit d'abord la colonne A (lignes présentes), calcule `targetLine = start + rows.length`, écrit avec **PUT** à la ligne précise — aucune insertion de ligne
+- **Erreur** : `encodeURIComponent('Fiche_Quotidienne!A4:A500')` encodait `:` en `%3A` → "unable to parse range". **Fix** : encoder uniquement `sheetName` et concaténer la notation A1 sans encoding
+
+### Session 4 — Thème clair : météo, sidebar, onglets, modales
+- **Météo** : Couleurs générées en JS avec `var _lt = document.body.classList.contains('light')` (ne plus utiliser `S._light` ou attrs CSS `[style*=]`)
+- **Sidebar palette** : `var _sbLt / _sbSub / _sbData` déclarés en haut de `buildSidebar()` — utilisés par toutes les couleurs inline (calendrier, historique, données)
+- **Onglets principals** : `.tabs{background:#1a3a1a}`, `.tab.on{border-bottom-color:#fff}` (soulignement blanc conforme doc)
+- **Modales/confirm** : `body.light .confirm-inner`, `body.light .modal`, `.modal-head/body/foot` corrigés
+
+---
+
+## 12. Règles architecture à ne jamais briser
+
+| Règle | Pourquoi |
+|---|---|
+| `var` uniquement dans `index.html` | Compatibilité mobile ES5 |
+| `TABLE_RANGES = {}` avant `appendRow()` | Ordre d'exécution JS |
+| `USERS` dans `handler()` | Cold start Vercel — env vars non dispo au module level |
+| Encoder seulement `sheetName`, pas la plage A1 | `encodeURIComponent` encode `:` en `%3A` rejeté par Sheets API |
+| Détecter thème via `document.body.classList.contains('light')` | `LIGHT_MODE` peut être désynchro |
+| `yn()` → `ynPick()` DOM direct | Pas de `r()` sur OUI/NON — garde le clavier ouvert |
+| Chainer git avec `;` PowerShell | `&&` non supporté PowerShell |
+
 
 | Date | Bug | Cause | Correction |
 |---|---|---|---|
@@ -952,13 +1015,24 @@ L'app utilise un **re-render complet du DOM** à chaque action :
 ```js
 function r() {
   var el = document.getElementById('app');
-  if (S.page === 'login') { el.innerHTML = pageLogin(); return; }
-  var html = pageApp();
-  if (MODAL.open) html += pageModal();
-  // ... autres overlays
+  // 1. Sauvegarde le focus actif (pour garder le clavier mobile ouvert)
+  var _aid = document.activeElement && document.activeElement.id ? document.activeElement.id : null;
+  // Sauvegarde aussi la position du curseur (selectionStart/End)
+  // 2. Scroll lock : body.overflow = 'hidden' si un overlay est ouvert
+  var _ov = SB.open || MODAL.open || CONFIRM.open || ...;
+  document.body.style.overflow = _ov ? 'hidden' : '';
+  // 3. Re-render
+  var html = (S.page==='login') ? pageLogin() : pageApp() + overlays...;
   el.innerHTML = html;
+  // 4. Restaure le focus (empêche le clavier mobile de se fermer)
+  if (_aid && (_atag==='INPUT'||_atag==='TEXTAREA')) {
+    var _re = document.getElementById(_aid);
+    if (_re) { _re.focus({preventScroll:true}); /* restaure curseur si besoin */ }
+  }
 }
 ```
+
+> **Important** : Ne jamais appeler `r()` depuis `ynPick()` sauf si la structure change (champs additionnels). Le DOM est mis à jour directement via `getElementById()` pour conserver le focus clavier.
 
 ### État global (objet S)
 

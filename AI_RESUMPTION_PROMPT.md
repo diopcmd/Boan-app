@@ -102,7 +102,20 @@ var CYCLE = lsGet('cycle') || {nbBetes:4, dateDebut:'', dureeMois:8, ration:12,
   capital:1450000, objectifPrix:2000, budgetSante:200000, veterinaire:'',
   foirail:'Thiès', commission:2, betes:[], alimentTypes:[], initialized:false, ...};
 var SID = {};             // {fondateur, gerant, rga, fallou} — rempli au login
-var TABLE_RANGES = {};    // ⚠️ Doit être déclaré AVANT appendRow()
+var TABLE_RANGES = {
+  // start = 1ère ligne données (3 lignes d'en-tête dans les feuilles formatées)
+  // end   = dernière ligne permise (PUT exact — jamais d'insertion de ligne)
+  'Fiche_Quotidienne': { start: 4, end: 500 },
+  'SOP_Check':         { start: 4, end: 200 },
+  'Stock_Nourriture':  { start: 4, end: 500 },
+  'Incidents':         { start: 4, end: 200 },
+  'Pesees':            { start: 4, end: 200 },
+  'Sante_Mortalite':   { start: 4, end: 200 },
+  'Hebdomadaire':      { start: 4, end: 200 },
+  'Suivi_Marche':      { start: 4, end: 200 },
+  'KPI_Mensuels':      { start: 4, end: 50  },
+  'KPI_Hebdo':         { start: 4, end: 50  }
+};  // ⚠️ Doit être déclaré AVANT appendRow()
 var STOCK_MVTS = [];      // [{date,type,mode:'ajouter'|'consommer',kg,cycleDebut}]
 var HISTORY = [];         // 20 dernières saisies
 var LIVE = {pesees:[],beteIds:[],prix:[],loaded:false};
@@ -115,7 +128,16 @@ var OFFLINE_QUEUE = lsGet('offline_queue') || [];
 ```js
 function getTok()                    // Promise<access_token Google> — cache S.tok/tokexp
 function readSheet(sid, range)       // Lit Sheets directement avec Google token
-function appendRow(sid, range, vals) // Écrit une ligne — guard si sid undefined
+function appendRow(sid, range, vals) // Écrit une ligne — pattern read-then-PUT OBLIGATOIRE
+// ⚠️  JAMAIS d'INSERT_ROWS — casserait les tableaux formatés
+// ⚠️  Guard {ok:false} si sid undefined/null
+// ⚠️  encodeURIComponent sur sheetName UNIQUEMENT, pas sur la plage A1
+//     (encodeURIComponent(':') = '%3A' → Sheets API rejette → "unable to parse range")
+// Pattern interne :
+//   var enc = encodeURIComponent(sheetName);
+//   1. GET  enc + '!A' + tr.start + ':A' + tr.end  → rows[]
+//   2. targetLine = Math.min(tr.start + rows.length, tr.end)
+//   3. PUT  enc + '!A' + targetLine  → body: {values:[vals]}
 function writeAll(sids[], range, vals)// Écrit dans plusieurs SIDs en parallèle
                                      // Guard si aucun SID valide — erreur explicite
 ```
@@ -200,6 +222,86 @@ S.tab = 'marche'     → viewMarche()
 5. **`USERS` dans `handler()`** — PAS au niveau module (cold start Vercel)
 6. **Swipe timeout : 290ms** — durée animation `.28s` — ne jamais réduire
 7. **PowerShell** — utiliser `;` pour chaîner, jamais `&&`
+8. **encodeURIComponent** — uniquement sur `sheetName`, JAMAIS sur la plage A1 entière
+9. **Détection thème clair** — TOUJOURS `document.body.classList.contains('light')`, jamais `S._light` ni `LIGHT_MODE`
+10. **`yn()` → `ynPick()`** — Ne jamais appeler `r()` depuis `ynPick()` sauf si la structure change (garder le clavier mobile ouvert)
+
+---
+
+## Patterns clés de cette session
+
+### Pattern appendRow (read-then-PUT)
+```js
+var enc = encodeURIComponent(sheetName);    // encode SEULEMENT le nom de feuille
+// 1. Lire la colonne A pour compter les lignes
+var readUrl = base + enc + '!A' + tr.start + ':A' + tr.end;
+fetch(readUrl) → var rows = d.values || [];
+// 2. Calculer la première ligne vide
+var targetLine = Math.min(tr.start + rows.length, tr.end);
+// 3. PUT exact (pas d'INSERT_ROWS)
+var writeUrl = base + enc + '!A' + targetLine + '?valueInputOption=USER_ENTERED';
+fetch(writeUrl, {method:'PUT', body:{values:[vals]}})
+```
+
+### Pattern yn() / ynPick() (clavier mobile)
+```js
+function yn(val, k, obj) {
+  var id = 'yn-'+obj+'-'+k;   // id unique par champ
+  return '<div id="'+id+'" ...>...</div>';  // boutons avec onclick="ynPick(...)"
+}
+function ynPick(cid, obj, k, val) {
+  if (S[obj]) S[obj][k] = val;
+  // Mise à jour DOM directe — PAS de r() sauf si structure change
+  var c = document.getElementById(cid);
+  if (c) { /* toggle .on class sur les boutons */ }
+  // r() seulement si champ conditionnel (ex: incident → textarea)
+  if ((obj==='fi' && k==='incident') || (obj==='fsa' && k==='dec')) r();
+}
+```
+
+### Pattern r() — scroll lock + focus restore
+```js
+function r() {
+  var _aid = document.activeElement && document.activeElement.id
+    ? document.activeElement.id : null;
+  // Sauvegarde curseur si input/textarea
+  var _ov = SB.open || MODAL.open || CONFIRM.open || S._resetPwdOpen || S._aiOpen;
+  document.body.style.overflow = _ov ? 'hidden' : '';
+  el.innerHTML = html;
+  // Restaure focus (garde le clavier mobile ouvert)
+  if (_aid && (_atag==='INPUT'||_atag==='TEXTAREA')) {
+    var _re = document.getElementById(_aid);
+    if (_re) { _re.focus({preventScroll:true}); /* + restaure curseur */ }
+  }
+}
+```
+
+### Pattern thème clair dans buildSidebar()
+```js
+function buildSidebar() {
+  var _sbLt   = document.body.classList.contains('light');  // TOUJOURS classList
+  var _sbSub  = _sbLt ? '#445533' : '#88aa88';  // texte secondaire / lettres calendrier
+  var _sbData = _sbLt ? '#334433' : '#ccc';      // données / chiffres
+  // Utiliser _sbSub et _sbData dans tous les style="" inline de la sidebar
+}
+```
+
+### Palette météo en thème clair (JS, pas CSS)
+```js
+var _lt = document.body.classList.contains('light');
+var _meteoBg  = _lt ? '#e8f4e8' : '#1a2e1a';
+var _meteoBg2 = _lt ? '#d8ecd8' : '#0f1f0f';
+var _meteoFg  = _lt ? '#1a2e1a' : '#fff';
+var _meteoSub = _lt ? '#445533' : '#88aa88';
+```
+
+### CSS onglets (valeurs correctes)
+```css
+.tabs { background:#1a3a1a; }
+.tab  { color:#88bb88; }
+.tab.on { color:#fff; border-bottom-color:#fff; }  /* blanc, pas vert */
+body.light .tab.on { color:#fff; border-bottom-color:#fff; }
+```
 
 ---
 
@@ -419,16 +521,24 @@ git push origin main
 
 ---
 
-## Derniers commits (état actuel)
+## État actuel et derniers commits
 
 ```
-ec1eed7  fix: double virgule dans S{} (_guideOpen: false,,)
-0202d55  ux: dashboard hero + bordures KPI/alertes/sections + onglet actif vert
-3913c23  ux: guide gerant redesign - gradients, icones, bouton dashboard
-11032e3  feat: guide gerant - modal quoi faire et quand
-85aebfe  feat: auto-creation Config_Passwords
-9d01cc8  fix: projection vente, SPARK.betes live, score sante, fluidite CSS
-e7c1cf3  fix: env vars dans handler() — evite Config serveur manquante
-c442942  feat: modification identifiants + mots de passe fondateur
-29aea65  fix: TABLE_RANGES declaration
+0b37c13  fix: couleurs sidebar/calendrier adaptees au theme clair (sbLt palette)
+98f2b6e  fix: tab colors aligned to reference doc (tabs bg #1a3a1a, underline #fff)
+2990947  fix: meteo et modales invisibles en theme clair (palette JS + CSS body.light)
+9534f99  fix: meteo light mode - always classList.contains not S._light
+9fbc075  fix: encodeURIComponent sheetName uniquement - pas la plage A1 (evite %3A)
+7995830  fix: appendRow read-then-PUT exact line, TABLE_RANGES start:4
+bd1c763  fix: TABLE_RANGES + appendRow overwrite dans tableau formate
+9fc05f1  fix: scroll bleed overlay, tab reset saveCycle, clavier mobile (yn->ynPick, r focus)
+[commits plus anciens]
+  fix: writeAll erreur si SID absent, marche via writeAll, guard appendRow sid
+  fix: double virgule dans S{} (_guideOpen: false,,)
+  ux: dashboard hero + bordures KPI/alertes + onglet actif vert
+  feat: guide gerant — modal quoi faire et quand
+  feat: auto-creation Config_Passwords
+  fix: env vars dans handler() — cold start Vercel
+  feat: modification identifiants + mots de passe fondateur
+  fix: TABLE_RANGES declaration avant appendRow
 ```
