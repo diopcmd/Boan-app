@@ -270,12 +270,16 @@ body.light [style*="color:#ccc"]{color:#445544 !important}
 body.light [style*="color:#aaa"]{color:#557755 !important}
 body.light [style*="color:#888aa88"]{color:#2d6a2d !important}
 /* météo sidebar — fonds sombres remplacés en thème clair */
-body.light .sb-body [style*="background:#1a2e1a"]{background:#e8f0e8 !important}
-body.light .sb-body [style*="background:#0f1f0f"]{background:#ddeedd !important}
-body.light .sb-body [style*="background:#1a1a00"]{background:#fff8e0 !important}
-body.light .sb-body [style*="color:#88aa88"]{color:#445533 !important}
-body.light .sb-body [style*="color:#556655"]{color:#334422 !important}
-body.light .sb-body [style*="color:#ffaa40"]{color:#b86000 !important}
+/* Dialogue de confirmation — thème clair */
+body.light .confirm-inner{background:#fff;border-color:#c8dcc8;color:#1a2e1a}
+body.light .confirm-inner *{color:#1a2e1a}
+/* Modale init cycle — thème clair */
+body.light .modal{background:#f8faf8;border-color:#c8dcc8}
+body.light .modal-head{border-color:#c8dcc8;background:#f0f5f0}
+body.light .modal-head *{color:#1a2e1a}
+body.light .modal-body{background:#f8faf8;color:#1a2e1a}
+body.light .modal-body *{color:#1a2e1a}
+body.light .modal-foot{border-color:#c8dcc8;background:#f0f5f0}
 body.light .sb-lbl{color:#334433}
 body.light .sb-val{color:#1a2e1a}
 body.light .sb-ok{color:#1a7a1a !important}
@@ -1010,25 +1014,18 @@ function appendRow(sid, range, vals) {
     if (!tk) return {ok:false, err:'Token invalide'};
     var sheetName = range.split('!')[0];
     var tr = TABLE_RANGES[sheetName];
-    if (!tr) {
-      // fallback appendRow classique si feuille inconnue
-      var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+encodeURIComponent(range)+':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS';
-      return fetch(url,{method:'POST',headers:{Authorization:'Bearer '+tk,'Content-Type':'application/json'},body:JSON.stringify({values:[vals]})})
-      .then(function(res){return res.json();})
-      .then(function(d){return d.error?{ok:false,err:d.error.message}:{ok:true};});
+    var apiRange;
+    if (tr) {
+      // Borner la plage dans le tableau formaté : l'API cherche la 1ère ligne vide entre start et end
+      var colPart = (range.split('!')[1] || 'A').split(':');
+      var colEnd = colPart[1] || colPart[0];
+      apiRange = sheetName + '!A' + tr.start + ':' + colEnd + tr.end;
+    } else {
+      apiRange = range;
     }
-    // Lire colonne A pour trouver la 1ère ligne vide dans le tableau
-    var readRange = sheetName+'!A'+tr.start+':A'+tr.end;
-    var readUrl = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+encodeURIComponent(readRange);
-    return fetch(readUrl, {headers:{Authorization:'Bearer '+tk}})
-    .then(function(res){return res.json();})
-    .then(function(d){
-      var rows = d.values || [];
-      var targetLine = Math.min(tr.start + rows.length, tr.end);
-      var writeRange = sheetName+'!A'+targetLine;
-      var writeUrl = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+encodeURIComponent(writeRange)+'?valueInputOption=USER_ENTERED';
-      return fetch(writeUrl, {method:'PUT', headers:{Authorization:'Bearer '+tk,'Content-Type':'application/json'}, body:JSON.stringify({values:[vals]})});
-    })
+    // OVERWRITE = remplace la 1ère ligne vide dans la plage (ne insère pas de lignes dans le tableau)
+    var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+encodeURIComponent(apiRange)+':append?valueInputOption=USER_ENTERED&insertDataOption=OVERWRITE';
+    return fetch(url, {method:'POST', headers:{Authorization:'Bearer '+tk,'Content-Type':'application/json'}, body:JSON.stringify({values:[vals]})})
     .then(function(res){return res.json();})
     .then(function(d){return d.error?{ok:false,err:d.error.message}:{ok:true};});
   }).catch(function(e){return{ok:false,err:e.message};});
@@ -3148,22 +3145,31 @@ function buildSidebar(){
       fetchMeteo();
       // Jours FR courts
       var joursFR = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+      // Couleurs météo adaptées au thème (clair ou sombre)
+      var _lt = !!S._light;
+      var _meteoBg  = _lt ? '#e8f4e8' : '#1a2e1a';
+      var _meteoBg2 = _lt ? '#d8ecd8' : '#0f1f0f';
+      var _meteoRainBg = _lt ? '#fff8e0' : '#1a1a00';
+      var _meteoFg  = _lt ? '#1a2e1a' : '#fff';
+      var _meteoSub = _lt ? '#445533' : '#88aa88';
+      var _meteoDate = _lt ? '#445533' : '#556655';
+      var _meteoRain = _lt ? '#b86000' : '#ffaa40';
       var meteoWeekHtml = '';
       if (METEO.showWeek && METEO.week && METEO.week.length > 0) {
-        meteoWeekHtml = '<div style="background:#0f1f0f;border-radius:10px;padding:12px;margin-bottom:10px">'
-          +'<div style="font-size:11px;color:#88aa88;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">📅 Prévisions 7 jours — Thiès</div>'
+        meteoWeekHtml = '<div style="background:'+_meteoBg2+';border-radius:10px;padding:12px;margin-bottom:10px">'
+          +'<div style="font-size:11px;color:'+_meteoSub+';text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">📅 Prévisions 7 jours — Thiès</div>'
           +'<div style="display:flex;flex-direction:column;gap:5px">'
           +METEO.week.map(function(d,i){
             var dt=new Date(d.date);
             var jour=i===0?'Auj.':i===1?'Dem.':joursFR[dt.getDay()];
             var rainWarn=d.rain>3;
-            return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 8px;border-radius:7px;background:'+(rainWarn?'#1a1a00':'#1a2e1a')+'">'
-              +'<span style="font-size:12px;color:#aaa;width:32px">'+jour+'</span>'
+            return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 8px;border-radius:7px;background:'+(rainWarn?_meteoRainBg:_meteoBg)+'">'
+              +'<span style="font-size:12px;color:'+_meteoSub+';width:32px">'+jour+'</span>'
               +'<span style="font-size:18px">'+meteoIcon(d.code)+'</span>'
-              +'<span style="font-size:13px;font-weight:700;color:#fff">'+d.tmax+'°</span>'
-              +'<span style="font-size:12px;color:#88aa88">'+d.tmin+'°</span>'
-              +'<span style="font-size:11px;min-width:44px;text-align:right;color:'+(rainWarn?'#ffaa40':'#88aa88')+'">💧'+d.rain+'mm</span>'
-              +(rainWarn?'<span style="font-size:10px;color:#ffaa40">⚠</span>':'<span style="width:12px"></span>')
+              +'<span style="font-size:13px;font-weight:700;color:'+_meteoFg+'">'+d.tmax+'°</span>'
+              +'<span style="font-size:12px;color:'+_meteoSub+'">'+d.tmin+'°</span>'
+              +'<span style="font-size:11px;min-width:44px;text-align:right;color:'+(rainWarn?_meteoRain:_meteoSub)+'">💧'+d.rain+'mm</span>'
+              +(rainWarn?'<span style="font-size:10px;color:'+_meteoRain+'">⚠</span>':'<span style="width:12px"></span>')
               +'</div>';
           }).join('')
           +'</div>'
@@ -3171,23 +3177,23 @@ function buildSidebar(){
           +'</div>';
       }
       var meteoHtml = !METEO.loaded
-        ? '<div style="background:#1a2e1a;border-radius:10px;padding:12px;margin-bottom:10px;display:flex;align-items:center;gap:8px"><div style="font-size:20px">🌍</div><div style="font-size:12px;color:#88aa88">Chargement météo Thiès...</div></div>'
+        ? '<div style="background:'+_meteoBg+';border-radius:10px;padding:12px;margin-bottom:10px;display:flex;align-items:center;gap:8px"><div style="font-size:20px">🌍</div><div style="font-size:12px;color:'+_meteoSub+'">Chargement météo Thiès...</div></div>'
         : METEO.error
-          ? '<div style="background:#1a2e1a;border-radius:10px;padding:12px;margin-bottom:10px;font-size:12px;color:#88aa88">🌐 Météo indisponible (vérifier la connexion)</div>'
+          ? '<div style="background:'+_meteoBg+';border-radius:10px;padding:12px;margin-bottom:10px;font-size:12px;color:'+_meteoSub+'">🌐 Météo indisponible (vérifier la connexion)</div>'
           : (function(){
               var _now=(function(){var n=_nowDakar();return new Date(n.year,n.month-1,n.day,n.hour,n.minute);})()
               var _jFR=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
               var _mFR=['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
               var _ds=_jFR[nowJour()]+' '+_now.getDate()+' '+_mFR[_now.getMonth()]+' '+_now.getFullYear();
               var _hs=_now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-              return '<div onclick="METEO.showWeek=!METEO.showWeek;r()" style="background:#1a2e1a;border-radius:10px;padding:12px;margin-bottom:'+(METEO.showWeek?'6':'10')+'px;cursor:pointer;user-select:none">'
-                +'<div style="font-size:10px;color:#556655;margin-bottom:6px;letter-spacing:.04em">'+_ds+' · '+_hs+'</div>'
+              return '<div onclick="METEO.showWeek=!METEO.showWeek;r()" style="background:'+_meteoBg+';border-radius:10px;padding:12px;margin-bottom:'+(METEO.showWeek?'6':'10')+'px;cursor:pointer;user-select:none">'
+                +'<div style="font-size:10px;color:'+_meteoDate+';margin-bottom:6px;letter-spacing:.04em">'+_ds+' · '+_hs+'</div>'
                 +'<div style="display:flex;align-items:center;gap:12px">'
                 +'<div style="font-size:36px;line-height:1">'+meteoIcon(METEO.code)+'</div>'
                 +'<div style="flex:1">'
-                +'<div style="font-size:24px;font-weight:700;color:#fff">'+METEO.temp+'°C</div>'
-                +'<div style="font-size:11px;color:#88aa88;margin-top:2px">Thiès · Pluie '+METEO.rain+'mm · Vent '+METEO.wind+' km/h</div>'
-                +(METEO.rain>2?'<div style="font-size:11px;color:#ffaa40;margin-top:3px">⚠️ Pluie — vérifier enclos</div>':'')
+                +'<div style="font-size:24px;font-weight:700;color:'+_meteoFg+'">'+METEO.temp+'°C</div>'
+                +'<div style="font-size:11px;color:'+_meteoSub+';margin-top:2px">Thiès · Pluie '+METEO.rain+'mm · Vent '+METEO.wind+' km/h</div>'
+                +(METEO.rain>2?'<div style="font-size:11px;color:'+_meteoRain+';margin-top:3px">⚠️ Pluie — vérifier enclos</div>':'')
                 +'</div>'
                 +'<div style="font-size:12px;color:#4caf50;font-weight:700;white-space:nowrap">'+(METEO.showWeek?'▲':'▼ 7j')+'</div>'
                 +'</div></div>';
