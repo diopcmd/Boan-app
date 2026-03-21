@@ -1015,14 +1015,19 @@ function appendRow(sid, range, vals) {
     var tr = TABLE_RANGES[sheetName];
     if (!tr) {
       // Feuille non référencée — append classique hors tableau formaté
-      var fbUrl = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+encodeURIComponent(range)+':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS';
+      var fbSheet = encodeURIComponent(sheetName);
+      var fbCols  = (range.split('!')[1] || 'A');
+      var fbUrl = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+fbSheet+'!'+fbCols+':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS';
       return fetch(fbUrl, {method:'POST', headers:{Authorization:'Bearer '+tk,'Content-Type':'application/json'}, body:JSON.stringify({values:[vals]})})
         .then(function(res){return res.json();})
         .then(function(d){return d.error?{ok:false,err:d.error.message}:{ok:true};});
     }
     // 1. Lire colonne A pour compter les lignes déjà saisies dans le tableau
+    // Note: encodeURIComponent encode ":" en "%3A" ce que l'API Sheets n'accepte pas —
+    // on encode uniquement le nom de la feuille, pas la notation A1
+    var enc = encodeURIComponent(sheetName);
     var readUrl = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid
-      +'/values/'+encodeURIComponent(sheetName+'!A'+tr.start+':A'+tr.end);
+      +'/values/'+enc+'!A'+tr.start+':A'+tr.end;
     return fetch(readUrl, {headers:{Authorization:'Bearer '+tk}})
       .then(function(res){return res.json();})
       .then(function(d){
@@ -1031,7 +1036,7 @@ function appendRow(sid, range, vals) {
         var targetLine = Math.min(tr.start + rows.length, tr.end);
         // 3. Écrire exactement à cette ligne (PUT — aucune insertion de ligne)
         var writeUrl = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid
-          +'/values/'+encodeURIComponent(sheetName+'!A'+targetLine)+'?valueInputOption=USER_ENTERED';
+          +'/values/'+enc+'!A'+targetLine+'?valueInputOption=USER_ENTERED';
         return fetch(writeUrl, {
           method: 'PUT',
           headers: {Authorization:'Bearer '+tk, 'Content-Type':'application/json'},
