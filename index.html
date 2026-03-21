@@ -24,7 +24,7 @@ body{background:#0f1a0f;color:#fff;font-family:'Inter',system-ui,sans-serif}
 .hdr{background:#1e4a1e;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
 .logo{display:flex;align-items:center;gap:10px}
 .logo-b{width:36px;height:36px;background:#2d6a2d;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px}
-.tabs{background:#0a140a;display:flex;border-bottom:1px solid #1a3a1a;overflow-x:auto}
+.tabs{background:#1a3a1a;display:flex;border-bottom:1px solid #2d4a2d;overflow-x:auto}
 .tabs::-webkit-scrollbar{display:none}
 .tab{padding:12px 20px;font-size:14px;color:#88bb88;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent}
 .tab.on{color:#fff;border-bottom-color:#fff;background:rgba(255,255,255,0.07)}
@@ -3145,6 +3145,10 @@ function buildSidebar(){
   }).join('');
 
   var body = '';
+  // Palette thème pour les éléments inline de la sidebar
+  var _sbLt = document.body.classList.contains('light');
+  var _sbSub  = _sbLt ? '#445533' : '#88aa88'; // texte secondaire
+  var _sbData = _sbLt ? '#334433' : '#ccc';     // texte données
 
   // ── GÉRANT TERRAIN ──
   if(u==='gerant'){
@@ -3283,6 +3287,8 @@ function buildSidebar(){
         +'<button onclick="S.page=\'login\';S.user=null;SB.open=false;r()" style="background:#2e1010;color:#ff7070;border:1px solid #8a0000;font-size:13px;padding:10px;margin-top:8px">Déconnexion</button>';
     } else if(SB.tab==='week'){
       // ── Calendrier semaine dynamique (fuseau Dakar) ──
+      var _calSub  = _sbSub;
+      var _calData = _sbData;
       var _n = _nowDakar();
       var _todayWD = _n.weekday; // 0=Dim,1=Lun,...,6=Sam
       // Décalage vers le lundi de la semaine courante
@@ -3331,7 +3337,7 @@ function buildSidebar(){
         +daysHtml+'</div>'
         +'<div class="sb-card">'
         +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val kval-ok">'+MOCK.gmq+' kg/j</span></div>'
-        +'<div class="sb-row"><span class="sb-lbl">Objectif</span><span style="font-size:12px;color:#88aa88">&ge; 1.0 kg/j</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">Objectif</span><span style="font-size:12px;color:'+_calSub+'">&ge; 1.0 kg/j</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Incidents</span><span class="sb-val '+(HISTORY.filter(function(h){var d=new Date(_monday.getTime());var end=new Date(_monday.getTime()+6*86400000);var p=h.date.split('/');if(p.length!==3)return false;var hd=new Date(p[2],p[1]-1,p[0]);return h.type==='inc'&&hd>=d&&hd<=end;}).length>0?'kval-warn':'kval-ok')+'">'+(HISTORY.filter(function(h){var d=new Date(_monday.getTime());var end=new Date(_monday.getTime()+6*86400000);var p=h.date.split('/');if(p.length!==3)return false;var hd=new Date(p[2],p[1]-1,p[0]);return h.type==='inc'&&hd>=d&&hd<=end;}).length)+' cette sem.</span></div>'
         +'</div>';
     } else if(SB.tab==='month'){
@@ -3353,15 +3359,16 @@ function buildSidebar(){
       var _gmqCl = MOCK.gmq>=1?'kval-ok':MOCK.gmq>=0.8?'kval-warn':'kval-crit';
       body='<div class="sb-card">'
         +'<div class="sb-row"><span class="sb-lbl">GMQ moyen mensuel</span><span class="sb-val '+_gmqCl+'">'+MOCK.gmq+' kg/j <span style="color:'+_gmqTrendCol+';font-weight:700">'+_gmqTrend+'</span></span></div>'
-        +'<div class="sb-row"><span class="sb-lbl">Conso. aliments</span><span style="font-size:12px;color:#ccc">~'+_consoMois+' kg/mois</span></div>'
-        +'<div class="sb-row"><span class="sb-lbl">Budget santé/mois</span><span style="font-size:12px;color:#ccc">~'+fmt(_coutVeto)+' FCFA</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">Conso. aliments</span><span style="font-size:12px;color:'+_calData+'">~'+_consoMois+' kg/mois</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">Budget santé/mois</span><span style="font-size:12px;color:'+_calData+'">~'+fmt(_coutVeto)+' FCFA</span></div>'
         +'</div>';
     } else {
       var histHtml = HISTORY.length
         ? HISTORY.slice(0,5).map(function(h){
+            var _lth = document.body.classList.contains('light');
             return '<div class="hist-item"><div class="hist-ico">'+h.icon+'</div>'
-              +'<div style="flex:1"><div style="color:#ccc">'+h.label+'</div>'
-              +'<div style="color:#555;margin-top:1px">'+h.date+' '+h.time+'</div></div></div>';
+              +'<div style="flex:1"><div style="color:'+(_sbLt?'#1a2e1a':'#ccc')+'">'+h.label+'</div>'
+              +'<div style="color:'+(_sbLt?'#556655':'#88aa88')+';margin-top:1px">'+h.date+' '+h.time+'</div></div></div>';
           }).join('')
         : '<div style="color:#445544;font-size:12px;padding:8px 0">Aucune saisie récente</div>';
       body='<div class="sb-card">'
@@ -3372,7 +3379,7 @@ function buildSidebar(){
           return '<div class="sb-row"><span class="sb-lbl">Mortalité cycle</span><span class="sb-val '+cl+'">'+mort+'%</span></div>';
         })()
         +'<div class="sb-row"><span class="sb-lbl">Semaine en cours</span><span class="sb-val gold">'+calcSemaine()+'/35</span></div>'
-        +(CYCLE.dateDebut?'<div class="sb-row"><span class="sb-lbl">Début cycle</span><span style="font-size:12px;color:#ccc">'+isoToFr(CYCLE.dateDebut)+'</span></div>':'')
+        +(CYCLE.dateDebut?'<div class="sb-row"><span class="sb-lbl">Début cycle</span><span style="font-size:12px;color:'+_sbData+'">'+isoToFr(CYCLE.dateDebut)+'</span></div>':'')
         +'</div>'
         +'<div class="sb-section-title">Historique récent</div>'
         +histHtml
@@ -3434,14 +3441,15 @@ function buildSidebar(){
     } else {
       var histHtml2 = HISTORY.length
         ? HISTORY.slice(0,5).map(function(h){
+            var _lth2 = document.body.classList.contains('light');
             return '<div class="hist-item"><div class="hist-ico">'+h.icon+'</div>'
-              +'<div style="flex:1"><div style="color:#ccc">'+h.label+'</div>'
-              +'<div style="color:#555;margin-top:1px">'+h.date+' '+h.time+'</div></div></div>';
+              +'<div style="flex:1"><div style="color:'+(_sbLt?'#1a2e1a':'#ccc')+'">'+h.label+'</div>'
+              +'<div style="color:'+(_sbLt?'#556655':'#88aa88')+';margin-top:1px">'+h.date+' '+h.time+'</div></div></div>';
           }).join('')
         : '<div style="color:#445544;font-size:12px;padding:8px 0">Aucune saisie récente</div>';
       body='<div class="sb-card">'
         +'<div class="sb-row"><span class="sb-lbl">Avancement</span><span class="sb-val gold">Sem. '+calcSemaine()+'/'+Math.round((CYCLE.dureeMois||8)*4.33)+'</span></div>'
-        +'<div class="sb-row"><span class="sb-lbl">Capital investi</span><span style="font-size:12px;color:#ccc">'+fmt(CYCLE.capital||1450000)+' FCFA</span></div>'+'<div class="sb-row"><span class="sb-lbl">Rappel pesée</span><span style="font-size:12px;color:#88aa88">Tous les '+(CYCLE.peseeFreq||30)+' jours</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">Capital investi</span><span style="font-size:12px;color:'+_sbData+'">'+fmt(CYCLE.capital||1450000)+' FCFA</span></div>'+'<div class="sb-row"><span class="sb-lbl">Rappel pesée</span><span style="font-size:12px;color:'+_sbSub+'">Tous les '+(CYCLE.peseeFreq||30)+' jours</span></div>'
         +(function(){          var sem=calcSemaine();          var totalSem=Math.round((CYCLE.dureeMois||8)*4.33);          var gmqL=LIVE.loaded&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq;          var poidsF=Math.round((CYCLE.poidsDepart||270)+gmqL*totalSem*7);          var caProj=(CYCLE.nbBetes||4)*poidsF*(CYCLE.objectifPrix||2000);          var roiCalc=CYCLE.capital>0?Math.round((caProj-CYCLE.capital)/CYCLE.capital*100):0;          return '<div class="sb-row"><span class="sb-lbl">ROI projeté</span><span style="font-size:12px;color:#C8A06A">'+roiCalc+'%</span></div>';        })()
         +'</div>'
         +'<div class="sb-section-title">Activité récente</div>'
