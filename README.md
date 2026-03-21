@@ -63,10 +63,10 @@ Interface de pilotage à distance multi-rôles : direction, gérant terrain, RGA
 
 ```
 Boan-app/
-├── index.html              SPA complète (HTML + CSS + JS inline, ~4700 lignes)
+├── index.html              SPA complète (HTML + CSS + JS inline, ~4970 lignes)
 ├── vercel.json             Rewrites /api/*
 ├── api/
-│   ├── auth.js             Login multi-rôle + override identifiants
+│   ├── auth.js             Login multi-rôle + SID multi-sheet par rôle
 │   ├── token.js            Service Account → Google OAuth2 access token
 │   ├── sheets.js           Proxy lecture/écriture Google Sheets
 │   ├── change-password.js  Modification credentials (fondateur)
@@ -180,3 +180,16 @@ vercel dev
 |---|---|
 | [DOCUMENTATION_TECHNIQUE.md](DOCUMENTATION_TECHNIQUE.md) | Architecture détaillée, patterns de code, référence API |
 | [AI_RESUMPTION_PROMPT.md](AI_RESUMPTION_PROMPT.md) | Prompt de reprise pour continuer avec une IA (état du projet, conventions, historique) |
+
+---
+
+## Historique
+
+| Commit | Description |
+|---|---|
+| `62ebeb1` | Auth multi-SID, loadLiveData 3-vagues, buildHistoryFromSheets, badge LIVE/MOCK, bouton Actualiser |
+| `6ddec0a` | `ficheDejaSoumise()` vérifie HISTORY (plus seulement localStorage) |
+| `02f9275` | Gérant reçoit `SID_FONDATEUR` — fondateur voit les soumissions gérant |
+| `a42c5e1` | `buildHistoryFromSheets` lit 7 onglets (SOP_Check, Stock_Nourriture inclus), filtre par clé |
+| `670c2a3` | Sidebar fondateur : bêtes/GMQ dynamiques, bilan dynamique, incidents semaine entière |
+| `133cada` | Tous les `/35` hardcodés → `CYCLE.dureeMois` dynamique (durée cycle configurable) |

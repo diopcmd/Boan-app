@@ -1,7 +1,7 @@
 # Documentation Technique — BOANR
 
 > Application web mobile de gestion d'élevage bovin — Ferme BOAN, Thiès, Sénégal.
-> Mise à jour : 21 mars 2026
+> Mise à jour : juillet 2025
 
 ---
 
@@ -191,7 +191,8 @@ Toutes les feuilles de saisie ont le même format :
 | `appendRow(sid, range, vals)` | Écriture ligne (read-then-PUT) |
 | `writeAll(sids, range, vals)` | Écriture parallèle multi-SID |
 | `kpiAppend(vals)` | Écriture KPI_Mensuels (SID.fondateur) |
-| `loadLiveData()` | Charge pesées réelles depuis Sheets |
+| `loadLiveData()` | Charge données réelles depuis Sheets (3 vagues) |
+| `buildHistoryFromSheets(...)` | Construit HISTORY depuis 7 onglets Sheets |
 | `loadPrix()` | Charge suivi marché depuis Sheets |
 
 ### Fonctions utilitaires
@@ -206,6 +207,7 @@ Toutes les feuilles de saisie ont le même format :
 | `ficheDejaSoumise()` | Bool — fiche quotidienne déjà envoyée aujourd'hui |
 | `joursSince(type)` | Jours depuis dernière saisie de ce type |
 | `calcSemaine()` | Numéro de semaine du cycle en cours |
+| `bilanDejaFaitCetteSemaine()` | Bool — bilan hebdomadaire déjà soumis cette semaine |
 | `calcStockLocal()` | Calcul stock restant depuis STOCK_MVTS |
 | `stockSyntheseHtml(compact)` | HTML mouvements stock (full ou compact sidebar) |
 
@@ -273,6 +275,8 @@ body.light .tab.on  { border-bottom-color: #fff; }
 5. **encode `sheetName` only** — `encodeURIComponent('Feuille')+'!A4'` et non `encodeURIComponent('Feuille!A4')`
 6. **Filter lignes vides** — `(d.values||[]).filter(r => r && r.length > 0 && r[0] !== '')`
 7. **Détection thème** — `document.body.classList.contains('light')` toujours
+8. **Jamais `/35` hardcodé** — toujours `Math.round((CYCLE.dureeMois||8)*4.33)` = total semaines cycle
+9. **Gérant reçoit `SID_FONDATEUR`** — `writeAll` écrit dans les deux sheets simultanément
 
 ### Bonnes pratiques
 
@@ -295,3 +299,122 @@ body.light .tab.on  { border-bottom-color: #fff; }
 | Login override refusé | Check USERS[id] avant API | Ne pas vérifier localement avant /api/auth |
 | Import crash (require not defined) | require() dans ES Module | import statique depuis 'node:crypto' |
 | Sidebar couleurs lisibles dark only | Couleurs hardcodées dark | Utiliser `_sbLt` ternaire |
+| Fondateur ne voit pas données gérant | Gérant sans `SID_FONDATEUR` | auth.js : gérant reçoit `{gerant,fondateur}` |
+| Sidebar variables toujours au même état | `buildHistoryFromSheets` manque SOP/Stock | Vague2 lit 7 onglets, filtre par clé pas date |
+| `/35` affiché même si cycle ≠ 8 mois | Valeur hardcodée | `Math.round((CYCLE.dureeMois\|\|8)*4.33)` |
+
+---
+
+## Architecture loadLiveData — 3 vagues
+
+`loadLiveData()` charge les données réelles depuis Google Sheets en 3 étapes séquentielles / parallèles :
+
+```
+Étape 1 — Bloquante (Config_Cycle)
+  readSheet(sidFondateur, 'Config_Cycle!A1:O1')
+  → Synchronise l'objet CYCLE (durée, nbBêtes, capital, etc.)
+  → Indispensable avant toute autre lecture (totalSemCycle dépend de CYCLE.dureeMois)
+
+Étape 2 — Vague1 parallèle (KPI temps réel)
+  ┌─ Pesees          → LIVE.pesees, calcule MOCK.gmq, MOCK.betes, SPARK.gmq
+  ├─ Stock_Nourriture → MOCK.stock
+  ├─ KPI_Mensuels    → MOCK.treso, SPARK.betes, SPARK.stock, SPARK.treso
+  └─ Sante_Mortalite → MOCK.incidents (cette semaine)
+
+Étape 3 — Vague2 parallèle (Historique complet)
+  Source : sidHisto = SID.fondateur || SID.gerant
+  ┌─ Fiche_Quotidienne  ┐
+  ├─ Incidents          │
+  ├─ Sante_Mortalite    │ → buildHistoryFromSheets(...) → HISTORY[]
+  ├─ Hebdomadaire       │    clé unique par entrée, Sheets prime sur HISTORY local
+  ├─ Pesees             │
+  ├─ SOP_Check          │
+  └─ Stock_Nourriture   ┘
+```
+
+**Source de lecture Vague2** : `sidHisto = SID.fondateur || SID.gerant`
+Le gérant reçoit `SID_FONDATEUR` au login → `writeAll` écrit dans les deux sheets → le fondateur lit depuis son propre sheet → cohérence garantie.
+
+---
+
+## buildHistoryFromSheets — Conversion 7 onglets → HISTORY
+
+```js
+buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops, stocks)
+```
+
+Chaque tableau correspond à un onglet Sheets (lignes brutes, sans en-têtes).
+La fonction convertit chaque ligne en entrée HISTORY `{ type, date, ... }` et fusionne avec l'HISTORY local existant.
+
+**Règle de déduplication** : clé composite `type + '|' + date + '|' + champ_discriminant`.
+Si la même clé existe dans Sheets ET dans HISTORY local, la version **Sheets prime** (source de vérité).
+
+**Types générés** :
+
+| Type HISTORY | Source Sheets | Champ clé |
+|---|---|---|
+| `fiche` | `Fiche_Quotidienne` | date |
+| `incident` | `Incidents` | date + idBete |
+| `sante` | `Sante_Mortalite` | date + idBete |
+| `bilan` | `Hebdomadaire` | semaine |
+| `pesee` | `Pesees` | date + idBete |
+| `sop` | `SOP_Check` | date |
+| `stock` | `Stock_Nourriture` | date + typeAliment |
+
+---
+
+## Gestion des SID par rôle
+
+Dans `api/auth.js`, chaque rôle reçoit un objet `sid` multi-clé :
+
+```js
+// Gérant — écrit dans les deux sheets pour que le fondateur voit ses données
+{ gerant: SID_GERANT, fondateur: SID_FONDATEUR }
+
+// Fondateur — accès complet
+{ fondateur: SID_FONDATEUR, gerant: SID_GERANT, fallou: SID_FALLOU }
+
+// RGA — lecture fondateur + gérant
+{ rga: SID_RGA, gerant: SID_GERANT, fondateur: SID_FONDATEUR }
+
+// Fallou (commerciale)
+{ fallou: SID_FALLOU, fondateur: SID_FONDATEUR }
+```
+
+Dans le frontend, `SID` est peuplé depuis `data.sid` au login :
+```js
+Object.assign(SID, data.sid);   // ex: SID.fondateur, SID.gerant, ...
+```
+
+`writeAll([SID.gerant, SID.fondateur], range, vals)` écrit en parallèle dans les deux sheets.
+Le fondateur lit depuis `sidHisto = SID.fondateur || SID.gerant`.
+
+---
+
+## Durée de cycle dynamique
+
+La durée du cycle n'est **jamais** hardcodée à 35 semaines.
+
+```js
+// Calcul total semaines cycle (partout dans le code) :
+var totalSemCycle = Math.round((CYCLE.dureeMois || 8) * 4.33);
+
+// Exemples d'utilisation :
+var pct = Math.round((sem / totalSemCycle) * 100);          // progression %
+var joursRestants = Math.max(0, (totalSemCycle - sem) * 7); // jours restants
+```
+
+`CYCLE.dureeMois` est lu depuis `Config_Cycle!A1:O1` (Google Sheets fondateur) au démarrage de `loadLiveData()`. Valeur par défaut : `8` mois (≈ 34.6 → arrondi 35 semaines).
+
+---
+
+## Historique des commits
+
+| Commit | Description |
+|---|---|
+| `62ebeb1` | Agents 1-4 : auth multi-SID, loadLiveData 3-étapes, buildHistoryFromSheets, badge LIVE/MOCK, bouton Actualiser |
+| `6ddec0a` | `ficheDejaSoumise()` vérifie HISTORY (plus seulement localStorage) |
+| `02f9275` | Gérant reçoit `SID_FONDATEUR` — fondateur voit les soumissions gérant |
+| `a42c5e1` | `buildHistoryFromSheets` lit 7 onglets (+ SOP_Check, Stock_Nourriture), filtre par clé |
+| `670c2a3` | Sidebar fondateur : bêtes/GMQ dynamiques, bilan `bilanDejaFaitCetteSemaine()`, incidents semaine entière, bug `+'</div>;` |
+| `133cada` | Tous les `/35` hardcodés → `CYCLE.dureeMois` dynamique (exportPDF, exportKpiPDF, WhatsApp, AI, viewLiv, sidebar) |
