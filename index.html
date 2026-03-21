@@ -269,6 +269,13 @@ body.light input::placeholder,body.light textarea::placeholder{color:#99aa99}
 body.light [style*="color:#ccc"]{color:#445544 !important}
 body.light [style*="color:#aaa"]{color:#557755 !important}
 body.light [style*="color:#888aa88"]{color:#2d6a2d !important}
+/* météo sidebar — fonds sombres remplacés en thème clair */
+body.light .sb-body [style*="background:#1a2e1a"]{background:#e8f0e8 !important}
+body.light .sb-body [style*="background:#0f1f0f"]{background:#ddeedd !important}
+body.light .sb-body [style*="background:#1a1a00"]{background:#fff8e0 !important}
+body.light .sb-body [style*="color:#88aa88"]{color:#445533 !important}
+body.light .sb-body [style*="color:#556655"]{color:#334422 !important}
+body.light .sb-body [style*="color:#ffaa40"]{color:#b86000 !important}
 body.light .sb-lbl{color:#334433}
 body.light .sb-val{color:#1a2e1a}
 body.light .sb-ok{color:#1a7a1a !important}
@@ -982,7 +989,20 @@ function getTok() {
   });
 }
 
-var TABLE_RANGES = {};
+// Plages des tableaux formatés dans chaque onglet Google Sheets
+// start = 1ère ligne de données (sous l'en-tête), end = dernière ligne réservée
+var TABLE_RANGES = {
+  'Fiche_Quotidienne': { start: 2, end: 1002 },
+  'SOP_Check':         { start: 2, end: 1002 },
+  'Stock_Nourriture':  { start: 2, end: 1002 },
+  'Incidents':         { start: 2, end: 1002 },
+  'Pesees':            { start: 2, end: 1002 },
+  'Sante_Mortalite':   { start: 2, end: 1002 },
+  'Hebdomadaire':      { start: 2, end: 1002 },
+  'Suivi_Marche':      { start: 2, end: 1002 },
+  'KPI_Mensuels':      { start: 2, end: 1002 },
+  'KPI_Hebdo':         { start: 2, end: 1002 }
+};
 
 function appendRow(sid, range, vals) {
   if (!sid) return Promise.resolve({ok:false, err:'SID spreadsheet non configuré — vérifier les variables SID_* dans Vercel'});
