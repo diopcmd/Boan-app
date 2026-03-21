@@ -3159,7 +3159,7 @@ function buildSidebar(){
       // Jours FR courts
       var joursFR = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
       // Couleurs météo adaptées au thème (clair ou sombre)
-      var _lt = !!S._light;
+      var _lt = document.body.classList.contains('light');
       var _meteoBg  = _lt ? '#e8f4e8' : '#1a2e1a';
       var _meteoBg2 = _lt ? '#d8ecd8' : '#0f1f0f';
       var _meteoRainBg = _lt ? '#fff8e0' : '#1a1a00';
