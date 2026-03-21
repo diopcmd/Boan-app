@@ -1211,18 +1211,22 @@ function loadLiveData() {
       // (accès garanti car c'est la sheet du fondateur — pas de problème permission cross-sheet)
       var sidHisto = sidFondateur || sidGerant;
       return Promise.all([
-        sidHisto ? readSheet(sidHisto, 'Fiche_Quotidienne!A4:G500') : Promise.resolve(null),
-        sidHisto ? readSheet(sidHisto, 'Incidents!A4:G200')         : Promise.resolve(null),
-        sidHisto ? readSheet(sidHisto, 'Sante_Mortalite!A4:G200')   : Promise.resolve(null),
-        sidHisto ? readSheet(sidHisto, 'Hebdomadaire!A4:H200')      : Promise.resolve(null),
-        sidHisto ? readSheet(sidHisto, 'Pesees!A4:G200')            : Promise.resolve(null),
+        sidHisto ? readSheet(sidHisto, 'Fiche_Quotidienne!A4:G500')  : Promise.resolve(null),
+        sidHisto ? readSheet(sidHisto, 'Incidents!A4:G200')          : Promise.resolve(null),
+        sidHisto ? readSheet(sidHisto, 'Sante_Mortalite!A4:G200')    : Promise.resolve(null),
+        sidHisto ? readSheet(sidHisto, 'Hebdomadaire!A4:H200')       : Promise.resolve(null),
+        sidHisto ? readSheet(sidHisto, 'Pesees!A4:G200')             : Promise.resolve(null),
+        sidHisto ? readSheet(sidHisto, 'SOP_Check!A4:H200')          : Promise.resolve(null),
+        sidHisto ? readSheet(sidHisto, 'Stock_Nourriture!A4:F200')   : Promise.resolve(null),
       ]).then(function(hist) {
         var fiches    = (hist[0] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
         var incidents = (hist[1] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
         var santes    = (hist[2] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
         var bilans    = (hist[3] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
         var pesees    = (hist[4] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
-        buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees);
+        var sops      = (hist[5] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
+        var stocks    = (hist[6] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
+        buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops, stocks);
         r(); // → sidebar et alertes se mettent à jour
       }).catch(function() {
         // Vague 2 échouée — Vague 1 déjà affichée, pas critique
@@ -1243,8 +1247,8 @@ function loadLiveData() {
 // ── Reconstruction HISTORY depuis les données Sheets (Agent 3) ──
 // Appelée après la Vague 2 de loadLiveData()
 // Paramètres : tableaux de lignes brutes filtrées depuis CYCLE.dateDebut
-function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees) {
-  var icons = { fiche:'📋', inc:'⚠️', sante:'💊', bilan:'📊', pesee:'⚖️' };
+function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops, stocks) {
+  var icons = { fiche:'📋', inc:'⚠️', sante:'💊', bilan:'📊', pesee:'⚖️', sop:'✅', stock:'🌾' };
 
   // Helper : convertir date FR "dd/mm/yyyy" en objet Date
   function parseFR(dateFR) {
@@ -1289,25 +1293,38 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees) {
   // Pesees [date, id, race, poids, prev, gain, statut]
   (pesees || []).forEach(function(r) {
     if (!r[0]) return;
-    var id = r[1] || '—'; var poids = r[3] || '—';
+    var id = r[1] || '\u2014'; var poids = r[3] || '\u2014';
     entries.push({ type:'pesee', label:id+' \u2014 '+poids+'kg', icon:icons.pesee,
-      date:r[0], time:'—', _id:id, _src:'sheets' });
+      date:r[0], time:'\u2014', _id:id, _src:'sheets' });
   });
 
-  // 2. Fusionner avec localStorage — Sheets gagne toujours
-  // localStorage complète UNIQUEMENT pour entrées dont la date > dernière entrée Sheets
-  var lastSheetDate = null;
+  // SOP_Check [date, net, des, rat, eau, stk, san, prob]
+  (sops || []).forEach(function(r) {
+    if (!r[0]) return;
+    entries.push({ type:'sop', label:'SOP du '+r[0], icon:icons.sop,
+      date:r[0], time:'\u2014', _src:'sheets' });
+  });
+
+  // Stock_Nourriture [date, type, kg, ...] — 1 entrée HISTORY par date unique
+  var stockDates = {};
+  (stocks || []).forEach(function(r) {
+    if (!r[0] || stockDates[r[0]]) return;
+    stockDates[r[0]] = true;
+    entries.push({ type:'stock', label:'Stock du '+r[0], icon:icons.stock,
+      date:r[0], time:'\u2014', _src:'sheets' });
+  });
+
+  // 2. Fusionner avec localStorage — Sheets gagne pour les clés existantes
+  // Garder les entrées locales qui n'ont PAS de doublon dans Sheets
+  var sheetsKeys = {};
   entries.forEach(function(e) {
-    var d = parseFR(e.date);
-    if (d && (!lastSheetDate || d > lastSheetDate)) lastSheetDate = d;
+    sheetsKeys[e.type + '|' + e.date + '|' + (e._id || '')] = true;
   });
 
   var localOnly = (HISTORY || []).filter(function(h) {
     if (h._src === 'sheets') return false; // déjà issu de Sheets
-    var d = parseFR(h.date);
-    if (!d) return false;
-    // Garder seulement les entrées locales plus récentes que la dernière entrée Sheets
-    return lastSheetDate ? d > lastSheetDate : true;
+    var key = h.type + '|' + h.date + '|' + (h._id || '');
+    return !sheetsKeys[key]; // garder si pas de doublon Sheets
   });
 
   var merged = entries.concat(localOnly);
