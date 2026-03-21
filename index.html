@@ -1207,12 +1207,15 @@ function loadLiveData() {
       r(); // → dashboard s'affiche avec vraies données
 
       // ── ÉTAPE 3 — Vague 2 historique (parallèle, après Vague 1) ──
+      // Lire depuis SID.fondateur si disponible : le gérant y écrit via writeAll
+      // (accès garanti car c'est la sheet du fondateur — pas de problème permission cross-sheet)
+      var sidHisto = sidFondateur || sidGerant;
       return Promise.all([
-        sidGerant ? readSheet(sidGerant, 'Fiche_Quotidienne!A4:G500') : Promise.resolve(null),
-        sidGerant ? readSheet(sidGerant, 'Incidents!A4:G200')         : Promise.resolve(null),
-        sidGerant ? readSheet(sidGerant, 'Sante_Mortalite!A4:G200')   : Promise.resolve(null),
-        sidGerant ? readSheet(sidGerant, 'Hebdomadaire!A4:H200')      : Promise.resolve(null),
-        sidGerant ? readSheet(sidGerant, 'Pesees!A4:G200')            : Promise.resolve(null),
+        sidHisto ? readSheet(sidHisto, 'Fiche_Quotidienne!A4:G500') : Promise.resolve(null),
+        sidHisto ? readSheet(sidHisto, 'Incidents!A4:G200')         : Promise.resolve(null),
+        sidHisto ? readSheet(sidHisto, 'Sante_Mortalite!A4:G200')   : Promise.resolve(null),
+        sidHisto ? readSheet(sidHisto, 'Hebdomadaire!A4:H200')      : Promise.resolve(null),
+        sidHisto ? readSheet(sidHisto, 'Pesees!A4:G200')            : Promise.resolve(null),
       ]).then(function(hist) {
         var fiches    = (hist[0] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
         var incidents = (hist[1] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });

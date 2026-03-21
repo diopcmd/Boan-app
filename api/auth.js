@@ -97,9 +97,11 @@ export default async function handler(req, res) {
         fondateur: process.env.SID_FONDATEUR,
       };
     } else {
-      // gerant (et tout rôle inconnu) → SID gérant uniquement
+      // gerant → reçoit aussi SID_FONDATEUR pour que writeAll synchronise les 2 sheets
+      // (toutes les saisies terrain sont censées atterrir dans la sheet fondateur)
       sid = {
-        gerant: process.env.SID_GERANT,
+        gerant:    process.env.SID_GERANT,
+        fondateur: process.env.SID_FONDATEUR,
       };
     }
 
