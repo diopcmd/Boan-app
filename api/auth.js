@@ -80,7 +80,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       sessionToken,
-      user: { login, name: user.name, tabs: user.tabs },
+      user: { login, role, name: user.name, tabs: user.tabs },
       sid: user.sid,
     });
 

@@ -919,7 +919,7 @@ function doLogin() {
   var id = S.lid.trim().toLowerCase();
   var pw = S.lpw;
   if (!id || !pw) { S.lerr = 'Identifiants requis'; r(); return; }
-  if (!USERS[id]) { S.lerr = 'Identifiant inconnu'; r(); return; }
+  // Pas de vérification locale USERS[id] — le serveur gère les logins overridés
 
   S.sending = true; S.lerr = ''; r();
 
@@ -935,13 +935,15 @@ function doLogin() {
       S.lerr = data.error || 'Identifiants incorrects';
       r(); return;
     }
-    // Stocker le token de session (jamais les credentials)
+    // Utiliser le rôle canonique retourné par le serveur (supporte les logins overridés)
+    var role = (data.user && data.user.role) || id;
+    if (!USERS[role]) { S.lerr = 'Rôle inconnu : ' + role; r(); return; }
     S.sessionToken = data.sessionToken;
-    S.user = id;
+    S.user = role;
     S.lerr = '';
-    // Peupler SID depuis la réponse serveur (jamais dans le code)
-    SID[id] = data.sid;
-    S.tab = USERS[id].tabs[0];
+    // Peupler SID depuis la réponse serveur avec le rôle canonique
+    SID[role] = data.sid;
+    S.tab = USERS[role].tabs[0];
     S.sub = S.tab==='saisie'?'fiche':S.tab==='livrables'?'treso':S.tab==='marche'?'prix':'';
     LAST_ACTIVITY = Date.now();
     S.page = 'app';
@@ -1068,7 +1070,9 @@ function readSheet(sid, range) {
 // Appelé au login — remplace MOCK{} par données réelles
 function loadLiveData() {
   if (!S.user) return;
-  var sid = SID.gerant;
+  // Fallback : utilise la copie fondateur ou rga si SID.gerant non disponible
+  // (fondateur reçoit aussi les écritures via writeAll)
+  var sid = SID.gerant || SID.fondateur || SID.rga;
 
   // Helper : valider et lire un nombre, retourne null si invalide
   function safeNum(val) {
@@ -1519,7 +1523,10 @@ function loadPesees() {
 // Charge les derniers prix foirail depuis Suivi_Marche
 function loadPrix() {
   if (!S.user) return;
-  readSheet(SID.fallou, 'Suivi_Marche!A4:J30').then(function(rows) {
+  // Fallback : fondateur reçoit aussi Suivi_Marche via writeAll
+  var _sidPrix = SID.fallou || SID.fondateur;
+  if (!_sidPrix) return;
+  readSheet(_sidPrix, 'Suivi_Marche!A4:J30').then(function(rows) {
     if (!rows) return;
     LIVE.prix = rows
       .filter(function(r){ return r[0] && r[2]; })
@@ -2896,7 +2903,8 @@ function saveCycle(){
     ];
     var allSids = [SID.fondateur, SID.gerant, SID.rga, SID.fallou];
     allSids.forEach(function(sid){
-      var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+encodeURIComponent('Config_Cycle!A1')+'?valueInputOption=USER_ENTERED';
+      var _ccEnc = encodeURIComponent('Config_Cycle');
+      var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+_ccEnc+'!A1?valueInputOption=USER_ENTERED';
       fetch(url,{method:'PUT',headers:{Authorization:'Bearer '+tk,'Content-Type':'application/json'},body:JSON.stringify({values:[vals]})});
     });
     r();
