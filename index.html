@@ -628,9 +628,11 @@ function santeDejaEnregistree(id, sym) {
 }
 
 function ficheDejaSoumise() {
-  // Bloque toute la journée calendaire (pas de restriction horaire)
+  // Vérifie localStorage ET HISTORY (reconstruit depuis Sheets au login)
   var last = lsGet('last_fiche');
-  return last === todayISO();
+  if (last === todayISO()) return true;
+  var td = today();
+  return HISTORY.some(function(h){ return h.type === 'fiche' && h.date === td; });
 }
 function marquerFicheAujourdhui() {
   lsSet('last_fiche', todayISO());
