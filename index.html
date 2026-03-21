@@ -515,10 +515,11 @@ function stockSyntheseHtml(compact) {
   if(!types.length) return '<div style="color:#88aa88;font-size:12px;padding:8px 0;text-align:center">Aucun mouvement enregistré ce cycle</div>';
   if(compact) {
     // Mode compact sidebar : aliment + stock courant
+    var _cLt = document.body.classList.contains('light');
     return types.map(function(t){
       var a=ajouts[t]||0, c=consos[t]||0, net=Math.max(0,a-c);
-      return '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 0;border-bottom:1px solid #1a2e1a">'
-        +'<span style="color:#ccc;flex:1">'+t+'</span>'
+      return '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:3px 0;border-bottom:1px solid '+(_cLt?'#c5d8c5':'#1a2e1a')+'">'
+        +'<span style="color:'+(_cLt?'#334433':'#ccc')+';flex:1">'+t+'</span>'
         +'<span style="color:'+(net>0?'#4caf50':'#f44336')+';font-weight:700;margin-left:8px">'+net+' kg</span>'
         +'</div>';
     }).join('');
@@ -1033,7 +1034,7 @@ function appendRow(sid, range, vals) {
     return fetch(readUrl, {headers:{Authorization:'Bearer '+tk}})
       .then(function(res){return res.json();})
       .then(function(d){
-        var rows = d.values || [];
+        var rows = (d.values || []).filter(function(r){ return r && r.length > 0 && r[0] !== ''; });
         // 2. Première ligne vide dans le tableau (sans dépasser la fin)
         var targetLine = Math.min(tr.start + rows.length, tr.end);
         // 3. Écrire exactement à cette ligne (PUT — aucune insertion de ligne)
@@ -3285,7 +3286,7 @@ function buildSidebar(){
             +(!fichOk2?'<div class=\"alert-banner\">⚠ Fiche du jour non remplie</div>':'');
         })()
         +'<div class="sb-section-title">Stock aliments</div>'
-        +(function(){var stkDisplay=MOCK.stock>0?MOCK.stock:calcStockLocal();var stkCl=stkDisplay>=6?'sb-ok':stkDisplay>=4?'sb-warn':'sb-ko';var jours=Math.round(stkDisplay*7);return '<div class="sb-row"><span class="sb-lbl">Semaines restantes</span>'+'<span class="sb-val '+stkCl+'">'+stkDisplay+' sem.</span></div>'+'<div class="sb-row"><span class="sb-lbl">Rupture estimée</span>'+'<span style="font-size:12px;color:'+(stkDisplay>=6?'#4caf50':stkDisplay>=4?'#ff9800':'#f44336')+'">~'+jours+' jours</span></div>'+(STOCK_MVTS&&STOCK_MVTS.length?'<div style="margin-top:6px;padding:6px;background:#0a150a;border-radius:6px">'+'<div style="font-size:10px;color:#88aa88;margin-bottom:4px;text-transform:uppercase">Mouvements cycle</div>'+stockSyntheseHtml(true)+'</div>':'');})()
+        +(function(){var stkDisplay=MOCK.stock>0?MOCK.stock:calcStockLocal();var stkCl=stkDisplay>=6?'sb-ok':stkDisplay>=4?'sb-warn':'sb-ko';var jours=Math.round(stkDisplay*7);return '<div class="sb-row"><span class="sb-lbl">Semaines restantes</span>'+'<span class="sb-val '+stkCl+'">'+stkDisplay+' sem.</span></div>'+'<div class="sb-row"><span class="sb-lbl">Rupture estimée</span>'+'<span style="font-size:12px;color:'+(stkDisplay>=6?'#4caf50':stkDisplay>=4?'#ff9800':'#f44336')+'">~'+jours+' jours</span></div>'+(STOCK_MVTS&&STOCK_MVTS.length?'<div style="margin-top:6px;padding:6px;background:'+(_sbLt?'#e8f0e8':'#0a150a')+';border-radius:6px">'+'<div style="font-size:10px;color:'+_sbSub+';margin-bottom:4px;text-transform:uppercase">Mouvements cycle</div>'+stockSyntheseHtml(true)+'</div>':'');})()
         +'</div>'
         +'<div class="sb-shortcut" onclick="chTab(\'saisie\');chSub(\'fiche\');closeSB()">'
         +'<div class="sb-shortcut-ico" style="background:#1a3a1a">📋</div>'
