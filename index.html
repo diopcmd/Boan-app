@@ -942,8 +942,12 @@ function doLogin() {
     S.sessionToken = data.sessionToken;
     S.user = role;
     S.lerr = '';
-    // Peupler SID depuis la réponse serveur avec le rôle canonique
-    SID[role] = data.sid;
+    // Peupler SID depuis la réponse serveur — data.sid est un objet {fondateur, gerant, ...}
+    if (data.sid && typeof data.sid === 'object') {
+      Object.keys(data.sid).forEach(function(k) { SID[k] = data.sid[k]; });
+    } else {
+      SID[role] = data.sid; // rétrocompatibilité
+    }
     S.tab = USERS[role].tabs[0];
     S.sub = S.tab==='saisie'?'fiche':S.tab==='livrables'?'treso':S.tab==='marche'?'prix':'';
     LAST_ACTIVITY = Date.now();
@@ -1071,9 +1075,17 @@ function readSheet(sid, range) {
 // Appelé au login — remplace MOCK{} par données réelles
 function loadLiveData() {
   if (!S.user) return;
-  // Fallback : utilise la copie fondateur ou rga si SID.gerant non disponible
-  // (fondateur reçoit aussi les écritures via writeAll)
-  var sid = SID.gerant || SID.fondateur || SID.rga;
+  LIVE.source = 'loading';
+
+  // Helper : filtrer les lignes depuis CYCLE.dateDebut
+  function apresDebut(dateFR) {
+    if (!CYCLE.dateDebut) return true;
+    var parts = dateFR.split('/');
+    if (parts.length !== 3) return false;
+    var d = new Date(parts[2], parts[1]-1, parts[0]);
+    var debut = new Date(CYCLE.dateDebut);
+    return d >= debut;
+  }
 
   // Helper : valider et lire un nombre, retourne null si invalide
   function safeNum(val) {
@@ -1082,79 +1094,250 @@ function loadLiveData() {
     return isNaN(n) ? null : n;
   }
 
-  // 1. Bêtes actives — garder MOCK.betes si lecture invalide
-  readSheet(sid, 'Sante_Mortalite!A4:G50').then(function(rows) {
-    if (!rows) return;
-    var deces = rows.filter(function(r){ return r[6] && r[6].toString().toUpperCase()==='OUI'; }).length;
-    var val = Math.max(0, (CYCLE.nbBetes||4) - deces);
-    if (!isNaN(val)) {
-      MOCK.betes = val;
-      // Alimenter SPARK.betes : historique des bêtes actives par ligne
-      var actives = (CYCLE.nbBetes||4);
-      var sparkBetes = [];
-      rows.slice(-7).forEach(function(r) {
-        if (r[6] && r[6].toString().toUpperCase()==='OUI') actives = Math.max(0, actives - 1);
-        sparkBetes.push(actives);
-      });
-      if (sparkBetes.length > 0) SPARK.betes = sparkBetes;
-      r();
-    }
-  });
+  var sidGerant   = SID.gerant;
+  var sidFondateur = SID.fondateur;
 
-  // 2. GMQ moyen — garder MOCK.gmq si pas de données valides
-  readSheet(sid, 'Pesees!A4:G50').then(function(rows) {
-    if (!rows || rows.length === 0) return;
-    var gains = rows.map(function(r){ return safeNum(r[5]); }).filter(function(v){ return v !== null && v > 0; });
-    if (gains.length > 0) {
-      var moy = gains.reduce(function(a,b){return a+b;},0) / gains.length;
-      var gmq = Math.round((moy/7)*100)/100;
-      if (gmq > 0 && gmq < 5) { // sanity check : GMQ bovin entre 0 et 5 kg/j
-        MOCK.gmq = gmq;
-        SPARK.gmq = gains.slice(-7).map(function(g){ return Math.round((g/7)*100)/100; });
-        r();
+  // ── ÉTAPE 1 — Config_Cycle (bloquante) ──
+  // Lire depuis SID.fondateur pour synchroniser CYCLE sur tout appareil
+  var step1 = sidFondateur
+    ? readSheet(sidFondateur, 'Config_Cycle!A1:O1').then(function(rows) {
+        if (!rows || !rows[0] || !rows[0][0]) return; // Sheets vide → garder CYCLE local
+        var row = rows[0];
+        var updates = {};
+        if (row[0])  updates.dateDebut      = row[0];
+        if (row[1])  updates.nbBetes        = parseInt(row[1])   || CYCLE.nbBetes;
+        if (row[2])  updates.poidsDepart    = parseInt(row[2])   || CYCLE.poidsDepart;
+        if (row[3])  updates.race           = row[3];
+        if (row[4])  updates.ration         = parseFloat(row[4]) || CYCLE.ration;
+        if (row[5])  updates.capital        = parseInt(row[5])   || CYCLE.capital;
+        if (row[6])  updates.objectifPrix   = parseInt(row[6])   || CYCLE.objectifPrix;
+        if (row[7])  updates.budgetSante    = parseInt(row[7])   || CYCLE.budgetSante;
+        if (row[8])  updates.veterinaire    = row[8];
+        if (row[9])  updates.foirail        = row[9];
+        if (row[10]) updates.commission     = parseFloat(row[10]) || CYCLE.commission;
+        if (row[11]) updates.contactUrgence = row[11];
+        if (row[12]) updates.peseeFreq      = parseInt(row[12])  || CYCLE.peseeFreq;
+        try { if (row[13]) updates.betes      = JSON.parse(row[13]); } catch(e) {}
+        try { if (row[14]) updates.stockLines = JSON.parse(row[14]); } catch(e) {}
+        Object.assign(CYCLE, updates);
+        lsSet('cycle', CYCLE);
+      }).catch(function() { /* Sheets inaccessible → garder CYCLE local existant */ })
+    : Promise.resolve();
+
+  step1.then(function() {
+    // ── ÉTAPE 2 — Vague 1 critique (parallèle, ~1 seconde) ──
+    return Promise.all([
+      sidGerant   ? readSheet(sidGerant,   'Pesees!A4:G200')           : Promise.resolve(null),
+      sidGerant   ? readSheet(sidGerant,   'Stock_Nourriture!A4:F200') : Promise.resolve(null),
+      sidFondateur ? readSheet(sidFondateur, 'KPI_Mensuels!A4:K50')   : Promise.resolve(null),
+      sidGerant   ? readSheet(sidGerant,   'Sante_Mortalite!A4:G200') : Promise.resolve(null),
+    ]).then(function(results) {
+      var rowsPesees = results[0];
+      var rowsStock  = results[1];
+      var rowsKpi    = results[2];
+      var rowsSante  = results[3];
+
+      // Sante_Mortalite → MOCK.betes + SPARK.betes
+      if (rowsSante && rowsSante.length) {
+        var deces = rowsSante.filter(function(r){ return r[6] && r[6].toString().toUpperCase()==='OUI'; }).length;
+        var valBetes = Math.max(0, (CYCLE.nbBetes||4) - deces);
+        if (!isNaN(valBetes)) {
+          MOCK.betes = valBetes;
+          var actives = (CYCLE.nbBetes||4);
+          var sparkBetes = [];
+          rowsSante.slice(-7).forEach(function(r) {
+            if (r[6] && r[6].toString().toUpperCase()==='OUI') actives = Math.max(0, actives - 1);
+            sparkBetes.push(actives);
+          });
+          if (sparkBetes.length > 0) SPARK.betes = sparkBetes;
+        }
       }
-    }
-  });
 
-  // 3. Stock — recalculer les semaines restantes depuis l'historique complet
-  readSheet(sid, 'Stock_Nourriture!A4:F50').then(function(rows) {
-    if (!rows || rows.length === 0) return;
-    // Agréger par aliment : somme nette (positif=ajout, négatif=conso)
-    var netKg = {};
-    rows.forEach(function(row) {
-      if (!row[0]) return;
-      var type = row[1] || 'Inconnu';
-      var kg   = safeNum(row[2]);
-      if (kg !== null) netKg[type] = (netKg[type] || 0) + kg;
-    });
-    var totalNet = Object.values(netKg).reduce(function(s, v) { return s + v; }, 0);
-    var rationJour = (CYCLE.ration || 12) * (CYCLE.nbBetes || 4);
-    if (totalNet > 0 && rationJour > 0) {
-      var semCalc = Math.round((totalNet / (rationJour * 7)) * 10) / 10;
-      if (semCalc >= 0 && semCalc <= 52) {
-        MOCK.stock = semCalc;
-        SPARK.stk = rows.slice(-7).map(function(row) {
-          var kg = safeNum(row[2]) || 0;
-          return rationJour > 0 ? Math.max(0, Math.round(kg / (rationJour * 7) * 10) / 10) : 0;
+      // Pesées → MOCK.gmq + SPARK.gmq
+      if (rowsPesees && rowsPesees.length) {
+        var gains = rowsPesees.map(function(r){ return safeNum(r[5]); }).filter(function(v){ return v !== null && v > 0; });
+        if (gains.length > 0) {
+          var moy = gains.reduce(function(a,b){return a+b;},0) / gains.length;
+          var gmq = Math.round((moy/7)*100)/100;
+          if (gmq > 0 && gmq < 5) {
+            MOCK.gmq = gmq;
+            SPARK.gmq = gains.slice(-7).map(function(g){ return Math.round((g/7)*100)/100; });
+          }
+        }
+      }
+
+      // Stock_Nourriture → MOCK.stock + SPARK.stk
+      if (rowsStock && rowsStock.length) {
+        var netKg = {};
+        rowsStock.forEach(function(row) {
+          if (!row[0]) return;
+          var type = row[1] || 'Inconnu';
+          var kg   = safeNum(row[2]);
+          if (kg !== null) netKg[type] = (netKg[type] || 0) + kg;
         });
-        r();
+        var totalNet = Object.keys(netKg).reduce(function(s, k){ return s + netKg[k]; }, 0);
+        var rationJour = (CYCLE.ration || 12) * (CYCLE.nbBetes || 4);
+        if (totalNet > 0 && rationJour > 0) {
+          var semCalc = Math.round((totalNet / (rationJour * 7)) * 10) / 10;
+          if (semCalc >= 0 && semCalc <= 52) {
+            MOCK.stock = semCalc;
+            SPARK.stk = rowsStock.slice(-7).map(function(row) {
+              var kg = safeNum(row[2]) || 0;
+              return rationJour > 0 ? Math.max(0, Math.round(kg / (rationJour * 7) * 10) / 10) : 0;
+            });
+          }
+        }
       }
-    }
+
+      // KPI_Mensuels → MOCK.treso + SPARK.treso
+      if (rowsKpi && rowsKpi.length) {
+        for (var i = rowsKpi.length - 1; i >= 0; i--) {
+          var valTreso = safeNum(rowsKpi[i][7]);
+          if (valTreso !== null && valTreso >= 0) {
+            MOCK.treso = valTreso;
+            SPARK.treso = rowsKpi.slice(-7).map(function(r){ return safeNum(r[7])||0; });
+            break;
+          }
+        }
+      }
+
+      LIVE.source = 'live';
+      r(); // → dashboard s'affiche avec vraies données
+
+      // ── ÉTAPE 3 — Vague 2 historique (parallèle, après Vague 1) ──
+      return Promise.all([
+        sidGerant ? readSheet(sidGerant, 'Fiche_Quotidienne!A4:G500') : Promise.resolve(null),
+        sidGerant ? readSheet(sidGerant, 'Incidents!A4:G200')         : Promise.resolve(null),
+        sidGerant ? readSheet(sidGerant, 'Sante_Mortalite!A4:G200')   : Promise.resolve(null),
+        sidGerant ? readSheet(sidGerant, 'Hebdomadaire!A4:H200')      : Promise.resolve(null),
+        sidGerant ? readSheet(sidGerant, 'Pesees!A4:G200')            : Promise.resolve(null),
+      ]).then(function(hist) {
+        var fiches    = (hist[0] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
+        var incidents = (hist[1] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
+        var santes    = (hist[2] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
+        var bilans    = (hist[3] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
+        var pesees    = (hist[4] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
+        buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees);
+        r(); // → sidebar et alertes se mettent à jour
+      }).catch(function() {
+        // Vague 2 échouée — Vague 1 déjà affichée, pas critique
+      });
+
+    }).catch(function() {
+      // Sheets inaccessible (Vague 1) → ne pas écraser localStorage
+      LIVE.source = 'cache';
+      r(); // → badge Cache affiché
+    });
+
+  }).catch(function() {
+    LIVE.source = 'cache';
+    r();
+  });
+}
+
+// ── Reconstruction HISTORY depuis les données Sheets (Agent 3) ──
+// Appelée après la Vague 2 de loadLiveData()
+// Paramètres : tableaux de lignes brutes filtrées depuis CYCLE.dateDebut
+function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees) {
+  var icons = { fiche:'📋', inc:'⚠️', sante:'💊', bilan:'📊', pesee:'⚖️' };
+
+  // Helper : convertir date FR "dd/mm/yyyy" en objet Date
+  function parseFR(dateFR) {
+    var p = dateFR ? dateFR.split('/') : [];
+    if (p.length !== 3) return null;
+    return new Date(p[2], p[1]-1, p[0]);
+  }
+
+  // 1. Convertir chaque onglet en entrées HISTORY
+  var entries = [];
+
+  // Fiche_Quotidienne [date, nb, nourris, eau, enclos, incident, desc]
+  (fiches || []).forEach(function(r) {
+    if (!r[0]) return;
+    entries.push({ type:'fiche', label:'Fiche du '+r[0], icon:icons.fiche,
+      date:r[0], time:'08:00', _src:'sheets' });
   });
 
-  // 4. Trésorerie — garder MOCK.treso si donnée invalide
-  readSheet(SID.fondateur, 'KPI_Mensuels!A4:K50').then(function(rows) {
-    if (!rows || rows.length === 0) return;
-    for (var i = rows.length-1; i >= 0; i--) {
-      var val = safeNum(rows[i][7]);
-      if (val !== null && val >= 0) { // tréso ne peut pas être négative ici
-        MOCK.treso = val;
-        SPARK.treso = rows.slice(-7).map(function(r){ return safeNum(r[7])||0; });
-        r();
-        break;
-      }
+  // Incidents [date, id, type, grav, desc, act, clos]
+  (incidents || []).forEach(function(r) {
+    if (!r[0]) return;
+    var id = r[1] || '—'; var typeInc = r[2] || '—';
+    entries.push({ type:'inc', label:id+' \u2014 '+typeInc, icon:icons.inc,
+      date:r[0], time:'—', _id:id, _typeInc:typeInc, _src:'sheets' });
+  });
+
+  // Sante_Mortalite [date, id, sym, tra, cout, res, dec]
+  (santes || []).forEach(function(r) {
+    if (!r[0]) return;
+    var id = r[1] || '—'; var sym = r[2] || '—';
+    entries.push({ type:'sante', label:id+' \u2014 '+sym, icon:icons.sante,
+      date:r[0], time:'—', _id:id, _sym:sym, _src:'sheets' });
+  });
+
+  // Hebdomadaire [sem, nb, nou, stk, inc, poi, al, msg]
+  (bilans || []).forEach(function(r) {
+    if (!r[0]) return;
+    entries.push({ type:'bilan', label:'Semaine '+r[0], icon:icons.bilan,
+      date:r[0], time:'—', _src:'sheets' });
+  });
+
+  // Pesees [date, id, race, poids, prev, gain, statut]
+  (pesees || []).forEach(function(r) {
+    if (!r[0]) return;
+    var id = r[1] || '—'; var poids = r[3] || '—';
+    entries.push({ type:'pesee', label:id+' \u2014 '+poids+'kg', icon:icons.pesee,
+      date:r[0], time:'—', _id:id, _src:'sheets' });
+  });
+
+  // 2. Fusionner avec localStorage — Sheets gagne toujours
+  // localStorage complète UNIQUEMENT pour entrées dont la date > dernière entrée Sheets
+  var lastSheetDate = null;
+  entries.forEach(function(e) {
+    var d = parseFR(e.date);
+    if (d && (!lastSheetDate || d > lastSheetDate)) lastSheetDate = d;
+  });
+
+  var localOnly = (HISTORY || []).filter(function(h) {
+    if (h._src === 'sheets') return false; // déjà issu de Sheets
+    var d = parseFR(h.date);
+    if (!d) return false;
+    // Garder seulement les entrées locales plus récentes que la dernière entrée Sheets
+    return lastSheetDate ? d > lastSheetDate : true;
+  });
+
+  var merged = entries.concat(localOnly);
+
+  // 3. Dédupliquer — clé unique = type + date + (_id si applicable)
+  var seen = {};
+  var deduped = [];
+  merged.forEach(function(e) {
+    var key = e.type + '|' + e.date + '|' + (e._id || '');
+    if (seen[key]) {
+      // En cas de doublon : garder l'entrée Sheets (déjà dans entries en premier)
+      if (e._src === 'sheets') { seen[key] = e; }
+    } else {
+      seen[key] = e;
+      deduped.push(key);
     }
   });
+  var result = deduped.map(function(k) { return seen[k]; });
+
+  // 4. Trier par date décroissante
+  result.sort(function(a, b) {
+    var da = parseFR(a.date), db = parseFR(b.date);
+    if (!da && !db) return 0;
+    if (!da) return 1;
+    if (!db) return -1;
+    return db - da;
+  });
+
+  // 5. Limiter à 50 entrées
+  result = result.slice(0, 50);
+
+  // 6. Sauvegarder dans localStorage ET mettre à jour HISTORY global
+  HISTORY = result;
+  lsSet('history', HISTORY);
+  return HISTORY;
 }
 
 function doSubmit(type) {
@@ -1448,7 +1631,8 @@ var LIVE = {
   pesees:  [],
   beteIds: [],
   prix:    [],  // [{date, foi, bas, moy, haut}] depuis Suivi_Marche
-  loaded:  false
+  loaded:  false,
+  source:  'cache'  // 'live' | 'cache' | 'loading'
 };
 // Charge les pesées depuis Sheets pour les courbes de croissance
 function loadPesees() {
@@ -3122,7 +3306,13 @@ function pageApp(){
     +'<div class="hdr">'
     +'<div class="logo"><div class="logo-b">B</div>'
     +'<div><div style="font-size:18px;font-weight:700">BOANR</div>'
-    +'<div style="font-size:11px;color:#88bb88;display:flex;align-items:center;gap:4px">Cycle 1 — Sem. '+calcSemaine()+'<div class="'+(ONLINE?'online-dot':'offline-dot')+'"></div></div>'
+    +'<div style="font-size:11px;color:#88bb88;display:flex;align-items:center;gap:4px">Cycle 1 \u2014 Sem. '+calcSemaine()
+    +(LIVE.source==='loading'
+      ? '<span style="color:#5ab4ff">&#9203;</span>'
+      : LIVE.source==='live'
+        ? '<span style="color:#4caf50" title="Donn\u00e9es temps r\u00e9el">&#128994;</span>'
+        : '<span style="color:#ff9800" title="Donn\u00e9es locales">&#128241;</span>')
+    +'<div class="'+(ONLINE?'online-dot':'offline-dot')+'"></div></div>'
     +'</div></div>'
     +'<div style="display:flex;align-items:center;gap:8px;position:relative">'
     +(S.user==='fondateur'?'<button class="ubtn" onclick="S.dd=!S.dd;r()">'+USERS[S.user].name+' &#9660;</button>':'')
@@ -3561,7 +3751,11 @@ function buildSidebar(){
     +'</div>'
     +'<button onclick="SB._freqDone=true;r()" style="width:100%;padding:8px;border-radius:6px;background:#C8A06A;color:#0f1a0f;font-size:13px;font-weight:700;border:none;cursor:pointer">OK — '+(CYCLE.peseeFreq||30)+' jours</button>'
     +'</div>';
-})()+'<button onclick="S.page=\'login\';S.user=null;SB.open=false;r()" style="background:#2e1010;color:#ff7070;border:1px solid #8a0000;font-size:13px;padding:10px">Déconnexion</button>'
+})()+'<button onclick="LIVE.source=\'loading\';r();setTimeout(loadLiveData,100)" '
+    +'style="background:#1a2e3a;color:#5ab4ff;border:1px solid #2a4a5a;'
+    +'font-size:13px;padding:10px;border-radius:8px;margin-bottom:8px;width:100%">'
+    +'&#128260; Actualiser les donn\u00e9es</button>'
+    +'<button onclick="S.page=\'login\';S.user=null;SB.open=false;r()" style="background:#2e1010;color:#ff7070;border:1px solid #8a0000;font-size:13px;padding:10px">D\u00e9connexion</button>'
     +'</div>';
 }
 

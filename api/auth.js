@@ -77,11 +77,37 @@ export default async function handler(req, res) {
       .update(payload).digest('hex');
     const sessionToken = Buffer.from(payload).toString('base64') + '.' + hmac;
 
+    // Construire l'objet SID selon le rôle — chaque rôle reçoit les SIDs nécessaires
+    let sid;
+    if (role === 'fondateur') {
+      sid = {
+        fondateur: process.env.SID_FONDATEUR,
+        gerant:    process.env.SID_GERANT,
+        fallou:    process.env.SID_FALLOU,
+      };
+    } else if (role === 'rga') {
+      sid = {
+        rga:       process.env.SID_RGA,
+        gerant:    process.env.SID_GERANT,
+        fondateur: process.env.SID_FONDATEUR,
+      };
+    } else if (role === 'fallou') {
+      sid = {
+        fallou:    process.env.SID_FALLOU,
+        fondateur: process.env.SID_FONDATEUR,
+      };
+    } else {
+      // gerant (et tout rôle inconnu) → SID gérant uniquement
+      sid = {
+        gerant: process.env.SID_GERANT,
+      };
+    }
+
     return res.status(200).json({
       ok: true,
       sessionToken,
       user: { login, role, name: user.name, tabs: user.tabs },
-      sid: user.sid,
+      sid,
     });
 
   } catch(e) {
