@@ -1210,12 +1210,31 @@ function loadLiveData() {
           var kg   = safeNum(row[2]);
           if (kg !== null) netKg[type] = (netKg[type] || 0) + kg;
         });
-        var totalNet = Object.keys(netKg).reduce(function(s, k){ return s + netKg[k]; }, 0);
+        // Math.max(0, ...) par type : un aliment épuisé ne compense pas un autre
+        var totalNet = Object.keys(netKg).reduce(function(s, k){ return s + Math.max(0, netKg[k]); }, 0);
         var rationJour = (CYCLE.ration || 12) * (CYCLE.nbBetes || 4);
-        if (totalNet > 0 && rationJour > 0) {
+        if (totalNet >= 0 && rationJour > 0) {
           var semCalc = Math.round((totalNet / (rationJour * 7)) * 10) / 10;
           if (semCalc >= 0 && semCalc <= 52) {
             MOCK.stock = semCalc;
+            // Reconstituer STOCK_MVTS depuis Sheets si localStorage vide (nouveau téléphone)
+            if (!STOCK_MVTS || STOCK_MVTS.length === 0) {
+              var cycleDebut = CYCLE.dateDebut || todayISO();
+              STOCK_MVTS = [];
+              rowsStock.forEach(function(row) {
+                if (!row[0] || !row[1]) return;
+                var kgRow = safeNum(row[2]);
+                if (kgRow === null) return;
+                STOCK_MVTS.push({
+                  date: row[0],
+                  type: row[1],
+                  mode: kgRow >= 0 ? 'ajouter' : 'consommer',
+                  kg: Math.abs(kgRow),
+                  cycleDebut: cycleDebut
+                });
+              });
+              saveMvts();
+            }
             SPARK.stk = rowsStock.slice(-7).map(function(row) {
               var kg = safeNum(row[2]) || 0;
               return rationJour > 0 ? Math.max(0, Math.round(kg / (rationJour * 7) * 10) / 10) : 0;
