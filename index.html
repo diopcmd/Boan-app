@@ -3967,26 +3967,28 @@ function buildSidebar(){
     +'<span onclick="toggleLight()" style="cursor:pointer;font-size:12px;color:#88aa88;padding:4px 8px;border:1px solid #2a4a2a;border-radius:8px">'+(LIGHT_MODE?'🌙 Sombre':'☀️ Clair')+'</span>'
     +'</div>'
     +((u==='fondateur'||u==='fallou')
-      ? '<div style="margin-bottom:12px;padding:10px;background:#0f1f0f;border-radius:8px;border:1px solid #2a4a2a">'        +'<div style="font-size:11px;color:#88aa88;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">⏱ Durée du cycle (simulateur)</div>'        +'<div style="display:flex;align-items:center;gap:8px">'        +'<input type="range" min="1" max="24" step="1" value="'+(CYCLE.dureeMois||8)+'" '        +'style="flex:1" '        +'oninput="CYCLE.dureeMois=parseInt(this.value);lsSet(\'cycle\',CYCLE);this.nextElementSibling.value=this.value;r()">'        +'<input type="number" min="1" max="24" step="1" value="'+(CYCLE.dureeMois||8)+'" inputmode="decimal" '        +'style="width:52px;padding:5px 6px;font-size:13px;font-weight:700;border-radius:7px;border:1px solid #2a4a2a;background:#1a2e1a;color:#C8A06A;text-align:center" '        +'onchange="var v=parseInt(this.value);if(!isNaN(v)&&v>=1&&v<=24){CYCLE.dureeMois=v;lsSet(\'cycle\',CYCLE);this.previousElementSibling.value=v;}">'        +'<span style="font-size:12px;color:#88aa88;white-space:nowrap">mois</span>'        +'</div>'        +'</div>'      : '')    +(function(){
-  if (SB._freqDone) {
-    return '<div style="background:#0f1a0f;border-radius:8px;padding:10px;margin-bottom:10px;cursor:pointer" onclick="SB._freqDone=false;r()">'
-      +'<div style="font-size:11px;color:#88aa88;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">⚖️ Rappel pesée</div>'
-      +'<div style="display:flex;justify-content:space-between;align-items:center">'
-      +'<span style="font-size:16px;font-weight:700;color:#C8A06A">'+(CYCLE.peseeFreq||30)+' jours</span>'
-      +'<span style="font-size:11px;color:#556655">✓ — tap pour modifier</span>'
-      +'</div></div>';
-  }
-  return '<div style="background:#0f1a0f;border-radius:8px;padding:10px;margin-bottom:10px">'
-    +'<div style="font-size:11px;color:#88aa88;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">⚖️ Fréquence rappel pesée</div>'
-    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'
+      ? '<div style="background:#0f1a0f;border-radius:8px;padding:8px 10px;margin-bottom:8px;border:1px solid #1a3a1a">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
+        +'<span style="font-size:11px;color:#88aa88;white-space:nowrap">⏱ Durée cycle</span>'
+        +'<div style="display:flex;align-items:center;gap:6px;flex:1;justify-content:flex-end">'
+        +[4,6,8,10,12].map(function(v){
+          var sel=(CYCLE.dureeMois||8)===v;
+          return '<button onclick="event.stopPropagation();CYCLE.dureeMois='+v+';lsSet(\'cycle\',CYCLE);r()" style="padding:4px 8px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid '+(sel?'#2d6a2d':'#2a4a2a')+';background:'+(sel?'#2d6a2d':'transparent')+';color:'+(sel?'#fff':'#88aa88')+'">'+v+'m</button>';
+        }).join('')
+        +'</div></div>'
+        +'</div>'
+      : '')
+    +'<div style="background:#0f1a0f;border-radius:8px;padding:8px 10px;margin-bottom:8px;border:1px solid #1a3a1a">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
+    +'<span style="font-size:11px;color:#88aa88;white-space:nowrap">⚖️ Rappel pesée</span>'
+    +'<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">'
     +[7,14,21,30].map(function(v){
       var sel=(CYCLE.peseeFreq||30)===v;
-      return '<button onclick="event.stopPropagation();CYCLE.peseeFreq='+v+';lsSet(\'cycle\',CYCLE);r()" style="padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid '+(sel?'#2d6a2d':'#2a4a2a')+';background:'+(sel?'#2d6a2d':'transparent')+';color:'+(sel?'#fff':'#88aa88')+'">'+v+'j</button>';
+      return '<button onclick="event.stopPropagation();CYCLE.peseeFreq='+v+';lsSet(\'cycle\',CYCLE);r()" style="padding:4px 8px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid '+(sel?'#2d6a2d':'#2a4a2a')+';background:'+(sel?'#2d6a2d':'transparent')+';color:'+(sel?'#fff':'#88aa88')+'">'+v+'j</button>';
     }).join('')
+    +'</div></div>'
     +'</div>'
-    +'<button onclick="SB._freqDone=true;r()" style="width:100%;padding:8px;border-radius:6px;background:#C8A06A;color:#0f1a0f;font-size:13px;font-weight:700;border:none;cursor:pointer">OK — '+(CYCLE.peseeFreq||30)+' jours</button>'
-    +'</div>';
-})()+'<button onclick="LIVE.source=\'loading\';r();setTimeout(loadLiveData,100)" '
+    +'<button onclick="LIVE.source=\'loading\';r();setTimeout(loadLiveData,100)" '
     +'style="background:#1a2e3a;color:#5ab4ff;border:1px solid #2a4a5a;'
     +'font-size:13px;padding:10px;border-radius:8px;margin-bottom:8px;width:100%">'
     +'&#128260; Actualiser les donn\u00e9es</button>'
