@@ -106,7 +106,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 /* SIDEBAR */
 .hbg{background:none;border:none;color:#fff;font-size:22px;cursor:pointer;width:auto;padding:6px 8px;border-radius:8px;line-height:1;position:relative;transition:background .15s}
 .hbg:active{background:#2d5a2d;transform:scale(0.94)}
-.hbg-badge{position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%;background:#f44336;animation:pulse 1.2s infinite}
+.hbg-badge{position:absolute;top:2px;right:2px;min-width:8px;height:8px;border-radius:10px;background:#f44336;animation:pulse 1.2s infinite;font-size:9px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;padding:0 2px;line-height:1}
 .sb-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;opacity:0;animation:fadeIn .2s ease forwards}
 @keyframes fadeIn{to{opacity:1}}
 .sb{position:fixed;top:0;right:0;bottom:0;width:300px;max-width:88vw;background:#0f1a0f;border-left:1px solid #2a4a2a;z-index:201;display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;transform:translateX(100%);animation:slideIn .25s cubic-bezier(.2,.8,.3,1) forwards}
@@ -3527,24 +3527,16 @@ function pageApp(){
     +'<div><div style="font-size:18px;font-weight:700">BOANR</div>'
     +'<div style="font-size:11px;color:#88bb88;display:flex;align-items:center;gap:4px">Cycle 1 \u2014 Sem. '+calcSemaine()
     +(LIVE.source==='loading'
-      ? '<span style="color:#5ab4ff">&#9203;</span>'
+      ? '<span style="color:#5ab4ff" title="Chargement...">&#9203;</span>'
       : LIVE.source==='live'
-        ? '<span style="color:#4caf50" title="Donn\u00e9es temps r\u00e9el">&#128994;</span>'
+        ? '<span style="color:#4caf50" title="'+(_lastSyncTS>0?(function(){var d=Math.round((Date.now()-_lastSyncTS)/60000);return d<1?'Sync il y a <1min':d<60?'Sync il y a '+d+'min':'Sync il y a '+(Math.round(d/60))+'h';})():'Données temps réel')+'">&#128994;</span>'
         : '<span style="color:#ff9800" title="Donn\u00e9es locales">&#128241;</span>')
-    +(_lastSyncTS > 0 ? (function(){
-        var diffMin = Math.round((Date.now()-_lastSyncTS)/60000);
-        var label = diffMin < 1 ? 'il y a <1min' : diffMin < 60 ? 'il y a '+diffMin+'min' : 'il y a '+(Math.round(diffMin/60))+'h';
-        return '<span style="font-size:10px;color:#668866" title="Derni\u00e8re synchronisation Sheets">&bull; '+label+'</span>';
-      })() : '')
-    +(_nbNewEntries > 0
-      ? '<span style="font-size:11px;background:#e53935;color:#fff;border-radius:12px;padding:2px 8px;font-weight:700" title="'+_nbNewEntries+' nouvelle(s) entr\u00e9e(s) depuis votre derni\u00e8re visite">+'+_nbNewEntries+' nouveau'+(_nbNewEntries>1?'x':'')+'</span>'
-      : '')
     +'<div class="'+(ONLINE?'online-dot':'offline-dot')+'"></div></div>'
     +'</div></div>'
     +'<div style="display:flex;align-items:center;gap:8px;position:relative">'
     +(S.user==='fondateur'?'<button class="ubtn" onclick="S.dd=!S.dd;r()">'+USERS[S.user].name+' &#9660;</button>':'')
     +ddHtml
-    +'<button class="hbg" onclick="openSB()" title="Menu">☰'+(hasAlert?'<div class="hbg-badge"></div>':'')+'</button>'
+    +'<button class="hbg" onclick="openSB()" title="Menu">☰'+((hasAlert||_nbNewEntries>0)?'<div class="hbg-badge">'+((_nbNewEntries>0&&!hasAlert)?_nbNewEntries:'')+'</div>':'')+'</button>'
     +'</div></div>'
     +bannerHtml
     +(S.user==='gerant' ? '<button type="button" onclick="partagerRapportJourWhatsApp()" style="width:100%;padding:10px;border-radius:8px;background:#25D366;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer;margin-bottom:8px">&#128172; Rapport du jour WhatsApp</button>' : '')
