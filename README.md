@@ -3,7 +3,7 @@
 Application web mobile de gestion d'élevage bovin pour la **Ferme BOAN** (Thiès, Sénégal).
 Interface de pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale.
 
-**Production** → https://boan-app-9u5e.vercel.app
+**Production** → https://boan-app-ur3x.vercel.app
 
 ---
 

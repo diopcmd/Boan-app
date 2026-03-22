@@ -1,18 +1,18 @@
-# Prompt de reprise — Projet BOANR
-> Colle ce prompt au début d'une nouvelle conversation avec n'importe quelle IA
-> pour reprendre le projet exactement où il en est.
+# Prompt de reprise â€” Projet BOANR
+> Colle ce prompt au dÃ©but d'une nouvelle conversation avec n'importe quelle IA
+> pour reprendre le projet exactement oÃ¹ il en est.
 
 ---
 
 ## Contexte projet
 
-Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bovin pour la Ferme BOAN au Sénégal (région de Thiès). L'app est une **SPA vanilla HTML/CSS/JS** déployée sur **Vercel**. Le pilotage s'effectue à distance depuis la France.
+Tu travailles sur **BOANR**, une application web mobile de gestion d'Ã©levage bovin pour la Ferme BOAN au SÃ©nÃ©gal (rÃ©gion de ThiÃ¨s). L'app est une **SPA vanilla HTML/CSS/JS** dÃ©ployÃ©e sur **Vercel**. Le pilotage s'effectue Ã  distance depuis la France.
 
-- **Production** : https://boan-app-9u5e.vercel.app
+- **Production** : https://boan-app-ur3x.vercel.app
 - **GitHub** : https://github.com/diopcmd/Boan-app (branche `main`)
 - **Dossier local** : `C:\Users\sg54378\Downloads\Boan-app\`
-- **Langue** : Tout est en français (code, UI, communications)
-- **Dernier commit** : `5149d5f` — docs: mise à jour README + DOCUMENTATION_TECHNIQUE
+- **Langue** : Tout en franÃ§ais (code, UI, communications)
+- **Dernier commit** : `71e3354` â€” fix: reset cycle vide _lastSyncTS, _lastFondVisitTS, MOCK._tresoFromSante
 
 ---
 
@@ -20,13 +20,13 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bov
 
 | Couche | Technologie |
 |---|---|
-| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~4678 lignes) |
+| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~5179 lignes) |
 | Backend | Vercel Serverless Functions (ES Module `export default async function handler`) |
 | Auth | Session token custom HMAC-SHA256 (`base64(payload).hmac_hex`), 8h |
-| Données | Google Sheets API v4 via Service Account RS256 JWT |
-| Déploiement | GitHub ? Vercel (auto sur push `main`) |
+| DonnÃ©es | Google Sheets API v4 via Service Account RS256 JWT |
+| DÃ©ploiement | GitHub â†’ Vercel (auto sur push `main`) |
 | IA | Anthropic Claude (proxy via `/api/ai`) |
-| Météo | Open-Meteo API (Thiès 14.79°N, -16.93°E) |
+| MÃ©tÃ©o | Open-Meteo API (ThiÃ¨s 14.79Â°N, -16.93Â°E) |
 
 ---
 
@@ -34,17 +34,17 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bov
 
 ```
 Boan-app/
-+-- index.html              SPA complète (~4678 lignes)
-+-- vercel.json             Rewrites /api/:path*
-+-- api/
-¦   +-- auth.js             Login ? session token HMAC + SID multi-sheet par rôle
-¦   +-- token.js            RS256 JWT ? access_token Google OAuth2
-¦   +-- sheets.js           Proxy CRUD Sheets (peu utilisé directement)
-¦   +-- change-password.js  Override mots de passe/identifiants (fondateur)
-¦   +-- ai.js               Proxy Anthropic Claude
-+-- README.md
-+-- DOCUMENTATION_TECHNIQUE.md
-+-- AI_RESUMPTION_PROMPT.md (ce fichier)
+â”œâ”€â”€ index.html              SPA complÃ¨te (~5179 lignes)
+â”œâ”€â”€ vercel.json             Rewrites SPA sans bloquer /api/
+â”œâ”€â”€ api/
+â”‚   â”œâ”€â”€ auth.js             Login â†’ session token HMAC + SID multi-sheet par rÃ´le
+â”‚   â”œâ”€â”€ token.js            RS256 JWT â†’ access_token Google OAuth2
+â”‚   â”œâ”€â”€ sheets.js           Proxy CRUD Sheets
+â”‚   â”œâ”€â”€ change-password.js  Override mots de passe/identifiants (fondateur)
+â”‚   â””â”€â”€ ai.js               Proxy Anthropic Claude
+â”œâ”€â”€ README.md
+â”œâ”€â”€ DOCUMENTATION_TECHNIQUE.md
+â””â”€â”€ AI_RESUMPTION_PROMPT.md (ce fichier)
 ```
 
 ---
@@ -54,25 +54,25 @@ Boan-app/
 ```
 PWD_FONDATEUR, PWD_GERANT, PWD_RGA, PWD_FALLOU
 SID_FONDATEUR, SID_GERANT, SID_RGA, SID_FALLOU
-SA_PRIVATE_KEY        (clé RSA avec \n escapés en \\n)
+SA_PRIVATE_KEY        (clÃ© RSA avec \n escapÃ©s en \\n)
 SA_CLIENT_EMAIL
 SESSION_SECRET        (>= 32 chars)
-ANTHROPIC_API_KEY     (optionnel — fonctionnalité IA)
+ANTHROPIC_API_KEY     (optionnel â€” fonctionnalitÃ© IA)
 ```
 
 ---
 
-## Rôles et accès
+## RÃ´les et accÃ¨s
 
-| Rôle | Identifiant | Onglets | SID reçu au login |
+| RÃ´le | Identifiant | Onglets | SID reÃ§u au login |
 |---|---|---|---|
-| Fondateur / Direction | `fondateur` | Dashboard, Saisie, Livrables, Marché | `{fondateur, gerant, fallou}` |
-| Gérant terrain | `gerant` | Dashboard, Saisie | `{gerant, fondateur}` |
+| Fondateur / Direction | `fondateur` | Dashboard, Saisie, Livrables, MarchÃ© | `{fondateur, gerant, fallou}` |
+| GÃ©rant terrain | `gerant` | Dashboard, Saisie | `{gerant, fondateur}` |
 | RGA | `rga` | Dashboard, Livrables | `{rga, gerant, fondateur}` |
-| Commerciale | `fallou` | Dashboard, Marché | `{fallou, fondateur}` |
+| Commerciale | `fallou` | Dashboard, MarchÃ© | `{fallou, fondateur}` |
 
-> **Règle critique** : Le gérant reçoit `SID_FONDATEUR` pour que `writeAll` écrive
-> dans les deux sheets simultanément. Le fondateur lit depuis `sidHisto = SID.fondateur || SID.gerant`.
+> **RÃ¨gle critique** : Le gÃ©rant reÃ§oit `SID_FONDATEUR` pour que `writeAll` Ã©crive
+> dans les deux sheets simultanÃ©ment. `sidHisto = SID.gerant || SID.fondateur`.
 
 ---
 
@@ -81,73 +81,84 @@ ANTHROPIC_API_KEY     (optionnel — fonctionnalité IA)
 ### Variables globales JS
 
 ```js
-var MOCK  = {betes:4, gmq:1.1, stock:6, treso:680000, incidents:0, sem:1};
-var CYCLE = lsGet('cycle') || { nbBetes:4, dateDebut:'', dureeMois:8, ... };
-var SID   = {};  // {fondateur, gerant, rga, fallou} — peuplé au login
-var HISTORY    = [];  // saisies fusionnées local + Sheets
+var MOCK  = {betes:4, gmq:1.1, stock:6, treso:680000, incidents:0, sem:1, _tresoFromSante:null};
+var CYCLE = lsGet('cycle') || { nbBetes:4, dateDebut:'', dureeMois:8, peseeFreq:30, ... };
+var SID   = {};  // {fondateur, gerant, rga, fallou} â€” peuplÃ© au login
+var HISTORY    = [];  // saisies fusionnÃ©es local + Sheets
 var LIVE = { pesees:[], beteIds:[], prix:[], loaded:false };
 var SPARK = { gmq:[], stk:[], treso:[], betes:[] };
+var _lastSyncTS      = 0;                                   // timestamp derniÃ¨re synchro Sheets rÃ©ussie
+var _lastFondVisitTS = lsGet('fondateur_last_visit') || 0;  // badge "nouveaux" fondateur
 ```
 
-### Durée de cycle — règle impérative
+### DurÃ©e de cycle â€” rÃ¨gle impÃ©rative
 
 ```js
-// JAMAIS /35 hardcodé — toujours :
+// JAMAIS /35 hardcodÃ© â€” toujours :
 var totalSemCycle = Math.round((CYCLE.dureeMois || 8) * 4.33);
 var pct = Math.round((sem / totalSemCycle) * 100);
 var joursRestants = Math.max(0, (totalSemCycle - sem) * 7);
 ```
 
-### loadLiveData — 3 vagues
+### ES5 strict â€” rÃ¨gles syntaxe
+
+```js
+// JAMAIS : const, let, ?., =>, ??
+// TOUJOURS : var, obj&&obj.prop, function(){}, obj||default
+// Pas de double virgule ,, dans les objets/arrays â€” erreur JS fatale silencieuse (page blanche)
+```
+
+### loadLiveData â€” 3 vagues
 
 ```
-Étape 1 (bloquante) — Config_Cycle!A1:O1 depuis SID.fondateur ? synchronise CYCLE
+Ã‰tape 1 (bloquante) â†’ Config_Cycle!A1:O1 depuis SID.fondateur â†’ synchronise CYCLE
 
-Vague 1 (parallèle) — KPI temps réel :
-  Pesees, Stock_Nourriture, KPI_Mensuels, Sante_Mortalite ? MOCK.gmq/betes/stock/treso, SPARK.*
+Vague 1 (parallÃ¨le) â†’ KPI temps rÃ©el :
+  Pesees, Stock_Nourriture, KPI_Mensuels, Sante_Mortalite â†’ MOCK.gmq/betes/stock/treso, SPARK.*
+  + MOCK._tresoFromSante = capital - somme coÃ»ts santÃ© (fallback si KPI vide)
 
-Vague 2 (parallèle) — source: sidHisto = SID.fondateur || SID.gerant :
-  7 onglets ? buildHistoryFromSheets ? HISTORY[]
-  Fiche_Quotidienne, Incidents, Sante_Mortalite, Hebdomadaire, Pesees, SOP_Check, Stock_Nourriture
+Vague 2 (parallÃ¨le) â†’ source: sidHisto = SID.gerant || SID.fondateur :
+  7 onglets â†’ buildHistoryFromSheets â†’ HISTORY[]
+  AprÃ¨s succÃ¨s : _lastSyncTS = Date.now()
 ```
 
 ### buildHistoryFromSheets
 
-Fusionne 7 onglets Sheets avec HISTORY local. Déduplication par clé `type|date|champ`. Sheets prime.
+Fusionne 7 onglets Sheets avec HISTORY local. DÃ©duplication par clÃ© `type|date|champ`. Sheets prime.
 
 ---
 
-## Google Sheets — Noms d'onglets EXACTS
+## Google Sheets â€” Noms d'onglets EXACTS
 
 | Onglet exact | Spreadsheets | Colonnes |
 |---|---|---|
-| `Fiche_Quotidienne` | Gérant + Fondateur | Date, NbBetes, Nourris, Eau, Enclos, Incident, Description |
-| `SOP_Check` | Gérant + Fondateur | Date, Net, Des, Rat, Eau, Stk, San, Prob |
-| `Stock_Nourriture` | Gérant + Fondateur | Date, TypeAliment, kg(±), Ration, Semaines, Alerte |
-| `Incidents` | Gérant + Fondateur | Date, IdBete, Type, Gravite(1-3), Description, Action, Cloture |
-| `Pesees` | Gérant + Fondateur | Date, IdBete, Race, Poids, PoidsPrec, Gain, Statut |
-| `Sante_Mortalite` | Gérant + Fondateur | Date, IdBete, Symptome, Traitement, Cout, Resultat, Deces |
-| `Hebdomadaire` | Gérant + Fondateur | Semaine, NbBetes, Nourriture, Stock, Incidents, Poids, Alerte, Msg |
-| `KPI_Mensuels` | Fondateur | Sem, Mois, Betes, GMQ, Stock, Treso, Incidents, col H = trésorerie |
+| `Fiche_Quotidienne` | GÃ©rant + Fondateur | Date, NbBetes, Nourris, Eau, Enclos, Incident, Description |
+| `SOP_Check` | GÃ©rant + Fondateur | Date, Net, Des, Rat, Eau, Stk, San, Prob |
+| `Stock_Nourriture` | GÃ©rant + Fondateur | Date, TypeAliment, kg(Â±), Ration, Semaines, Alerte |
+| `Incidents` | GÃ©rant + Fondateur | Date, IdBete, Type, Gravite(1-3), Description, Action, Cloture |
+| `Pesees` | GÃ©rant + Fondateur | Date, IdBete, Race, Poids, PoidsPrec, Gain, Statut |
+| `Sante_Mortalite` | GÃ©rant + Fondateur | Date, IdBete, Symptome, Traitement, Cout(col5=r[4]), Resultat, Deces |
+| `Hebdomadaire` | GÃ©rant + Fondateur | Semaine, NbBetes, Nourriture, Stock, Incidents, Poids, Alerte, Msg |
+| `KPI_Mensuels` | Fondateur | col H = trÃ©sorerie rÃ©elle |
 | `Config_Passwords` | Fondateur | role, pwd_base64, updated_at, login_override |
-| `Config_Cycle` | Fondateur | A1:O1 — config cycle (nbBetes, dureeMois, capital…) |
+| `Config_Cycle` | Fondateur | A1:O1 infos cycle (nbBetes, dureeMois, capitalâ€¦) |
 | `Suivi_Marche` | Fallou + Fondateur | Date, Foirail, Bas, Moy, Haut, Vol, Note |
 
 ---
 
 ## Patterns critiques
 
-### appendRow — read-then-PUT
+### appendRow â€” read-then-PUT
 
 ```js
-// encode sheetName UNIQUEMENT — jamais la plage entière :
+// encode sheetName UNIQUEMENT â€” jamais la plage entiÃ¨re :
 var enc = encodeURIComponent(sheetName);
 var rows = (d.values || []).filter(function(r){ return r && r.length > 0 && r[0] !== ''; });
 var targetLine = Math.min(tr.start + rows.length, tr.end);
-// PUT exact — PAS INSERT_ROWS
+// PUT exact â€” PAS INSERT_ROWS
 ```
 
-### Détection thème / sidebar
+### DÃ©tection thÃ¨me / sidebar
 
 ```js
 var _sbLt  = document.body.classList.contains('light');  // TOUJOURS classList
@@ -158,60 +169,74 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 
 ## Conventions strictes
 
-1. **`var` uniquement** — Pas de `let`/`const` dans `index.html`
-2. **Pas de double virgule `,,`** — erreur JS fatale silencieuse (page blanche)
-3. **`TABLE_RANGES`** — déclaré AVANT `function appendRow()`
-4. **`USERS` dans `handler()`** — PAS au niveau module (cold start Vercel)
-5. **encodeURIComponent** — uniquement sur `sheetName`, JAMAIS sur la plage complète
-6. **Détection thème** — TOUJOURS `document.body.classList.contains('light')`
-7. **Jamais `INSERT_ROWS`** — toujours pattern read-then-PUT
-8. **Filter lignes vides** — `r && r.length > 0 && r[0] !== ''`
-9. **Jamais `/35` hardcodé** — `Math.round((CYCLE.dureeMois||8)*4.33)`
-10. **Gérant multi-SID** — auth.js retourne `{gerant, fondateur}`
-11. **PowerShell** — utiliser `;` pour chaîner, jamais `&&`
+1. **`var` uniquement** â€” Pas de `let`/`const` dans `index.html`
+2. **Pas de `?.` optional chaining** â€” ES5 uniquement : `obj && obj.prop`
+3. **Pas de double virgule `,,`** â€” erreur JS fatale silencieuse (page blanche)
+4. **`TABLE_RANGES`** â€” dÃ©clarÃ© AVANT `function appendRow()`
+5. **`USERS` dans `handler()`** â€” PAS au niveau module (cold start Vercel)
+6. **encodeURIComponent** â€” uniquement sur `sheetName`, JAMAIS sur la plage complÃ¨te
+7. **DÃ©tection thÃ¨me** â€” TOUJOURS `document.body.classList.contains('light')`
+8. **Jamais `INSERT_ROWS`** â€” toujours pattern read-then-PUT
 
 ---
 
-## Commandes de déploiement
+## Features implÃ©mentÃ©es (Ã©tat mars 2026)
 
-```powershell
-Set-Location "C:\Users\sg54378\Downloads\Boan-app"
-git add index.html
-git commit -m "type: description"
-git push origin main
-# Vercel déploie automatiquement en ~30-60 secondes
-```
+### Dashboard
+- KPIs live : bÃªtes, GMQ, stock, trÃ©sorerie (avec sparklines)
+- Alerte GMQ prÃ©dictive (comparaison sem. vs sem. -1)
+- SynthÃ¨se stock cycle (par type d'aliment)
+- Bouton "Rapport du jour WhatsApp" (gÃ©rant uniquement)
+- Bouton IA analyse troupeau (fondateur uniquement)
+- Guide gÃ©rant "Quoi faire et quand"
+
+### Saisie (gÃ©rant)
+- Fiche quotidienne : prÃ©-remplie avec OUI/NON par dÃ©faut (nourris, eau, enclos=OUI, incident=NON)
+- Anti-doublons calendaires (fiche/bilan/sop/pesÃ©e/incident/santÃ©)
+- Confirmation visuelle : "âœ… EnvoyÃ© dans Sheets" aprÃ¨s soumission
+- Bilan hebdo : prÃ©-rempli (nb bÃªtes depuis MOCK, stock depuis MOCK/localStorage)
+- flushQueue auto au retour rÃ©seau
+
+### Header
+- Timestamp synchro en tooltip sur le point vert (live/cache)
+- Badge "+X nouveaux" dans le bouton â˜° (fondateur uniquement)
+- Point live/cache/loading uniquement â€” pas de texte encombrant
+
+### Livrables
+- TrÃ©sorerie, KPI, BÃªtes (courbes de croissance + seuil de rentabilitÃ©), Go/No-Go
+- Onglet BÃªtes : `poidsFinal` calculÃ© dans les 2 branches (LIVE + dÃ©mo)
+
+### Sidebar
+- DurÃ©e cycle : boutons compacts 4/6/8/10/12 mois sur une ligne
+- Rappel pesÃ©e : boutons compacts 7/14/21/30j sur une ligne
+
+### Reset cycle
+- RÃ©initialise : HISTORY, STOCK_MVTS, LIVE, MOCK, _lastSyncTS, _lastFondVisitTS, MOCK._tresoFromSante
+- Vide tous les onglets Sheets (lignes 4+) gÃ©rant + fondateur
+- Recharge CYCLE depuis Config_Cycle Sheets aprÃ¨s reset
+
+### MarchÃ©
+- Simulateur de vente avec prix dynamique
+- Partage WhatsApp synthÃ¨se + KPI
+- Export PDF rapport mensuel
 
 ---
 
-## Historique des commits
+## Historique commits rÃ©cents
 
-```
-5149d5f  docs: mise à jour README + DOCUMENTATION_TECHNIQUE
-133cada  fix: tous les /35 hardcodés ? CYCLE.dureeMois dynamique
-670c2a3  fix: sidebar fondateur bêtes/GMQ dynamiques, bilan, incidents semaine
-a42c5e1  fix: buildHistoryFromSheets 7 onglets, filtre par clé
-02f9275  fix: gérant reçoit SID_FONDATEUR
-6ddec0a  fix: ficheDejaSoumise vérifie HISTORY
-62ebeb1  feat: auth multi-SID, loadLiveData 3-étapes, buildHistoryFromSheets, badge LIVE/MOCK
-2324772  fix: thème clair mouvements cycle, filter lignes vides appendRow
-fe13700  fix: login override, SID fallbacks, Config_Cycle encode
-ccf83ab  fix: import crypto statique, encodeURIComponent readSheet
-```
-
----
-
-## Bugs résolus — Référence rapide
-
-| Symptôme | Cause | Fix |
-|---|---|---|
-| Page blanche au login | `,,` dans `S{}` | Supprimée |
-| Écriture décale d'une ligne | cellules formatées vides comptées | filter `r[0] !== ''` |
-| `%3A` dans URL, range rejetée | encode URL entière | encode `sheetName` uniquement |
-| Login override bloqué | check `USERS[id]` avant API | supprimé |
-| Crash API en production | `require()` dans ES Module | `import` statique |
-| Fondateur ne voit pas données gérant | Gérant sans `SID_FONDATEUR` | auth.js multi-SID |
-| SOP/Stock toujours "jamais" | buildHistoryFromSheets manquait 2 onglets | 7 onglets, filtre par clé |
-| Sidebar fondateur couleurs figées | Valeurs MOCK hardcodées | CYCLE dynamique |
-| Bilan toujours "En attente" | `h.date===today` | `bilanDejaFaitCetteSemaine()` |
-| `/35` affiché même si cycle ? 8 mois | Valeur hardcodée | `Math.round((CYCLE.dureeMois||8)*4.33)` |
+| Commit | Description |
+|---|---|
+| `71e3354` | fix: reset cycle vide _lastSyncTS, _lastFondVisitTS, MOCK._tresoFromSante |
+| `e601921` | ux: sidebar durÃ©e cycle + rappel pesÃ©e compacts sur une ligne |
+| `03e5df9` | ux: bouton rapport WhatsApp dans dashboard + prÃ©-remplissage fiche OUI/NON |
+| `62cccb0` | ux: header fondateur Ã©purÃ© â€” timestamp en tooltip, badge dans â˜° |
+| `ec8490c` | fix: poidsFinal fallback gmq robuste |
+| `8182e7e` | fix: poidsFinal non dÃ©fini onglet BÃªtes (branche LIVE) |
+| `7232ed9` | feat: timestamp synchro, badge nouveaux, rapport jour WhatsApp, trÃ©so santÃ© |
+| `3c68d5d` | fix: vercel.json rewrite SPA sans bloquer /api/ |
+| `b2a483b` | fix: _nowDakar fallback UTC+0 + try/catch r() anti page-verte |
+| `dfb0711` | fix: reset cycle vide tous les onglets Sheets |
+| `5a1f622` | fix: sync immÃ©diate login, auto-refresh 5min, MOCK.incidents |
+| `c443b63` | fix: Vague2 sidGerant, bilans hebdo non filtrÃ©s |
+| `133cada` | fix: tous /35 â†’ CYCLE.dureeMois dynamique |
+| `62ebeb1` | feat: sync Sheets temps rÃ©el, auth multi-SID |
