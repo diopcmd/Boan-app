@@ -3128,9 +3128,25 @@ function saveCycle(){
   MODAL.open = false;
   // Passer à l'app après validation
   S.page = 'app';
-  // Écrire Config_Cycle dans TOUS les sheets (gerant, fondateur, rga, fallou)
+
+  // ── Reset complet de l'état local (synchrone) ──
+  HISTORY = [];
+  lsSet('history', []);
+  LIVE.pesees  = [];
+  LIVE.beteIds = [];
+  LIVE.loaded  = false;
+  LIVE.source  = 'loading';
+  MOCK.gmq       = 1.1;
+  MOCK.incidents = 0;
+  MOCK.treso     = CYCLE.capital || 0;
+  // MOCK.betes et MOCK.stock déjà mis à jour plus haut dans saveCycle()
+  r();
+
+  // ── Écriture Sheets + vidage données ancien cycle ──
   getTok().then(function(tk){
-    if(!tk) { r(); return; }
+    if (!tk) { LIVE.source = 'cache'; r(); return; }
+
+    // 1. Écrire Config_Cycle dans TOUS les sheets (gerant, fondateur, rga, fallou)
     var vals = [
       CYCLE.dateDebut, CYCLE.nbBetes, CYCLE.poidsDepart, CYCLE.race, CYCLE.ration,
       CYCLE.capital, CYCLE.objectifPrix, CYCLE.budgetSante, CYCLE.veterinaire,
@@ -3138,13 +3154,53 @@ function saveCycle(){
       JSON.stringify(CYCLE.betes||[]),
       JSON.stringify(CYCLE.stockLines||[])
     ];
-    var allSids = [SID.fondateur, SID.gerant, SID.rga, SID.fallou];
+    var allSids = [SID.fondateur, SID.gerant, SID.rga, SID.fallou].filter(Boolean);
     allSids.forEach(function(sid){
       var _ccEnc = encodeURIComponent('Config_Cycle');
       var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+_ccEnc+'!A1?valueInputOption=USER_ENTERED';
-      fetch(url,{method:'PUT',headers:{Authorization:'Bearer '+tk,'Content-Type':'application/json'},body:JSON.stringify({values:[vals]})});
+      fetch(url, {method:'PUT', headers:{Authorization:'Bearer '+tk, 'Content-Type':'application/json'}, body:JSON.stringify({values:[vals]})});
     });
-    r();
+
+    // 2. Vider les onglets de saisie dans les sheets gérant ET fondateur (lignes 4+)
+    //    Les 3 premières lignes (en-têtes/légendes/formatage) sont préservées
+    var dataOnglets = [
+      'Fiche_Quotidienne!A4:Z500',
+      'SOP_Check!A4:Z200',
+      'Stock_Nourriture!A4:Z500',
+      'Incidents!A4:Z200',
+      'Pesees!A4:Z200',
+      'Sante_Mortalite!A4:Z200',
+      'Hebdomadaire!A4:Z200',
+    ];
+    var kpiOnglets = [
+      'KPI_Mensuels!A4:Z50',
+      'KPI_Hebdo!A4:Z50',
+    ];
+    var clearPromises = [];
+    // Vider données dans sheet gérant + fondateur
+    [SID.gerant, SID.fondateur].filter(Boolean).forEach(function(sid) {
+      dataOnglets.forEach(function(range) {
+        var parts = range.split('!');
+        var enc = encodeURIComponent(parts[0]) + '!' + parts[1];
+        var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+enc+':clear';
+        clearPromises.push(fetch(url, {method:'POST', headers:{Authorization:'Bearer '+tk, 'Content-Type':'application/json'}}));
+      });
+    });
+    // Vider KPI uniquement dans sheet fondateur
+    if (SID.fondateur) {
+      kpiOnglets.forEach(function(range) {
+        var parts = range.split('!');
+        var enc = encodeURIComponent(parts[0]) + '!' + parts[1];
+        var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+SID.fondateur+'/values/'+enc+':clear';
+        clearPromises.push(fetch(url, {method:'POST', headers:{Authorization:'Bearer '+tk, 'Content-Type':'application/json'}}));
+      });
+    }
+    Promise.all(clearPromises).then(function() {
+      // 3. Rechargement complet depuis Sheets après reset
+      loadLiveData();
+    }).catch(function() {
+      loadLiveData();
+    });
   });
 }
 
