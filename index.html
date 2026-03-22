@@ -391,7 +391,7 @@ function calcSemaine() {
   var _nd3  = _nowDakar();
   var now   = new Date(_nd3.year, _nd3.month-1, _nd3.day);
   var diff  = Math.floor((now - debut) / (7 * 24 * 3600 * 1000)) + 1;
-  return Math.max(1, Math.min(diff, 35));
+  return Math.max(1, Math.min(diff, Math.round((CYCLE.dureeMois||8)*4.33)));
 }
 
 // Historique des 10 dernières saisies
@@ -752,14 +752,24 @@ function bilanDejaFaitCetteSemaine() {
   });
 }
 
-// Inactivité 8h
+// Inactivité 8h + auto-refresh Sheets toutes les 5 minutes
 var LAST_ACTIVITY = Date.now();
+var _lastAutoRefresh = 0;
 function resetActivity() { LAST_ACTIVITY = Date.now(); }
 document.addEventListener('touchstart', resetActivity);
 document.addEventListener('click', resetActivity);
 setInterval(function() {
-  if (S.user && Date.now() - LAST_ACTIVITY > 8 * 3600 * 1000) {
-    S.page='login'; S.user=null; r();
+  var _now = Date.now();
+  // Déconnexion après 8h d'inactivité
+  if (S.user && _now - LAST_ACTIVITY > 8 * 3600 * 1000) {
+    S.page = 'login'; S.user = null; r(); return;
+  }
+  // Auto-refresh Sheets toutes les 5 minutes si utilisateur actif (<30min)
+  if (S.user && S.page === 'app' && !S.sending &&
+      _now - LAST_ACTIVITY < 30 * 60 * 1000 &&
+      _now - _lastAutoRefresh > 5 * 60 * 1000) {
+    _lastAutoRefresh = _now;
+    loadLiveData();
   }
 }, 60000);
 
@@ -954,10 +964,10 @@ function doLogin() {
     S.sub = S.tab==='saisie'?'fiche':S.tab==='livrables'?'treso':S.tab==='marche'?'prix':'';
     LAST_ACTIVITY = Date.now();
     S.page = 'app';
-    setTimeout(loadLiveData, 500);
-    setTimeout(rebuildAlimList, 600);
-    setTimeout(loadPesees, 800);
-    setTimeout(loadPrix, 1000);
+    loadLiveData();             // sync immédiate — SID déjà peuplu00e9
+    setTimeout(rebuildAlimList, 50);
+    setTimeout(loadPesees, 50);  // LIVE.pesees + LIVE.beteIds
+    setTimeout(loadPrix, 100);
     r();
   })
   .catch(function(e){
@@ -1360,6 +1370,23 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   // 6. Sauvegarder dans localStorage ET mettre à jour HISTORY global
   HISTORY = result;
   lsSet('history', HISTORY);
+
+  // 7. Mettre à jour MOCK.incidents — incidents de la semaine courante (lun→dim, fuseau Dakar)
+  var _n = _nowDakar();
+  var _todayD = new Date(_n.year, _n.month-1, _n.day);
+  var _wd = _todayD.getDay(); // 0=dim
+  var _lundi = new Date(_todayD);
+  _lundi.setDate(_todayD.getDate() - (_wd === 0 ? 6 : _wd - 1));
+  var _incCnt = 0;
+  result.forEach(function(h) {
+    if (h.type !== 'inc') return;
+    var p = h.date ? h.date.split('/') : [];
+    if (p.length !== 3) return;
+    var d = new Date(p[2], p[1]-1, p[0]);
+    if (d >= _lundi) _incCnt++;
+  });
+  MOCK.incidents = _incCnt;
+
   return HISTORY;
 }
 
