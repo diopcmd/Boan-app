@@ -755,6 +755,9 @@ function bilanDejaFaitCetteSemaine() {
 // Inactivité 8h + auto-refresh Sheets toutes les 5 minutes
 var LAST_ACTIVITY = Date.now();
 var _lastAutoRefresh = 0;
+var _lastSyncTS = 0;          // timestamp de la dernière Vague 2 réussie
+var _lastFondVisitTS = lsGet('fondateur_last_visit') || 0; // dernière visite fondateur
+var _newDataSinceVisit = false; // true = données plus récentes que dernière visite fondateur
 function resetActivity() { LAST_ACTIVITY = Date.now(); }
 document.addEventListener('touchstart', resetActivity);
 document.addEventListener('click', resetActivity);
@@ -1163,6 +1166,18 @@ function loadLiveData() {
           });
           if (sparkBetes.length > 0) SPARK.betes = sparkBetes;
         }
+        // 5 — MOCK.treso déduit automatiquement des coûts santé réels
+        // coût santé = somme colonne 4 (index réél = r[4]) si numérique
+        var totalCoutSante = rowsSante.reduce(function(sum, r) {
+          var c = parseFloat(r[4]);
+          return sum + (isNaN(c) ? 0 : c);
+        }, 0);
+        if (totalCoutSante > 0 && CYCLE.capital > 0) {
+          var tresoCalc = CYCLE.capital - totalCoutSante;
+          // On ne réécrit MOCK.treso que si KPI_Mensuels n'a pas encore de valeur réelle
+          // (KPI_Mensuels sera traité ensuite et écrasera si nécessaire)
+          MOCK._tresoFromSante = tresoCalc;
+        }
       }
 
       // Pesées → MOCK.gmq + SPARK.gmq
@@ -1208,9 +1223,13 @@ function loadLiveData() {
           if (valTreso !== null && valTreso >= 0) {
             MOCK.treso = valTreso;
             SPARK.treso = rowsKpi.slice(-7).map(function(r){ return safeNum(r[7])||0; });
+            MOCK._tresoFromSante = null; // KPI a priorité sur l'estimation santé
             break;
           }
         }
+      } else if (MOCK._tresoFromSante !== null && MOCK._tresoFromSante !== undefined) {
+        // Fallback : KPI vide → utiliser estimation depuis coûts santé
+        MOCK.treso = Math.max(0, MOCK._tresoFromSante);
       }
 
       LIVE.source = 'live';
@@ -1238,6 +1257,14 @@ function loadLiveData() {
         var sops      = (hist[5] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
         var stocks    = (hist[6] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
         buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops, stocks);
+        _lastSyncTS = Date.now(); // ✅ marquer le moment de la synchro réussie
+        // Badge "nouvelles données" : y a-t-il des entrées plus récentes que la dernière visite fondateur ?
+        if (S.user === 'fondateur') {
+          _newDataSinceVisit = false; // le fondateur voit les données maintenant
+        } else {
+          // pour les autres rôles, pas de badge pertinent
+          _newDataSinceVisit = false;
+        }
         r(); // → sidebar et alertes se mettent à jour
       }).catch(function() {
         // Vague 2 échouée — Vague 1 déjà affichée, pas critique
@@ -1588,7 +1615,7 @@ function _submitActual(type) {
   p.then(function(res){
     S.sending=false; S._sendCount=0; S._sendSheet='';
     if (res&&res.ok) {
-      S.msg='ok';
+      S.msg='ok:✅ Envoy\u00e9 dans Sheets';
       haptic('success');
       // Mise à jour immédiate MOCK.stock depuis STOCK_MVTS
       if(type==='stock'){ var s=calcStockLocal(); if(s>=0) MOCK.stock=s; }
@@ -1620,8 +1647,67 @@ function _submitActual(type) {
   });
 }
 
+// ── Rapport du jour WhatsApp (g\u00e9rant → fondateur) ──
+function partagerRapportJourWhatsApp(){
+  var _td = today();
+  var _n = _nowDakar();
+  var dayFR=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'][_n.weekday||new Date().getDay()];
+  var mFR=['janvier','f\u00e9vrier','mars','avril','mai','juin','juillet','ao\u00fbt','septembre','octobre','novembre','d\u00e9cembre'];
+  var dateLabel = dayFR+' '+(_n.day<10?'0':'')+_n.day+' '+mFR[_n.month-1]+' '+_n.year;
 
-// ── MODE CLAIR / SOMBRE ──
+  // Aujourd'hui dans HISTORY
+  var aujourdHui = HISTORY.filter(function(h){ return h.date === _td; });
+  var fiche    = aujourdHui.find(function(h){ return h.type==='fiche'; });
+  var sop      = aujourdHui.find(function(h){ return h.type==='sop'; });
+  var incidents = aujourdHui.filter(function(h){ return h.type==='inc'; });
+  var santes   = aujourdHui.filter(function(h){ return h.type==='sante'; });
+  var pesees   = HISTORY.filter(function(h){ return h.type==='pesee' && h.date===_td; });
+  var stocks   = aujourdHui.filter(function(h){ return h.type==='stock'; });
+
+  var lines = [
+    '\uD83D\uDC04 *BOANR \u2014 Rapport du jour*',
+    '\uD83D\uDCC5 '+dateLabel+' \u2014 Sem. '+calcSemaine(),
+    '\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500',
+    '\uD83D\uDCCB Fiche journali\u00e8re : '+(fiche ? '\u2705 Soumise' : '\u274C Non soumise'),
+    '\u2705 Checklist SOP : '+(sop ? '\u2705 Valid\u00e9e' : '\u274C Non valid\u00e9e'),
+    '\uD83D\uDCE6 Stock : '+(stocks.length ? '\u2705 Mis \u00e0 jour' : '\u2014 Pas de mouvement'),
+  ];
+
+  // Bêtes actives
+  lines.push('\uD83D\uDC2E B\u00eates actives : *'+MOCK.betes+' / '+(CYCLE.nbBetes||4)+'*');
+  // Stock aliments
+  var stkDisplay = MOCK.stock > 0 ? MOCK.stock : calcStockLocal();
+  lines.push('\uD83C\uDF3E Stock aliments : *'+stkDisplay+' semaines*'+(stkDisplay>=6?' \u2705':stkDisplay>=4?' \u26A0\uFE0F':' \uD83D\uDD34'));
+
+  // Incidents
+  if (incidents.length > 0) {
+    lines.push('\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500');
+    lines.push('*\u26A0\uFE0F Incidents du jour ('+incidents.length+') :*');
+    incidents.forEach(function(inc) {
+      lines.push('\u2022 '+inc.label);
+    });
+  } else {
+    lines.push('\uD83D\uDFE2 Aucun incident aujourd\'hui');
+  }
+
+  // Pesées
+  if (pesees.length > 0) {
+    lines.push('*\u2696\uFE0F Pes\u00e9es ('+pesees.length+') :*');
+    pesees.forEach(function(p) { lines.push('\u2022 '+p.label); });
+  }
+
+  // Santé / mortalité
+  if (santes.length > 0) {
+    lines.push('*\uD83D\uDC8A Sant\u00e9 / Mortalit\u00e9 :*');
+    santes.forEach(function(s) { lines.push('\u2022 '+s.label); });
+  }
+
+  lines.push('\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500');
+  lines.push('_G\u00e9n\u00e9r\u00e9 par BOANR_');
+
+  var msg = encodeURIComponent(lines.join('\n'));
+  window.open('https://wa.me/?text='+msg, '_blank');
+}
 var LIGHT_MODE = lsGet('light_mode') || false;
 function toggleLight() {
   LIGHT_MODE = !LIGHT_MODE;
@@ -3398,6 +3484,23 @@ function pageApp(){
   // Badge ☰
   var hasAlert = _alertStockCrit || _alertFiche || _alertSOP || _alertStock || _alertPesee || _alertBilan;
 
+  // Badge "nouvelles données" pour fondateur — entrées Sheets plus récentes que dernière visite
+  var _nbNewEntries = 0;
+  if (S.user === 'fondateur' && _lastFondVisitTS > 0) {
+    _nbNewEntries = HISTORY.filter(function(h) {
+      if (!h._src || h._src !== 'sheets') return false;
+      var p = h.date ? h.date.split('/') : [];
+      if (p.length !== 3) return false;
+      var d = new Date(p[2], p[1]-1, p[0]);
+      return d.getTime() > _lastFondVisitTS - 86400000; // entrées du jour ou après
+    }).length;
+  }
+  // Mettre à jour timestamp dernière visite fondateur
+  if (S.user === 'fondateur' && _lastSyncTS > 0) {
+    _lastFondVisitTS = Date.now();
+    lsSet('fondateur_last_visit', _lastFondVisitTS);
+  }
+
   // Bannières empilées
   var bannerHtml = '';
   if (_alertFiche)
@@ -3421,11 +3524,20 @@ function pageApp(){
       : LIVE.source==='live'
         ? '<span style="color:#4caf50" title="Donn\u00e9es temps r\u00e9el">&#128994;</span>'
         : '<span style="color:#ff9800" title="Donn\u00e9es locales">&#128241;</span>')
+    // Timestamp derni\u00e8re synchro
+    +(_lastSyncTS > 0 ? (function(){
+        var diffMin = Math.round((Date.now()-_lastSyncTS)/60000);
+        var label = diffMin < 1 ? 'il y a <1min' : diffMin < 60 ? 'il y a '+diffMin+'min' : 'il y a '+(Math.round(diffMin/60))+'h';
+        return '<span style="font-size:10px;color:#668866" title="Derni\u00e8re synchronisation Sheets">'\u2022 '+label+'</span>';
+      })() : '')
     +'<div class="'+(ONLINE?'online-dot':'offline-dot')+'"></div></div>'
     +'</div></div>'
     +'<div style="display:flex;align-items:center;gap:8px;position:relative">'
     +(S.user==='fondateur'?'<button class="ubtn" onclick="S.dd=!S.dd;r()">'+USERS[S.user].name+' &#9660;</button>':'')
     +ddHtml
+    +(_nbNewEntries > 0
+      ? '<span style="font-size:11px;background:#e53935;color:#fff;border-radius:12px;padding:2px 8px;font-weight:700" title="'+_nbNewEntries+' nouvelle(s) entr\u00e9e(s) depuis votre derni\u00e8re visite">+'+_nbNewEntries+' nouveau'+(+_nbNewEntries>1?'x':'')+'</span>'
+      : '')
     +'<button class="hbg" onclick="openSB()" title="Menu">☰'+(hasAlert?'<div class="hbg-badge"></div>':'')+'</button>'
     +'</div></div>'
     +bannerHtml
@@ -3954,6 +4066,7 @@ function viewDash(){
     +'<div style="margin-top:6px;font-size:11px;color:#665540">Semaine '+semActuelle+' / '+totalSemCycle+'</div>'
     +'</div>'
     +'<button type="button" onclick="exportKpiPDF()" style="width:100%;padding:10px;border-radius:8px;background:#1a3a6a;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer;margin-bottom:8px">📄 Télécharger le rapport KPI en PDF</button>'
+    +'<button type="button" onclick="partagerRapportJourWhatsApp()" style="width:100%;padding:10px;border-radius:8px;background:#25D366;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer;margin-bottom:8px">💬 Rapport du jour WhatsApp</button>'
     +(S.user==='gerant'
       ?'<button type="button" onclick="S._guideOpen=true;r()" '
         +'style="width:100%;padding:13px 16px;border-radius:12px;margin-bottom:10px;cursor:pointer;'
