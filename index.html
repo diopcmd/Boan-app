@@ -4616,7 +4616,7 @@ function viewLiv(){
         var joursRestants = Math.max(0,(totalSemCycle-semCourante)*7);
         var coutBete = (CYCLE.capital||1450000)/(CYCLE.nbBetes||4);
         var poidsMin = Math.ceil(coutBete/2000);
-        var poidsFinal = Math.round(poidsCourant + (gmqMoy||1) * joursRestants);
+        var poidsFinal = Math.round(poidsCourant + (gmqMoy || MOCK.gmq || 1) * joursRestants);
         betesData.push({id:id, race:derniere.race||'Djakoré', poids:poidsCourant,
           poidsFinal:poidsFinal, gmq:gmqMoy, poidsMin:poidsMin,
           rentable:poidsCourant>=poidsMin, historique:peseesBete});
