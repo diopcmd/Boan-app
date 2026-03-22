@@ -3232,6 +3232,10 @@ function saveCycle(){
   MOCK.gmq       = 1.1;
   MOCK.incidents = 0;
   MOCK.treso     = CYCLE.capital || 0;
+  MOCK._tresoFromSante = null;
+  _lastSyncTS      = 0;
+  _lastFondVisitTS = 0;
+  lsSet('fondateur_last_visit', 0);
   // MOCK.betes et MOCK.stock déjà mis à jour plus haut dans saveCycle()
   r();
 
