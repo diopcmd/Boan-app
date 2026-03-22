@@ -1302,10 +1302,7 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   (fiches || []).forEach(function(r) {
     if (!r[0]) return;
     entries.push({ type:'fiche', label:'Fiche du '+r[0], icon:icons.fiche,
-      date:r[0], time:'08:00', _src:'sheets',
-      // Stocker les champs bruts pour le pré-remplissage fiche J-1
-      _raw:{ nourris: r[2]||'', eau: r[3]||'', enclos: r[4]||'' }
-    });
+      date:r[0], time:'08:00', _src:'sheets' });
   });
 
   // Incidents [date, id, type, grav, desc, act, clos]
@@ -3541,7 +3538,6 @@ function pageApp(){
     +(_nbNewEntries > 0
       ? '<span style="font-size:11px;background:#e53935;color:#fff;border-radius:12px;padding:2px 8px;font-weight:700" title="'+_nbNewEntries+' nouvelle(s) entr\u00e9e(s) depuis votre derni\u00e8re visite">+'+_nbNewEntries+' nouveau'+(+_nbNewEntries>1?'x':'')+'</span>'
       : '')
-    +'<button class="hbg" onclick="S._aiOpen=true;S._aiResult=\'\';S._aiError=\'\';r()" title="Assistant IA" style="margin-right:2px;font-size:16px">🤖</button>'
     +'<button class="hbg" onclick="openSB()" title="Menu">☰'+(hasAlert?'<div class="hbg-badge"></div>':'')+'</button>'
     +'</div></div>'
     +bannerHtml
@@ -4166,16 +4162,6 @@ function viewSaisie(){
   if(S.sub==='fiche'){
     var f=S.fi; if(!f.date)f.date=td;
     if(!f.nb && MOCK.betes){ f.nb=String(MOCK.betes); S.fi.nb=f.nb; }
-    // Pré-remplir nourris/eau/enclos depuis la dernière fiche dans HISTORY (J-1)
-    // Seulement si les champs sont vides — ne pas écraser ce que le gérant a déjà saisi
-    if (!f.nourris || !f.eau || !f.enclos) {
-      var _dernFiche = HISTORY.find(function(h){ return h.type==='fiche' && h.date !== today(); });
-      if (_dernFiche && _dernFiche._raw) {
-        if (!f.nourris && _dernFiche._raw.nourris) { f.nourris = _dernFiche._raw.nourris; S.fi.nourris = f.nourris; }
-        if (!f.eau     && _dernFiche._raw.eau)     { f.eau     = _dernFiche._raw.eau;     S.fi.eau     = f.eau;     }
-        if (!f.enclos  && _dernFiche._raw.enclos)  { f.enclos  = _dernFiche._raw.enclos;  S.fi.enclos  = f.enclos;  }
-      }
-    }
     var prog=formProgress(countFilled([f.date,f.nb]),2);
     form='<div class="card">'+prog
       +calBadge(
@@ -4481,14 +4467,6 @@ function viewSaisie(){
       var stkVal = MOCK.stock > 0 ? MOCK.stock : calcStockLocal();
       if(stkVal > 0) { f.stk = String(stkVal); S.fb.stk = f.stk; }
     }
-    // Pré-remplir: nourris = OUI par défaut si la dernière fiche le dit
-    if (!f.nou) {
-      var _dernF = HISTORY.find(function(h){ return h.type==='fiche' && h._raw; });
-      if (_dernF && _dernF._raw && _dernF._raw.nourris) { f.nou = _dernF._raw.nourris; S.fb.nou = f.nou; }
-      else if (!f.nou) { f.nou = 'OUI'; S.fb.nou = 'OUI'; } // défaut optimiste
-    }
-    // Pré-remplir: incidents = NON par défaut si aucun incident cette semaine
-    if (!f.inc && MOCK.incidents === 0) { f.inc = 'NON'; S.fb.inc = 'NON'; }
     var prog=formProgress(countFilled([f.sem,f.nb,f.stk]),3);
     form='<div class="card">'+prog
       +'<div class="frow">'
