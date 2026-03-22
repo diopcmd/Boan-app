@@ -332,27 +332,36 @@ var MOCK = {betes:4, gmq:1.1, stock:6, treso:680000, sem:1, mois:1};
 // ── Source de vérité : fuseau Africa/Dakar (UTC+0 toute l'année)
 // Le gérant est à Dakar — toutes les dates/heures sont en heure de Dakar
 function _nowDakar() {
-  // Intl.DateTimeFormat retourne les composantes dans le bon fuseau
-  var fmt = new Intl.DateTimeFormat('fr-FR', {
-    timeZone: 'Africa/Dakar',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-    hour12: false
-  });
-  var parts = fmt.formatToParts(new Date());
-  var get = function(t){ return parts.find(function(p){return p.type===t;}).value; };
-  return {
-    year:  parseInt(get('year')),
-    month: parseInt(get('month')),
-    day:   parseInt(get('day')),
-    hour:  parseInt(get('hour')),
-    minute:parseInt(get('minute')),
-    // Jour de semaine : 0=Dim, 1=Lun, … 6=Sam — calculé depuis composantes
-    weekday: (function(){
-      var d = new Date(parseInt(get('year')), parseInt(get('month'))-1, parseInt(get('day')));
-      return d.getDay();
-    })()
-  };
+  // Dakar est UTC+0 toute l’année — fallback direct si Intl ne supporte pas Africa/Dakar
+  try {
+    var fmt = new Intl.DateTimeFormat('fr-FR', {
+      timeZone: 'Africa/Dakar',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false
+    });
+    var parts = fmt.formatToParts(new Date());
+    var get = function(t){ return parts.find(function(p){return p.type===t;}).value; };
+    return {
+      year:  parseInt(get('year')),
+      month: parseInt(get('month')),
+      day:   parseInt(get('day')),
+      hour:  parseInt(get('hour')),
+      minute:parseInt(get('minute')),
+      weekday: (function(){
+        var d = new Date(parseInt(get('year')), parseInt(get('month'))-1, parseInt(get('day')));
+        return d.getDay();
+      })()
+    };
+  } catch(e) {
+    // Fallback UTC+0 (= Dakar, pas de décalage)
+    var _d = new Date();
+    return {
+      year: _d.getUTCFullYear(), month: _d.getUTCMonth()+1, day: _d.getUTCDate(),
+      hour: _d.getUTCHours(), minute: _d.getUTCMinutes(),
+      weekday: _d.getUTCDay()
+    };
+  }
 }
 function today() {
   var n = _nowDakar();
@@ -904,17 +913,28 @@ function r() {
   document.body.style.overflow = _ov ? 'hidden' : '';
   var html;
   if (S.page==='login') {
-    html = pageLogin();
-    // Si la modale init est ouverte (fondateur première connexion), l'afficher sur le login aussi
-    if (MODAL.open) html += pageModal();
+    try {
+      html = pageLogin();
+      if (MODAL.open) html += pageModal();
+    } catch(e) {
+      html = '<div style="padding:20px;color:#ff7070;text-align:center;margin-top:60px">Erreur: '+(e&&e.message||e)+'</div>';
+    }
   } else {
-    html = pageApp();
-    if (MODAL.open) html += pageModal();
-    if (CONFIRM.open) html += pageConfirm();
-    if (S._resetPwdOpen) html += pageResetPwd();
-    if (S._aiOpen) html += pageAI();
-    if (S._pwdMgrOpen) html += pagePwdManager();
-    if (S._guideOpen)   html += pageGuide();
+    try {
+      html = pageApp();
+      if (MODAL.open) html += pageModal();
+      if (CONFIRM.open) html += pageConfirm();
+      if (S._resetPwdOpen) html += pageResetPwd();
+      if (S._aiOpen) html += pageAI();
+      if (S._pwdMgrOpen) html += pagePwdManager();
+      if (S._guideOpen)   html += pageGuide();
+    } catch(e) {
+      html = '<div style="padding:24px;max-width:400px;margin:40px auto;background:#2e1010;border:1px solid #8a0000;border-radius:12px;color:#ff7070;font-family:monospace">'
+        +'<div style="font-size:15px;font-weight:700;margin-bottom:8px">⚠️ Erreur</div>'
+        +'<div style="font-size:12px;word-break:break-all">'+(e&&e.message||String(e))+'</div>'
+        +'<button onclick="S.page=\'login\';S.user=null;r()" style="margin-top:14px;background:#8a0000">Retour connexion</button>'
+        +'</div>';
+    }
   }
   el.innerHTML = html;
   // Restaurer focus sur les inputs avec ID (maintient le clavier mobile ouvert)
