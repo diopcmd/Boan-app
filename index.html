@@ -3314,10 +3314,10 @@ function saveCycle(){
     var dataOnglets = [
       'Fiche_Quotidienne!A4:Z500',
       'SOP_Check!A4:Z200',
-      'Stock_Nourriture!A4:Z500',
-      'Incidents!A4:Z200',
+      'Stock_Nourriture!A5:Z500',
+      'Incidents!A5:Z200',
       'Pesees!A4:Z200',
-      'Sante_Mortalite!A4:Z200',
+      'Sante_Mortalite!A5:Z200',
       'Hebdomadaire!A4:Z200',
     ];
     var kpiOnglets = [
@@ -4879,7 +4879,7 @@ function viewMarche(){
       +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'marche\')">Enregistrer</button>'+msgHtml()
       +'</div>';
   } else if(S.sub==='sim'){
-    var cycleMois = CYCLE.dureeMois || 8;
+    var cycleMois = (S.simMois !== undefined && S.simMois !== null) ? S.simMois : (CYCLE.dureeMois || 8);
 
     // ── État — valeurs par défaut réalistes marché sénégalais ──
     var nb      = S.sn  !== null && S.sn  !== undefined ? S.sn  : (CYCLE.nbBetes||4);
@@ -4968,6 +4968,18 @@ function viewMarche(){
     function sign(v) { return v >= 0 ? '+' : ''; }
 
     view = ''
+
+    // ── Durée cycle (simu) ──
+    + '<div class="card">'
+    +   '<div class="stitle">⏱ Durée du cycle (simulation)</div>'
+    +   '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+    +     '<input id="sim-mois-inp" type="number" inputmode="decimal" min="1" max="60" value="' + cycleMois + '"'
+    +       ' style="flex:1;padding:10px 8px;font-size:18px;font-weight:700;border-radius:8px;border:1px solid #2a4a2a;background:#0a150a;color:#eee;text-align:center">'
+    +     '<button onclick="event.stopPropagation();var v=parseInt(document.getElementById(\'sim-mois-inp\').value);if(v>=1&&v<=60){S.simMois=v;r();}"'
+    +       ' style="padding:10px 18px;font-size:13px;font-weight:700;border-radius:8px;border:1px solid #2d6a2d;background:#2d6a2d;color:#fff;cursor:pointer">OK</button>'
+    +   '</div>'
+    +   '<div style="font-size:11px;color:#665540">Cycle réel : ' + (CYCLE.dureeMois||8) + ' mois — modifiez ici pour simuler une autre durée</div>'
+    + '</div>'
 
     // ── Bloc Vente ──
     + '<div class="card">'
