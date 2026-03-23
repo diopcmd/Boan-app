@@ -4050,34 +4050,29 @@ function buildSidebar(){
     +'</div></div>'
     +'</div>'
     +'<div class="sb-tabs">'+tabsHtml+'</div>'
-    +'<div class="sb-body">'+body+'</div>'
+    +'<div class="sb-body">'+body
+    +'<div style="margin-top:14px;padding-top:12px;border-top:1px solid #1a3a1a">'
+    +((u==='fondateur'||u==='fallou'||u==='rga')
+      ? '<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0 8px">'
+        +'<span style="font-size:11px;color:#88aa88">\u23f1 Dur\u00e9e cycle</span>'
+        +'<div style="display:flex;align-items:center">'
+        +'<button onclick="event.stopPropagation();var el=document.getElementById(\'sb-duree-inp\');el.value=Math.max(1,(parseInt(el.value)||'+(CYCLE.dureeMois||8)+')-1)" style="width:28px;height:28px;font-size:18px;line-height:1;border-radius:6px 0 0 6px;background:#1a2e1a;border:1px solid #2a4a2a;border-right:none;color:#C8A06A;cursor:pointer">&#8722;</button>'
+        +'<input id="sb-duree-inp" type="number" min="1" max="60" value="'+(CYCLE.dureeMois||8)+'" style="width:38px;height:28px;text-align:center;font-size:13px;font-weight:700;border:1px solid #2a4a2a;border-left:none;border-right:none;background:#0a150a;color:#eee">'
+        +'<button onclick="event.stopPropagation();var el=document.getElementById(\'sb-duree-inp\');el.value=Math.min(60,(parseInt(el.value)||'+(CYCLE.dureeMois||8)+')+1)" style="width:28px;height:28px;font-size:18px;line-height:1;border-radius:0 6px 6px 0;background:#1a2e1a;border:1px solid #2a4a2a;border-left:none;color:#C8A06A;cursor:pointer">&#43;</button>'
+        +'<button onclick="event.stopPropagation();updateDureeMois(parseInt(document.getElementById(\'sb-duree-inp\').value))" style="margin-left:6px;padding:4px 8px;font-size:11px;font-weight:700;border-radius:6px;border:1px solid #2d6a2d;background:#2d6a2d;color:#fff;cursor:pointer">\u2713</button>'
+        +'</div></div>'
+      : '')
+    +'<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0 0">'
+    +'<span style="font-size:11px;color:#88aa88">\u2696\ufe0f Pes\u00e9e</span>'
+    +'<div style="display:flex;gap:4px">'
+    +[7,14,21,30].map(function(v){ var sel=(CYCLE.peseeFreq||30)===v; return '<button onclick="event.stopPropagation();updatePeseeFreq('+v+')" style="padding:3px 7px;border-radius:5px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid '+(sel?'#2d6a2d':'#2a4a2a')+';background:'+(sel?'#2d6a2d':'transparent')+';color:'+(sel?'#fff':'#88aa88')+'">'+v+'j</button>'; }).join('')
+    +'</div></div>'
+    +'</div>'
+    +'</div>'
     +'<div class="sb-foot">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
-    +'<span style="font-size:12px;color:#88aa88">'+(ONLINE?'🟢 Connecté':'🔴 Hors ligne')+'</span>'
-    +'<span onclick="toggleLight()" style="cursor:pointer;font-size:12px;color:#88aa88;padding:4px 8px;border:1px solid #2a4a2a;border-radius:8px">'+(LIGHT_MODE?'🌙 Sombre':'☀️ Clair')+'</span>'
-    +'</div>'
-    +((u==='fondateur'||u==='fallou'||u==='rga')
-      ? '<div style="background:#0f1a0f;border-radius:8px;padding:6px 10px;margin-bottom:8px;border:1px solid #1a3a1a">'
-        +'<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">'
-        +'<span style="font-size:11px;color:#88aa88;white-space:nowrap">⏱ Durée cycle</span>'
-        +'<div style="display:flex;align-items:center;gap:5px">'
-        +'<input id="sb-duree-inp" type="number" min="1" max="60" value="'+(CYCLE.dureeMois||8)+'"'
-        +' style="width:44px;padding:3px 4px;font-size:13px;font-weight:700;border-radius:5px;border:1px solid #2a4a2a;background:#0a150a;color:#eee;text-align:center">'
-        +'<span style="font-size:11px;color:#88aa88">m</span>'
-        +'<button onclick="event.stopPropagation();var v=parseInt(document.getElementById(\'sb-duree-inp\').value);updateDureeMois(v)"'
-        +' style="padding:3px 9px;font-size:12px;font-weight:700;border-radius:5px;border:1px solid #2d6a2d;background:#2d6a2d;color:#fff;cursor:pointer">OK</button>'
-        +'</div></div>'
-        +'</div>'
-      : '')
-    +'<div style="background:#0f1a0f;border-radius:8px;padding:8px 10px;margin-bottom:8px;border:1px solid #1a3a1a">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
-    +'<span style="font-size:11px;color:#88aa88;white-space:nowrap">⚖️ Rappel pesée</span>'
-    +'<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">'
-    +[7,14,21,30].map(function(v){
-      var sel=(CYCLE.peseeFreq||30)===v;
-      return '<button onclick="event.stopPropagation();updatePeseeFreq('+v+')" style="padding:4px 8px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid '+(sel?'#2d6a2d':'#2a4a2a')+';background:'+(sel?'#2d6a2d':'transparent')+';color:'+(sel?'#fff':'#88aa88')+'">'+v+'j</button>';
-    }).join('')
-    +'</div></div>'
+    +'<span style="font-size:12px;color:#88aa88">'+(ONLINE?'\uD83D\uDFE2 Connect\u00e9':'\uD83D\uDD34 Hors ligne')+'</span>'
+    +'<span onclick="toggleLight()" style="cursor:pointer;font-size:12px;color:#88aa88;padding:4px 8px;border:1px solid #2a4a2a;border-radius:8px">'+(LIGHT_MODE?'\uD83C\uDF19 Sombre':'\u2600\uFE0F Clair')+'</span>'
     +'</div>'
     +'<button onclick="LIVE.source=\'loading\';r();setTimeout(loadLiveData,100)" '
     +'style="background:#1a2e3a;color:#5ab4ff;border:1px solid #2a4a5a;'
@@ -5005,16 +5000,15 @@ function viewMarche(){
 
     view = ''
 
-    // ── Durée cycle (simu) ──
-    + '<div class="card">'
-    +   '<div class="stitle">⏱ Durée du cycle (simulation)</div>'
-    +   '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
-    +     '<input id="sim-mois-inp" type="number" inputmode="decimal" min="1" max="60" value="' + cycleMois + '"'
-    +       ' style="flex:1;padding:10px 8px;font-size:18px;font-weight:700;border-radius:8px;border:1px solid #2a4a2a;background:#0a150a;color:#eee;text-align:center">'
-    +     '<button onclick="event.stopPropagation();var v=parseInt(document.getElementById(\'sim-mois-inp\').value);if(v>=1&&v<=60){S.simMois=v;r();}"'
-    +       ' style="padding:10px 18px;font-size:13px;font-weight:700;border-radius:8px;border:1px solid #2d6a2d;background:#2d6a2d;color:#fff;cursor:pointer">OK</button>'
+    // ── Durée cycle simulée — stepper ──
+    + '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;margin-bottom:10px;background:#1a2e1a;border-radius:10px;border:1px solid #2a4a2a">'
+    +   '<div><div style="font-size:11px;color:#88aa88">\u23f1 Dur\u00e9e simul\u00e9e</div>'
+    +   '<div style="font-size:10px;color:#445540;margin-top:2px">R\u00e9el\u00a0: ' + (CYCLE.dureeMois||8) + '\u00a0m</div></div>'
+    +   '<div style="display:flex;align-items:center">'
+    +     '<button onclick="event.stopPropagation();S.simMois=Math.max(1,(S.simMois!==undefined?S.simMois:' + cycleMois + ')-1);r()" style="width:34px;height:34px;font-size:20px;border-radius:8px 0 0 8px;background:#0a150a;border:1px solid #2a4a2a;border-right:none;color:#C8A06A;cursor:pointer">&#8722;</button>'
+    +     '<div style="min-width:50px;height:34px;display:flex;align-items:center;justify-content:center;background:#0a150a;border-top:1px solid #2a4a2a;border-bottom:1px solid #2a4a2a;font-size:17px;font-weight:800;color:#eee">' + cycleMois + '\u00a0m</div>'
+    +     '<button onclick="event.stopPropagation();S.simMois=Math.min(60,(S.simMois!==undefined?S.simMois:' + cycleMois + ')+1);r()" style="width:34px;height:34px;font-size:20px;border-radius:0 8px 8px 0;background:#0a150a;border:1px solid #2a4a2a;border-left:none;color:#C8A06A;cursor:pointer">&#43;</button>'
     +   '</div>'
-    +   '<div style="font-size:11px;color:#665540">Cycle réel : ' + (CYCLE.dureeMois||8) + ' mois — modifiez ici pour simuler une autre durée</div>'
     + '</div>'
 
     // ── Bloc Vente ──
