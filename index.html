@@ -760,11 +760,12 @@ function santeDejaEnregistreeAujourdhui(id) {
 }
 
 // Vérifie si le bilan hebdo de la semaine courante a déjà été soumis
+// Supporte les entrées locales (date=today()) ET celles venant de Sheets (date='Semaine X', _sem='X')
 function bilanDejaFaitCetteSemaine() {
-  // Bilan : 1 fois par jour calendaire
   var td = today();
+  var sem = String(calcSemaine());
   return HISTORY.some(function(h){
-    return h.type === 'bilan' && h.date === td;
+    return h.type === 'bilan' && (h.date === td || h._sem === sem);
   });
 }
 
@@ -1139,7 +1140,7 @@ function loadLiveData() {
   // ── ÉTAPE 1 — Config_Cycle (bloquante) ──
   // Lire depuis SID.fondateur pour synchroniser CYCLE sur tout appareil
   var step1 = sidFondateur
-    ? readSheet(sidFondateur, 'Config_Cycle!A1:O1').then(function(rows) {
+    ? readSheet(sidFondateur, 'Config_Cycle!A1:P1').then(function(rows) {
         if (!rows || !rows[0] || !rows[0][0]) return; // Sheets vide → garder CYCLE local
         var row = rows[0];
         var updates = {};
@@ -1158,6 +1159,7 @@ function loadLiveData() {
         if (row[12]) updates.peseeFreq      = parseInt(row[12])  || CYCLE.peseeFreq;
         try { if (row[13]) updates.betes      = JSON.parse(row[13]); } catch(e) {}
         try { if (row[14]) updates.stockLines = JSON.parse(row[14]); } catch(e) {}
+        if (row[15]) updates.dureeMois      = parseInt(row[15])  || CYCLE.dureeMois; // col P
         Object.assign(CYCLE, updates);
         lsSet('cycle', CYCLE);
       }).catch(function() { /* Sheets inaccessible → garder CYCLE local existant */ })
@@ -1382,8 +1384,10 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   // Hebdomadaire [sem, nb, nou, stk, inc, poi, al, msg]
   (bilans || []).forEach(function(r) {
     if (!r[0]) return;
+    // Extraire le numéro de semaine pour la détection _bilanOk (date=r[0] n'est pas DD/MM/YYYY)
+    var _semNum = r[0].toString().replace(/[^0-9]/g, '');
     entries.push({ type:'bilan', label:'Semaine '+r[0], icon:icons.bilan,
-      date:r[0], time:'—', _src:'sheets' });
+      date:r[0], _sem:_semNum, time:'—', _src:'sheets' });
   });
 
   // Pesees [date, id, race, poids, prev, gain, statut]
@@ -1722,7 +1726,8 @@ function _syncCycle() {
       CYCLE.capital, CYCLE.objectifPrix, CYCLE.budgetSante, CYCLE.veterinaire,
       CYCLE.foirail, CYCLE.commission, CYCLE.contactUrgence, CYCLE.peseeFreq,
       JSON.stringify(CYCLE.betes||[]),
-      JSON.stringify(CYCLE.stockLines||[])
+      JSON.stringify(CYCLE.stockLines||[]),
+      CYCLE.dureeMois  // col P (index 15) — synchronisé pour que tous les acteurs voient la durée cycle
     ];
     var allSids = [SID.fondateur, SID.gerant, SID.rga, SID.fallou].filter(Boolean);
     allSids.forEach(function(sid) {
@@ -3339,7 +3344,8 @@ function saveCycle(){
       CYCLE.capital, CYCLE.objectifPrix, CYCLE.budgetSante, CYCLE.veterinaire,
       CYCLE.foirail, CYCLE.commission, CYCLE.contactUrgence, CYCLE.peseeFreq,
       JSON.stringify(CYCLE.betes||[]),
-      JSON.stringify(CYCLE.stockLines||[])
+      JSON.stringify(CYCLE.stockLines||[]),
+      CYCLE.dureeMois  // col P (index 15)
     ];
     var allSids = [SID.fondateur, SID.gerant, SID.rga, SID.fallou].filter(Boolean);
     allSids.forEach(function(sid){
@@ -3567,7 +3573,8 @@ function pageApp(){
 
   var _fichOk   = ficheDejaSoumise();
   var _sopOk    = HISTORY.some(function(h){ return h.type==='sop' && h.date===_td; });
-  var _bilanOk  = HISTORY.some(function(h){ return h.type==='bilan' && h.date===_td; });
+  // _bilanOk : vérifie par date locale (soumis aujourd'hui) OU par numéro de semaine (depuis Sheets)
+  var _bilanOk  = HISTORY.some(function(h){ return h.type==='bilan' && (h.date===_td || h._sem===String(calcSemaine())); });
   var _dernStock = _jourDepuis(_dernierType('stock'));
   var _dernPesee = _jourDepuis(_dernierType('pesee'));
 
