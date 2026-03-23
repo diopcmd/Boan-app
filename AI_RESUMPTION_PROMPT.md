@@ -12,7 +12,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 - **GitHub** : https://github.com/diopcmd/Boan-app (branche `main`)
 - **Dossier local** : `C:\Temp\Boan-app\`
 - **Langue** : Tout en français (code, UI, communications)
-- **Dernier commit** : `sync-peseeFreq` — fix: peseeFreq sidebar synchro Sheets via _syncCycle + refactor updateDureeMois
+- **Dernier commit** : `6f2078f` — fix: PWA clavier mobile — viewport interactive-widget + manifest + touch-action
 
 ---
 
@@ -20,7 +20,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 
 | Couche | Technologie |
 |---|---|
-| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~5278 lignes) |
+| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~4974 lignes) |
 | Backend | Vercel Serverless Functions (ES Module `export default async function handler`) |
 | Auth | Session token custom HMAC-SHA256 (`base64(payload).hmac_hex`), 8h |
 | Données | Google Sheets API v4 via Service Account RS256 JWT |
@@ -34,8 +34,9 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 
 ```
 Boan-app/
-├── index.html              SPA complète (~5179 lignes)
-├── vercel.json             Rewrites SPA sans bloquer /api/
+├── index.html              SPA complète (~4974 lignes)
+├── vercel.json             Rewrites SPA (exclut /api/ et /manifest.json)
+├── manifest.json           Web App Manifest (PWA — icône, nom, display:standalone)
 ├── api/
 │   ├── auth.js             Login → session token HMAC + SID multi-sheet par rôle
 │   ├── token.js            RS256 JWT → access_token Google OAuth2
@@ -235,9 +236,17 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 - Onglet Bêtes : `poidsFinal` calculé dans les 2 branches (LIVE + démo)
 
 ### Sidebar
-- **Durée cycle** : champ libre (1–60 mois) + bouton OK — fondateur/rga/fallou — `updateDureeMois(v)` → `_syncCycle()`
+- **Durée cycle** : stepper pur `−` / `+` (sans input — évite reset au re-render) — fondateur/rga/fallou — plage 1–60 mois — `updateDureeMois(v)` → `_syncCycle()`
 - **Rappel pesée** : boutons compacts 7/14/21/30j — tous rôles — `updatePeseeFreq(v)` → `_syncCycle()`
-- Les deux champs synchronisent `Config_Cycle!A1:O1` dans les 4 sheets — tous les acteurs verront la nouvelle valeur au prochain `loadLiveData`
+- Les deux contrôles synchronisent `Config_Cycle!A1:O1` dans les 4 sheets — tous les acteurs verront la nouvelle valeur au prochain `loadLiveData`
+- Durée cycle et Rappel pesée sont dans le `sb-body` scrollable (pas dans le footer fixe)
+
+### PWA — Clavier mobile
+- **Viewport** : `interactive-widget=resizes-visual` — Android adapte la mise en page quand le clavier s'ouvre
+- **Manifest** : `/manifest.json` lié dans `<head>` — Android Chrome reconnaît correctement le mode standalone
+- **CSS** : `touch-action: manipulation` sur inputs/buttons/a — supprime le délai 300ms iOS qui bloquait le clavier
+- **iOS** : `apple-mobile-web-app-status-bar-style: black-translucent` ajouté
+- **vercel.json** : regex exclut `/manifest.json` du rewrite → `/index.html` (sinon manifest inaccessible)
 
 ### Reset cycle
 - Réinitialise : HISTORY, STOCK_MVTS, LIVE, MOCK, _lastSyncTS, _lastFondVisitTS, MOCK._tresoFromSante
@@ -255,17 +264,13 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 
 | Commit | Description |
 |---|---|
-| `sync-peseeFreq` | fix: peseeFreq sidebar synchro Sheets via _syncCycle + refactor updateDureeMois |
+| `6f2078f` | fix: PWA clavier mobile — viewport interactive-widget + manifest + touch-action |
+| `82cff3e` | ux: stepper durée cycle contraste élevé fond vert + valeur lisible |
+| `ca27beb` | ux: sidebar durée cycle stepper pur -/+ sans input (évite reset au re-render) |
+| `b6e4187` | ux: sidebar config dans body scrollable + footer réduit + stepper simu durée |
+| `0e85245` | fix: peseeFreq sidebar synchro Sheets via _syncCycle + refactor updateDureeMois |
 | `5245263` | ux: sidebar durée cycle compact (input inline + OK) |
 | `e34c505` | docs: mise à jour docs + chemin local + ligne count |
+| `3ea8929` | fix: bugs marché prix + durée cycle réel sidebar synchro sheets |
 | `d6a0cc8` | feat: saisie libre durée cycle simulateur + reset A4→A5 Stock/Incidents/Sante |
 | `462b641` | fix: message soumission, validation conso stock, cohérence net, alerte par aliment |
-| `6f8cfb2` | fix: stock fondateur — Vague1 sidGerant\|\|sidFondateur + Vague2 reconstruit STOCK_MVTS |
-| `d7a8a4b` | fix: STOCK_MVTS reconstitué depuis Sheets pour le fondateur à chaque login |
-| `5588542` | docs: mise à jour AI_RESUMPTION_PROMPT + README |
-| `71e3354` | fix: reset cycle vide _lastSyncTS, _lastFondVisitTS, MOCK._tresoFromSante |
-| `e601921` | ux: sidebar durée cycle + rappel pesée compacts sur une ligne |
-| `03e5df9` | ux: bouton rapport WhatsApp dans dashboard + pré-remplissage fiche OUI/NON |
-| `62cccb0` | ux: header fondateur épuré — timestamp en tooltip, badge dans ☰ |
-| `133cada` | fix: tous /35 → CYCLE.dureeMois dynamique |
-| `62ebeb1` | feat: sync Sheets temps réel, auth multi-SID |

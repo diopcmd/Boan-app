@@ -63,8 +63,9 @@ Interface de pilotage à distance multi-rôles : direction, gérant terrain, RGA
 
 ```
 Boan-app/
-├── index.html              SPA complète (HTML + CSS + JS inline, ~5278 lignes)
-├── vercel.json             Rewrites /api/*
+├── index.html              SPA complète (HTML + CSS + JS inline, ~4974 lignes)
+├── vercel.json             Rewrites SPA (exclut /api/ et /manifest.json)
+├── manifest.json           Web App Manifest (PWA — icône, nom, display:standalone)
 ├── api/
 │   ├── auth.js             Login multi-rôle + SID multi-sheet par rôle
 │   ├── token.js            Service Account → Google OAuth2 access token

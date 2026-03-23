@@ -1,7 +1,7 @@
 # Documentation Technique — BOANR
 
 > Application web mobile de gestion d'élevage bovin — Ferme BOAN, Thiès, Sénégal.
-> Mise à jour : juillet 2025
+> Mise à jour : mars 2026
 
 ---
 
@@ -171,34 +171,64 @@ Toutes les feuilles de saisie ont le même format :
 
 ## Frontend — Composants JS clés
 
+> `index.html` : **~4974 lignes** (ES5 strict, var uniquement)
+
+### PWA — Clavier mobile (méta + CSS)
+
+```html
+<!-- Viewport : empêche le clavier Android d'écraser la mise en page -->
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-visual">
+<!-- iOS PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- Manifest : requis pour que Chrome Android détecte correctement le mode standalone -->
+<link rel="manifest" href="/manifest.json">
+```
+
+```css
+/* Supprime le délai 300ms iOS qui bloque le clavier au premier tap */
+input,textarea,select,button,a { touch-action: manipulation; }
+```
+
+**vercel.json** exclut `/manifest.json` du rewrite SPA :
+```json
+{ "source": "/((?!api/|manifest\\.json).*)", "destination": "/index.html" }
+```
+
 ### Fonctions de rendu
 
-| Fonction | Description |
-|---|---|
-| `r()` | Re-render complet — restaure focus/curseur pour clavier mobile |
-| `pageLogin()` | Page connexion |
-| `pageApp()` | Shell app (header + tabs + contenu) |
-| `viewDash()` | Dashboard (hero card + KPI + alertes) |
-| `viewSaisie()` | Formulaires de saisie (dispatch sur S.sub) |
-| `viewLiv()` | Livrables (trésorerie, simulations, projections) |
-| `viewMarche()` | Marché (prix, recommandations) |
-| `buildSidebar()` | Sidebar (météo, stock, checklist) |
+| Fonction | Ligne | Description |
+|---|---|---|
+| `r()` | L905 | Re-render complet — restaure focus/curseur pour clavier mobile |
+| `pageLogin()` | L3498 | Page connexion |
+| `pageApp()` | L3516 | Shell app (header + tabs + contenu) |
+| `viewDash()` | L4106 | Dashboard (hero card + KPI + alertes) |
+| `viewSaisie()` | L4258 | Formulaires de saisie (dispatch sur S.sub) |
+| `viewLiv()` | L4599 | Livrables (trésorerie, simulations, projections) |
+| `viewMarche()` | L4858 | Marché (prix, recommandations, simulateur) |
+| `buildSidebar()` | L3642 | Sidebar (météo, stock, checklist, stepper durée+pesée) |
+| `pageModal()` | L2056 | Modale configuration cycle |
+| `pageAI()` | L2470 | Modale assistant IA Claude |
+| `pagePwdManager()` | L2717 | Gestionnaire mots de passe (fondateur) |
 
 ### Fonctions réseau
 
-| Fonction | Description |
-|---|---|
-| `getTok()` | Promise — access_token Google (cache 55min) |
-| `readSheet(sid, range)` | Lecture plage Google Sheets |
-| `appendRow(sid, range, vals)` | Écriture ligne (read-then-PUT) |
-| `writeAll(sids, range, vals)` | Écriture parallèle multi-SID |
-| `kpiAppend(vals)` | Écriture KPI_Mensuels (SID.fondateur) |
-| `loadLiveData()` | Charge données réelles depuis Sheets (3 vagues) |
-| `buildHistoryFromSheets(...)` | Construit HISTORY depuis 7 onglets Sheets |
-| `loadPrix()` | Charge suivi marché depuis Sheets (`Suivi_Marche!A4:J500`, filtre bas ou moy présent) |
-| `_syncCycle()` | Réécrit `Config_Cycle!A1:O1` dans les 4 sheets disponibles (helper partagé) |
-| `updateDureeMois(v)` | Met à jour `CYCLE.dureeMois` + appelle `_syncCycle()` |
-| `updatePeseeFreq(v)` | Met à jour `CYCLE.peseeFreq` + appelle `_syncCycle()` |
+| Fonction | Ligne | Description |
+|---|---|---|
+| `getTok()` | — | Promise — access_token Google (cache 55min) |
+| `readSheet(sid, range)` | — | Lecture plage Google Sheets |
+| `appendRow(sid, range, vals)` | — | Écriture ligne (read-then-PUT) |
+| `writeAll(sids, range, vals)` | — | Écriture parallèle multi-SID |
+| `kpiAppend(vals)` | — | Écriture KPI_Mensuels (SID.fondateur) |
+| `loadLiveData()` | L1115 | Charge données réelles depuis Sheets (3 vagues) |
+| `buildHistoryFromSheets(...)` | — | Construit HISTORY depuis 7 onglets Sheets |
+| `loadPrix()` | L1880 | Charge suivi marché depuis Sheets (`Suivi_Marche!A4:J500`, filtre bas ou moy présent) |
+| `doSubmit(type)` | L1478 | Soumission formulaire — valide, préfixe `ok:`, écrit Sheets |
+| `addStockLigne(mode)` | L2281 | Ajout/consommation stock — valide dispo avant acceptation |
+| `_syncCycle()` | L1717 | Réécrit `Config_Cycle!A1:O1` dans les 4 sheets disponibles |
+| `updateDureeMois(v)` | L1734 | Met à jour `CYCLE.dureeMois` + appelle `_syncCycle()` |
+| `updatePeseeFreq(v)` | L1739 | Met à jour `CYCLE.peseeFreq` + appelle `_syncCycle()` |
+| `saveCycle()` | L3272 | Valide et enregistre la configuration cycle complète |
 
 ### Fonctions utilitaires
 
@@ -215,6 +245,27 @@ Toutes les feuilles de saisie ont le même format :
 | `bilanDejaFaitCetteSemaine()` | Bool — bilan hebdomadaire déjà soumis cette semaine |
 | `calcStockLocal()` | Calcul stock restant depuis STOCK_MVTS |
 | `stockSyntheseHtml(compact)` | HTML mouvements stock (full ou compact sidebar) |
+
+### Sidebar — stepper durée cycle
+
+```js
+// Stepper pur -/+ (pas d'input — évite reset au re-render)
+// Rendu dans sb-body (scrollable), PAS dans sb-foot (fixe)
+// Fond vert foncé #1a3a1a pour lisibilité, texte blanc, valeur en gros
+'<button onclick="updateDureeMois(Math.max(1,'+(CYCLE.dureeMois||8)+'-1))">−</button>'
++'<div style="background:#1a3a1a;color:#fff;font-size:15px;font-weight:900">'+(CYCLE.dureeMois||8)+' mois</div>'
++'<button onclick="updateDureeMois(Math.min(60,'+(CYCLE.dureeMois||8)+'+1))">+</button>'
+// updateDureeMois(v) → CYCLE.dureeMois=v; lsSet; r(); _syncCycle()
+```
+
+### Simulateur durée
+
+```js
+// Stepper inline dans le bandeau simulateur (S.simMois état local)
+// -/+ appels directs, pas d'input, pas de bouton OK
+var cycleMois = (S.simMois !== undefined && S.simMois !== null) ? S.simMois : (CYCLE.dureeMois||8);
+// L5011–5013
+```
 
 ### Navigation et UX
 
