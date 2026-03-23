@@ -1662,8 +1662,13 @@ function _submitActual(type) {
   } else if(type==='marche'){
     var f=S.fm; var td=isoToFr(f.date);
     var foirail = (f.foi==='Autre' && f.foiCustom) ? f.foiCustom : f.foi;
-    // writeAll pour que fondateur puisse aussi écrire si SID.fallou absent
-    p=writeAll([SID.fallou,SID.fondateur],'Suivi_Marche!A:J',[td,foirail,f.bas,f.moy,f.haut,'','','-','','']);
+    var bas=parseFloat(f.bas)||0, moy=parseFloat(f.moy)||0, haut=parseFloat(f.haut)||0;
+    if(!moy && !bas) { p=Promise.resolve({ok:false,err:'Saisir au moins le prix moyen ou bas'}); }
+    else if(bas&&moy&&bas>moy){ p=Promise.resolve({ok:false,err:'Prix bas > prix moyen — vérifier les valeurs'}); }
+    else if(moy&&haut&&moy>haut){ p=Promise.resolve({ok:false,err:'Prix moyen > prix haut — vérifier les valeurs'}); }
+    else {
+      p=writeAll([SID.fallou,SID.fondateur],'Suivi_Marche!A:E',[td,foirail,bas||'',moy||'',haut||'']);
+    }
   } else {
     p=Promise.resolve({ok:false,err:'Type inconnu'});
   }
@@ -1702,6 +1707,32 @@ function _submitActual(type) {
   });
 }
 
+
+// ── DURÉE CYCLE RÉEL (sidebar) — synchro Sheets ──
+function updateDureeMois(v) {
+  v = parseInt(v);
+  if (isNaN(v) || v < 1 || v > 60) return;
+  CYCLE.dureeMois = v;
+  lsSet('cycle', CYCLE);
+  r();
+  // Écrire dans Config_Cycle!A1:O1 (colonne O = index 14, dureeMois = colonne A = index 0)
+  // On réécrit toute la ligne pour ne rien écraser
+  getTok().then(function(tk) {
+    if (!tk) return;
+    var vals = [
+      CYCLE.dateDebut, CYCLE.nbBetes, CYCLE.poidsDepart, CYCLE.race, CYCLE.ration,
+      CYCLE.capital, CYCLE.objectifPrix, CYCLE.budgetSante, CYCLE.veterinaire,
+      CYCLE.foirail, CYCLE.commission, CYCLE.contactUrgence, CYCLE.peseeFreq,
+      JSON.stringify(CYCLE.betes||[]),
+      JSON.stringify(CYCLE.stockLines||[])
+    ];
+    var allSids = [SID.fondateur, SID.gerant, SID.rga, SID.fallou].filter(Boolean);
+    allSids.forEach(function(sid) {
+      var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+encodeURIComponent('Config_Cycle')+'!A1?valueInputOption=USER_ENTERED';
+      fetch(url, {method:'PUT', headers:{Authorization:'Bearer '+tk,'Content-Type':'application/json'}, body:JSON.stringify({values:[vals]})});
+    });
+  });
+}
 
 // ── MODE CLAIR / SOMBRE ──
 var LIGHT_MODE = lsGet('light_mode') || false;
@@ -1843,10 +1874,10 @@ function loadPrix() {
   // Fallback : fondateur reçoit aussi Suivi_Marche via writeAll
   var _sidPrix = SID.fallou || SID.fondateur;
   if (!_sidPrix) return;
-  readSheet(_sidPrix, 'Suivi_Marche!A4:J30').then(function(rows) {
+  readSheet(_sidPrix, 'Suivi_Marche!A4:J500').then(function(rows) {
     if (!rows) return;
     LIVE.prix = rows
-      .filter(function(r){ return r[0] && r[2]; })
+      .filter(function(r){ return r[0] && (r[2]||r[3]); })
       .map(function(r){
         return {
           date: r[0]||'',
@@ -4021,16 +4052,16 @@ function buildSidebar(){
     +'<span style="font-size:12px;color:#88aa88">'+(ONLINE?'🟢 Connecté':'🔴 Hors ligne')+'</span>'
     +'<span onclick="toggleLight()" style="cursor:pointer;font-size:12px;color:#88aa88;padding:4px 8px;border:1px solid #2a4a2a;border-radius:8px">'+(LIGHT_MODE?'🌙 Sombre':'☀️ Clair')+'</span>'
     +'</div>'
-    +((u==='fondateur'||u==='fallou')
+    +((u==='fondateur'||u==='fallou'||u==='rga')
       ? '<div style="background:#0f1a0f;border-radius:8px;padding:8px 10px;margin-bottom:8px;border:1px solid #1a3a1a">'
-        +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
-        +'<span style="font-size:11px;color:#88aa88;white-space:nowrap">⏱ Durée cycle</span>'
-        +'<div style="display:flex;align-items:center;gap:6px;flex:1;justify-content:flex-end">'
-        +[4,6,8,10,12].map(function(v){
-          var sel=(CYCLE.dureeMois||8)===v;
-          return '<button onclick="event.stopPropagation();CYCLE.dureeMois='+v+';lsSet(\'cycle\',CYCLE);r()" style="padding:4px 8px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid '+(sel?'#2d6a2d':'#2a4a2a')+';background:'+(sel?'#2d6a2d':'transparent')+';color:'+(sel?'#fff':'#88aa88')+'">'+v+'m</button>';
-        }).join('')
-        +'</div></div>'
+        +'<div style="font-size:11px;color:#88aa88;margin-bottom:6px">⏱ Durée du cycle réel</div>'
+        +'<div style="display:flex;align-items:center;gap:8px">'
+        +'<input id="sb-duree-inp" type="number" min="1" max="60" value="'+(CYCLE.dureeMois||8)+'"'
+        +' style="flex:1;padding:8px 6px;font-size:16px;font-weight:700;border-radius:7px;border:1px solid #2a4a2a;background:#0a150a;color:#eee;text-align:center">'
+        +'<button onclick="event.stopPropagation();var v=parseInt(document.getElementById(\'sb-duree-inp\').value);updateDureeMois(v)"'
+        +' style="padding:8px 14px;font-size:13px;font-weight:700;border-radius:7px;border:1px solid #2d6a2d;background:#2d6a2d;color:#fff;cursor:pointer">OK</button>'
+        +'</div>'
+        +'<div style="font-size:10px;color:#445544;margin-top:4px">Actuellement : '+(CYCLE.dureeMois||8)+' mois — modif. synchro sur tous les appareils</div>'
         +'</div>'
       : '')
     +'<div style="background:#0f1a0f;border-radius:8px;padding:8px 10px;margin-bottom:8px;border:1px solid #1a3a1a">'
