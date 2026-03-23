@@ -121,6 +121,8 @@ Toutes les feuilles de saisie ont le même format :
 - **Lignes 1-3** : En-têtes, titres, légendes (formatés, ne pas toucher)
 - **Ligne 4+** : Données (`TABLE_RANGES.start = 4`)
 
+> **Exception reset cycle** : `Stock_Nourriture`, `Incidents`, `Sante_Mortalite` ont une ligne 4 protégée — le reset vide à partir de **A5** pour ces trois onglets uniquement.
+
 ```
 | Ligne 1 | Titre fusionné                    |
 | Ligne 2 | En-têtes colonnes                 |
@@ -144,7 +146,7 @@ Toutes les feuilles de saisie ont le même format :
 | Fondateur | `KPI_Hebdo` | Sem, Date, Betes, GMQ, Stock, Incidents, Poids |
 | Fondateur | `Config_Passwords` | role, pwd_base64, updated_at, login_override |
 | Fondateur | `Config_Cycle` | Clé, Valeur (une config par ligne, A1 format) |
-| Fallou + Fondateur | `Suivi_Marche` | Date, Foirail, Bas, Moy, Haut, Vol, Note |
+| Fallou + Fondateur | `Suivi_Marche` | Date, Foirail, Bas, Moy, Haut (validation bas≤moy≤haut — écriture A:E uniquement) |
 
 ---
 
@@ -193,7 +195,8 @@ Toutes les feuilles de saisie ont le même format :
 | `kpiAppend(vals)` | Écriture KPI_Mensuels (SID.fondateur) |
 | `loadLiveData()` | Charge données réelles depuis Sheets (3 vagues) |
 | `buildHistoryFromSheets(...)` | Construit HISTORY depuis 7 onglets Sheets |
-| `loadPrix()` | Charge suivi marché depuis Sheets |
+| `loadPrix()` | Charge suivi marché depuis Sheets (`Suivi_Marche!A4:J500`, filtre bas ou moy présent) |
+| `updateDureeMois(v)` | Met à jour `CYCLE.dureeMois` localement ET réécrit `Config_Cycle!A1:O1` dans les 4 sheets |
 
 ### Fonctions utilitaires
 
@@ -277,6 +280,8 @@ body.light .tab.on  { border-bottom-color: #fff; }
 7. **Détection thème** — `document.body.classList.contains('light')` toujours
 8. **Jamais `/35` hardcodé** — toujours `Math.round((CYCLE.dureeMois||8)*4.33)` = total semaines cycle
 9. **Gérant reçoit `SID_FONDATEUR`** — `writeAll` écrit dans les deux sheets simultanément
+10. **Messages succès** — préfixe `ok:` obligatoire (`S.msg='ok:✅ texte'`) — `msgHtml()` détecte avec `S.msg.indexOf('ok:')===0`
+11. **Validation stock** — `addStockLigne('consommer')` vérifie `dispo = calcStockParAliment()[type] + pendingNet` avant d'accepter
 
 ### Bonnes pratiques
 

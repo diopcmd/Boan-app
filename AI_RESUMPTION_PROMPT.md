@@ -10,9 +10,9 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 
 - **Production** : https://boan-app-ur3x.vercel.app
 - **GitHub** : https://github.com/diopcmd/Boan-app (branche `main`)
-- **Dossier local** : `C:\Users\sg54378\Downloads\Boan-app\`
+- **Dossier local** : `C:\Temp\Boan-app\`
 - **Langue** : Tout en français (code, UI, communications)
-- **Dernier commit** : `71e3354` — fix: reset cycle vide _lastSyncTS, _lastFondVisitTS, MOCK._tresoFromSante
+- **Dernier commit** : `3ea8929` — fix: bugs marché prix + durée cycle réel sidebar synchro tous sheets
 
 ---
 
@@ -20,7 +20,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 
 | Couche | Technologie |
 |---|---|
-| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~5179 lignes) |
+| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~5273 lignes) |
 | Backend | Vercel Serverless Functions (ES Module `export default async function handler`) |
 | Auth | Session token custom HMAC-SHA256 (`base64(payload).hmac_hex`), 8h |
 | Données | Google Sheets API v4 via Service Account RS256 JWT |
@@ -148,6 +148,23 @@ Fusionne 7 onglets Sheets avec HISTORY local. Déduplication par clé `type|date
 
 ## Patterns critiques
 
+### updateDureeMois — synchro durée cycle
+
+```js
+// Modifie CYCLE.dureeMois localement ET réécrit Config_Cycle!A1:O1 dans les 4 sheets
+// Disponible fondateur / rga / fallou depuis la sidebar
+// Même effet que saveCycle() sur ce seul paramètre
+function updateDureeMois(v) { /* v = 1–60 */ }
+```
+
+### msgHtml — convention préfixe ok:
+
+```js
+// Succès : S.msg = 'ok:✅ texte affiché'   → détecté avec S.msg.indexOf('ok:')===0
+// Erreur  : S.msg = 'err:texte erreur'       → affiché en rouge après .replace('err:','')
+// Chargement : S.msg = 'load'
+```
+
 ### appendRow — read-then-PUT
 
 ```js
@@ -207,12 +224,12 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 - Onglet Bêtes : `poidsFinal` calculé dans les 2 branches (LIVE + démo)
 
 ### Sidebar
-- Durée cycle : boutons compacts 4/6/8/10/12 mois sur une ligne
+- Durée cycle : champ libre (1–60 mois) + bouton **✓ Valider** — disponible fondateur/rga/fallou — appelle `updateDureeMois(v)` qui synchro `Config_Cycle!A1:O1` dans les 4 sheets
 - Rappel pesée : boutons compacts 7/14/21/30j sur une ligne
 
 ### Reset cycle
 - Réinitialise : HISTORY, STOCK_MVTS, LIVE, MOCK, _lastSyncTS, _lastFondVisitTS, MOCK._tresoFromSante
-- Vide tous les onglets Sheets (lignes 4+) gérant + fondateur
+- Vide les onglets Sheets depuis : **A4** (Fiche_Quotidienne, SOP_Check, Pesees, Hebdomadaire, KPI_*) | **A5** (Stock_Nourriture, Incidents, Sante_Mortalite — ligne 4 protégée)
 - Recharge CYCLE depuis Config_Cycle Sheets après reset
 
 ### Marché
@@ -226,17 +243,15 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 
 | Commit | Description |
 |---|---|
+| `3ea8929` | fix: bugs marché prix + durée cycle réel sidebar synchro sheets fondateur/rga/fallou |
+| `d6a0cc8` | feat: saisie libre durée cycle simulateur + reset A4→A5 Stock/Incidents/Sante |
+| `462b641` | fix: message soumission, validation conso stock, cohérence net, alerte par aliment |
+| `6f8cfb2` | fix: stock fondateur — Vague1 sidGerant\|\|sidFondateur + Vague2 reconstruit STOCK_MVTS |
+| `d7a8a4b` | fix: STOCK_MVTS reconstitué depuis Sheets pour le fondateur à chaque login |
+| `5588542` | docs: mise à jour AI_RESUMPTION_PROMPT + README |
 | `71e3354` | fix: reset cycle vide _lastSyncTS, _lastFondVisitTS, MOCK._tresoFromSante |
 | `e601921` | ux: sidebar durée cycle + rappel pesée compacts sur une ligne |
 | `03e5df9` | ux: bouton rapport WhatsApp dans dashboard + pré-remplissage fiche OUI/NON |
 | `62cccb0` | ux: header fondateur épuré — timestamp en tooltip, badge dans ☰ |
-| `ec8490c` | fix: poidsFinal fallback gmq robuste |
-| `8182e7e` | fix: poidsFinal non défini onglet Bêtes (branche LIVE) |
-| `7232ed9` | feat: timestamp synchro, badge nouveaux, rapport jour WhatsApp, tréso santé |
-| `3c68d5d` | fix: vercel.json rewrite SPA sans bloquer /api/ |
-| `b2a483b` | fix: _nowDakar fallback UTC+0 + try/catch r() anti page-verte |
-| `dfb0711` | fix: reset cycle vide tous les onglets Sheets |
-| `5a1f622` | fix: sync immédiate login, auto-refresh 5min, MOCK.incidents |
-| `c443b63` | fix: Vague2 sidGerant, bilans hebdo non filtrés |
 | `133cada` | fix: tous /35 → CYCLE.dureeMois dynamique |
 | `62ebeb1` | feat: sync Sheets temps réel, auth multi-SID |

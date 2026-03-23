@@ -63,7 +63,7 @@ Interface de pilotage à distance multi-rôles : direction, gérant terrain, RGA
 
 ```
 Boan-app/
-├── index.html              SPA complète (HTML + CSS + JS inline, ~4970 lignes)
+├── index.html              SPA complète (HTML + CSS + JS inline, ~5273 lignes)
 ├── vercel.json             Rewrites /api/*
 ├── api/
 │   ├── auth.js             Login multi-rôle + SID multi-sheet par rôle
@@ -187,9 +187,14 @@ vercel dev
 
 | Commit | Description |
 |---|---|
-| `62ebeb1` | Auth multi-SID, loadLiveData 3-vagues, buildHistoryFromSheets, badge LIVE/MOCK, bouton Actualiser |
-| `6ddec0a` | `ficheDejaSoumise()` vérifie HISTORY (plus seulement localStorage) |
-| `02f9275` | Gérant reçoit `SID_FONDATEUR` — fondateur voit les soumissions gérant |
-| `a42c5e1` | `buildHistoryFromSheets` lit 7 onglets (SOP_Check, Stock_Nourriture inclus), filtre par clé |
-| `670c2a3` | Sidebar fondateur : bêtes/GMQ dynamiques, bilan dynamique, incidents semaine entière |
-| `133cada` | Tous les `/35` hardcodés → `CYCLE.dureeMois` dynamique (durée cycle configurable) |
+| `3ea8929` | fix: bugs marché prix + durée cycle réel sidebar synchro tous sheets (fondateur/rga/fallou) |
+| `d6a0cc8` | feat: saisie libre durée cycle simulateur + reset A4→A5 pour Stock/Incidents/Sante |
+| `462b641` | fix: message soumission, validation conso stock, cohérence net formule, alerte par aliment |
+| `6f8cfb2` | fix: stock fondateur — Vague1 lit sidGerant\|\|sidFondateur + Vague2 reconstruit STOCK_MVTS |
+| `d7a8a4b` | fix: STOCK_MVTS reconstitué depuis Sheets pour le fondateur à chaque login |
+| `5588542` | docs: mise à jour AI_RESUMPTION_PROMPT + README (URL prod, nouvelles features) |
+| `71e3354` | fix: reset cycle vide _lastSyncTS, _lastFondVisitTS, MOCK._tresoFromSante |
+| `e601921` | ux: sidebar durée cycle + rappel pesée compacts sur une ligne |
+| `03e5df9` | ux: bouton rapport WhatsApp dans dashboard + pré-remplissage fiche OUI/NON |
+| `62ebeb1` | feat: Auth multi-SID, loadLiveData 3-vagues, buildHistoryFromSheets |
+| `133cada` | fix: tous les `/35` hardcodés → `CYCLE.dureeMois` dynamique |
