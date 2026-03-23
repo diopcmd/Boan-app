@@ -1161,11 +1161,16 @@ function loadLiveData() {
 
   step1.then(function() {
     // ── ÉTAPE 2 — Vague 1 critique (parallèle, ~1 seconde) ──
+    // Pour Pesees, Stock_Nourriture et Sante_Mortalite :
+    // → essayer sidGerant d'abord, puis sidFondateur en fallback.
+    // Le gérant écrit dans les deux sheets via writeAll, donc les données
+    // sont toujours disponibles dans au moins l'un des deux.
+    var sidDataSource = sidGerant || sidFondateur;
     return Promise.all([
-      sidGerant   ? readSheet(sidGerant,   'Pesees!A4:G200')           : Promise.resolve(null),
-      sidGerant   ? readSheet(sidGerant,   'Stock_Nourriture!A4:F200') : Promise.resolve(null),
-      sidFondateur ? readSheet(sidFondateur, 'KPI_Mensuels!A4:K50')   : Promise.resolve(null),
-      sidGerant   ? readSheet(sidGerant,   'Sante_Mortalite!A4:G200') : Promise.resolve(null),
+      sidDataSource  ? readSheet(sidDataSource,  'Pesees!A4:G200')           : Promise.resolve(null),
+      sidDataSource  ? readSheet(sidDataSource,  'Stock_Nourriture!A4:F200') : Promise.resolve(null),
+      sidFondateur   ? readSheet(sidFondateur,   'KPI_Mensuels!A4:K50')      : Promise.resolve(null),
+      sidDataSource  ? readSheet(sidDataSource,  'Sante_Mortalite!A4:G200')  : Promise.resolve(null),
     ]).then(function(results) {
       var rowsPesees = results[0];
       var rowsStock  = results[1];
@@ -1295,6 +1300,23 @@ function loadLiveData() {
         var pesees    = (hist[4] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
         var sops      = (hist[5] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
         var stocks    = (hist[6] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
+        // Sécurité : si STOCK_MVTS est vide (Vague 1 n'a pas pu le reconstruire),
+        // le reconstruire maintenant depuis les données de la Vague 2
+        if ((!STOCK_MVTS || STOCK_MVTS.length === 0 || S.user === 'fondateur') && stocks.length > 0) {
+          var cycleDebut2 = CYCLE.dateDebut || todayISO();
+          STOCK_MVTS = [];
+          stocks.forEach(function(row) {
+            if (!row[0] || !row[1]) return;
+            var kgRow2 = parseFloat(row[2]);
+            if (isNaN(kgRow2)) return;
+            STOCK_MVTS.push({
+              date: row[0], type: row[1],
+              mode: kgRow2 >= 0 ? 'ajouter' : 'consommer',
+              kg: Math.abs(kgRow2), cycleDebut: cycleDebut2
+            });
+          });
+          saveMvts();
+        }
         buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops, stocks);
         _lastSyncTS = Date.now(); // ✓ marquer le moment de la synchro réussie
         r(); // → sidebar et alertes se mettent à jour
