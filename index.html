@@ -1218,7 +1218,8 @@ function loadLiveData() {
           if (semCalc >= 0 && semCalc <= 52) {
             MOCK.stock = semCalc;
             // Reconstituer STOCK_MVTS depuis Sheets si localStorage vide (nouveau téléphone)
-            if (!STOCK_MVTS || STOCK_MVTS.length === 0) {
+            // ou si fondateur (pour qu'il voit toujours les mouvements réels du gérant)
+            if (!STOCK_MVTS || STOCK_MVTS.length === 0 || S.user === 'fondateur') {
               var cycleDebut = CYCLE.dateDebut || todayISO();
               STOCK_MVTS = [];
               rowsStock.forEach(function(row) {
