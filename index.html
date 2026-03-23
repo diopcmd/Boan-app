@@ -4056,10 +4056,9 @@ function buildSidebar(){
       ? '<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0 8px">'
         +'<span style="font-size:11px;color:#88aa88">\u23f1 Dur\u00e9e cycle</span>'
         +'<div style="display:flex;align-items:center">'
-        +'<button onclick="event.stopPropagation();var el=document.getElementById(\'sb-duree-inp\');el.value=Math.max(1,(parseInt(el.value)||'+(CYCLE.dureeMois||8)+')-1)" style="width:28px;height:28px;font-size:18px;line-height:1;border-radius:6px 0 0 6px;background:#1a2e1a;border:1px solid #2a4a2a;border-right:none;color:#C8A06A;cursor:pointer">&#8722;</button>'
-        +'<input id="sb-duree-inp" type="number" min="1" max="60" value="'+(CYCLE.dureeMois||8)+'" style="width:38px;height:28px;text-align:center;font-size:13px;font-weight:700;border:1px solid #2a4a2a;border-left:none;border-right:none;background:#0a150a;color:#eee">'
-        +'<button onclick="event.stopPropagation();var el=document.getElementById(\'sb-duree-inp\');el.value=Math.min(60,(parseInt(el.value)||'+(CYCLE.dureeMois||8)+')+1)" style="width:28px;height:28px;font-size:18px;line-height:1;border-radius:0 6px 6px 0;background:#1a2e1a;border:1px solid #2a4a2a;border-left:none;color:#C8A06A;cursor:pointer">&#43;</button>'
-        +'<button onclick="event.stopPropagation();updateDureeMois(parseInt(document.getElementById(\'sb-duree-inp\').value))" style="margin-left:6px;padding:4px 8px;font-size:11px;font-weight:700;border-radius:6px;border:1px solid #2d6a2d;background:#2d6a2d;color:#fff;cursor:pointer">\u2713</button>'
+        +'<button onclick="event.stopPropagation();updateDureeMois(Math.max(1,'+(CYCLE.dureeMois||8)+'-1))" style="width:30px;height:30px;font-size:18px;line-height:1;border-radius:6px 0 0 6px;background:#1a2e1a;border:1px solid #2a4a2a;border-right:none;color:#C8A06A;cursor:pointer">&#8722;</button>'
+        +'<div style="min-width:44px;height:30px;display:flex;align-items:center;justify-content:center;background:#0a150a;border-top:1px solid #2a4a2a;border-bottom:1px solid #2a4a2a;font-size:14px;font-weight:800;color:#eee">'+(CYCLE.dureeMois||8)+'m</div>'
+        +'<button onclick="event.stopPropagation();updateDureeMois(Math.min(60,'+(CYCLE.dureeMois||8)+'+1))" style="width:30px;height:30px;font-size:18px;line-height:1;border-radius:0 6px 6px 0;background:#1a2e1a;border:1px solid #2a4a2a;border-left:none;color:#C8A06A;cursor:pointer">&#43;</button>'
         +'</div></div>'
       : '')
     +'<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0 0">'
