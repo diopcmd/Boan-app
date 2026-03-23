@@ -196,7 +196,9 @@ Toutes les feuilles de saisie ont le même format :
 | `loadLiveData()` | Charge données réelles depuis Sheets (3 vagues) |
 | `buildHistoryFromSheets(...)` | Construit HISTORY depuis 7 onglets Sheets |
 | `loadPrix()` | Charge suivi marché depuis Sheets (`Suivi_Marche!A4:J500`, filtre bas ou moy présent) |
-| `updateDureeMois(v)` | Met à jour `CYCLE.dureeMois` localement ET réécrit `Config_Cycle!A1:O1` dans les 4 sheets |
+| `_syncCycle()` | Réécrit `Config_Cycle!A1:O1` dans les 4 sheets disponibles (helper partagé) |
+| `updateDureeMois(v)` | Met à jour `CYCLE.dureeMois` + appelle `_syncCycle()` |
+| `updatePeseeFreq(v)` | Met à jour `CYCLE.peseeFreq` + appelle `_syncCycle()` |
 
 ### Fonctions utilitaires
 
@@ -282,6 +284,7 @@ body.light .tab.on  { border-bottom-color: #fff; }
 9. **Gérant reçoit `SID_FONDATEUR`** — `writeAll` écrit dans les deux sheets simultanément
 10. **Messages succès** — préfixe `ok:` obligatoire (`S.msg='ok:✅ texte'`) — `msgHtml()` détecte avec `S.msg.indexOf('ok:')===0`
 11. **Validation stock** — `addStockLigne('consommer')` vérifie `dispo = calcStockParAliment()[type] + pendingNet` avant d'accepter
+12. **Sync CYCLE** — toute modification de `CYCLE.dureeMois` ou `CYCLE.peseeFreq` doit passer par `updateDureeMois()` / `updatePeseeFreq()` (ou `_syncCycle()`) pour être visible par tous les acteurs. Ne jamais faire `CYCLE.x=v;lsSet('cycle',CYCLE)` seul pour ces champs.
 
 ### Bonnes pratiques
 

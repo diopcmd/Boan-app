@@ -12,7 +12,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 - **GitHub** : https://github.com/diopcmd/Boan-app (branche `main`)
 - **Dossier local** : `C:\Temp\Boan-app\`
 - **Langue** : Tout en français (code, UI, communications)
-- **Dernier commit** : `3ea8929` — fix: bugs marché prix + durée cycle réel sidebar synchro tous sheets
+- **Dernier commit** : `sync-peseeFreq` — fix: peseeFreq sidebar synchro Sheets via _syncCycle + refactor updateDureeMois
 
 ---
 
@@ -20,7 +20,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 
 | Couche | Technologie |
 |---|---|
-| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~5273 lignes) |
+| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~5278 lignes) |
 | Backend | Vercel Serverless Functions (ES Module `export default async function handler`) |
 | Auth | Session token custom HMAC-SHA256 (`base64(payload).hmac_hex`), 8h |
 | Données | Google Sheets API v4 via Service Account RS256 JWT |
@@ -148,6 +148,17 @@ Fusionne 7 onglets Sheets avec HISTORY local. Déduplication par clé `type|date
 
 ## Patterns critiques
 
+### _syncCycle / updateDureeMois / updatePeseeFreq
+
+```js
+// _syncCycle() = helper partagé : réécrit Config_Cycle!A1:O1 dans les 4 sheets
+// Champs CYCLE synchronisés automatiquement : dateDebut, nbBetes, poidsDepart,
+//   race, ration, capital, objectifPrix, budgetSante, veterinaire, foirail,
+//   commission, contactUrgence, peseeFreq, betes[], stockLines[]
+// dureeMois est inclus implicitement via CYCLE.dureeMois au moment de l'appel
+// Règle : ne JAMAIS faire `CYCLE.peseeFreq=v;lsSet('cycle',CYCLE)` sans appeler _syncCycle()
+```
+
 ### updateDureeMois — synchro durée cycle
 
 ```js
@@ -224,8 +235,9 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 - Onglet Bêtes : `poidsFinal` calculé dans les 2 branches (LIVE + démo)
 
 ### Sidebar
-- Durée cycle : champ libre (1–60 mois) + bouton **✓ Valider** — disponible fondateur/rga/fallou — appelle `updateDureeMois(v)` qui synchro `Config_Cycle!A1:O1` dans les 4 sheets
-- Rappel pesée : boutons compacts 7/14/21/30j sur une ligne
+- **Durée cycle** : champ libre (1–60 mois) + bouton OK — fondateur/rga/fallou — `updateDureeMois(v)` → `_syncCycle()`
+- **Rappel pesée** : boutons compacts 7/14/21/30j — tous rôles — `updatePeseeFreq(v)` → `_syncCycle()`
+- Les deux champs synchronisent `Config_Cycle!A1:O1` dans les 4 sheets — tous les acteurs verront la nouvelle valeur au prochain `loadLiveData`
 
 ### Reset cycle
 - Réinitialise : HISTORY, STOCK_MVTS, LIVE, MOCK, _lastSyncTS, _lastFondVisitTS, MOCK._tresoFromSante
@@ -243,7 +255,9 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 
 | Commit | Description |
 |---|---|
-| `3ea8929` | fix: bugs marché prix + durée cycle réel sidebar synchro sheets fondateur/rga/fallou |
+| `sync-peseeFreq` | fix: peseeFreq sidebar synchro Sheets via _syncCycle + refactor updateDureeMois |
+| `5245263` | ux: sidebar durée cycle compact (input inline + OK) |
+| `e34c505` | docs: mise à jour docs + chemin local + ligne count |
 | `d6a0cc8` | feat: saisie libre durée cycle simulateur + reset A4→A5 Stock/Incidents/Sante |
 | `462b641` | fix: message soumission, validation conso stock, cohérence net, alerte par aliment |
 | `6f8cfb2` | fix: stock fondateur — Vague1 sidGerant\|\|sidFondateur + Vague2 reconstruit STOCK_MVTS |

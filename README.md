@@ -63,7 +63,7 @@ Interface de pilotage à distance multi-rôles : direction, gérant terrain, RGA
 
 ```
 Boan-app/
-├── index.html              SPA complète (HTML + CSS + JS inline, ~5273 lignes)
+├── index.html              SPA complète (HTML + CSS + JS inline, ~5278 lignes)
 ├── vercel.json             Rewrites /api/*
 ├── api/
 │   ├── auth.js             Login multi-rôle + SID multi-sheet par rôle
@@ -187,6 +187,7 @@ vercel dev
 
 | Commit | Description |
 |---|---|
+| `e34c505` | docs: mise à jour docs + chemin local + ligne count |
 | `3ea8929` | fix: bugs marché prix + durée cycle réel sidebar synchro tous sheets (fondateur/rga/fallou) |
 | `d6a0cc8` | feat: saisie libre durée cycle simulateur + reset A4→A5 pour Stock/Incidents/Sante |
 | `462b641` | fix: message soumission, validation conso stock, cohérence net formule, alerte par aliment |

@@ -1708,15 +1708,9 @@ function _submitActual(type) {
 }
 
 
-// ── DURÉE CYCLE RÉEL (sidebar) — synchro Sheets ──
-function updateDureeMois(v) {
-  v = parseInt(v);
-  if (isNaN(v) || v < 1 || v > 60) return;
-  CYCLE.dureeMois = v;
-  lsSet('cycle', CYCLE);
-  r();
-  // Écrire dans Config_Cycle!A1:O1 (colonne O = index 14, dureeMois = colonne A = index 0)
-  // On réécrit toute la ligne pour ne rien écraser
+// ── SYNC CONFIG_CYCLE → SHEETS (fondateur/rga/fallou/gérant) ──
+// Écrit toute la ligne Config_Cycle!A1:O1 dans les 4 sheets disponibles
+function _syncCycle() {
   getTok().then(function(tk) {
     if (!tk) return;
     var vals = [
@@ -1732,6 +1726,16 @@ function updateDureeMois(v) {
       fetch(url, {method:'PUT', headers:{Authorization:'Bearer '+tk,'Content-Type':'application/json'}, body:JSON.stringify({values:[vals]})});
     });
   });
+}
+function updateDureeMois(v) {
+  v = parseInt(v);
+  if (isNaN(v) || v < 1 || v > 60) return;
+  CYCLE.dureeMois = v; lsSet('cycle', CYCLE); r(); _syncCycle();
+}
+function updatePeseeFreq(v) {
+  v = parseInt(v);
+  if (isNaN(v) || v <= 0) return;
+  CYCLE.peseeFreq = v; lsSet('cycle', CYCLE); r(); _syncCycle();
 }
 
 // ── MODE CLAIR / SOMBRE ──
@@ -4071,7 +4075,7 @@ function buildSidebar(){
     +'<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">'
     +[7,14,21,30].map(function(v){
       var sel=(CYCLE.peseeFreq||30)===v;
-      return '<button onclick="event.stopPropagation();CYCLE.peseeFreq='+v+';lsSet(\'cycle\',CYCLE);r()" style="padding:4px 8px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid '+(sel?'#2d6a2d':'#2a4a2a')+';background:'+(sel?'#2d6a2d':'transparent')+';color:'+(sel?'#fff':'#88aa88')+'">'+v+'j</button>';
+      return '<button onclick="event.stopPropagation();updatePeseeFreq('+v+')" style="padding:4px 8px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid '+(sel?'#2d6a2d':'#2a4a2a')+';background:'+(sel?'#2d6a2d':'transparent')+';color:'+(sel?'#fff':'#88aa88')+'">'+v+'j</button>';
     }).join('')
     +'</div></div>'
     +'</div>'
