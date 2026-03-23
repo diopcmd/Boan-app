@@ -1634,7 +1634,8 @@ function _submitActual(type) {
     // Écrire dans Sheets : une ligne par mouvement
     var sheetsPromises = mvts.map(function(m){
       var kgSheet = m.mode === 'consommer' ? -m.kg : m.kg;
-      return writeAll([SID.gerant,SID.fondateur],'Stock_Nourriture!A:F',[td,m.type,kgSheet,rat,sem,parseFloat(sem)<6?'OUI':'NON']);
+      var semType = rat>0 ? (Math.max(0,netParType[m.type]||0)/(rat*7)).toFixed(1) : 0;
+      return writeAll([SID.gerant,SID.fondateur],'Stock_Nourriture!A:F',[td,m.type,kgSheet,rat,semType,parseFloat(semType)<6?'OUI':'NON']);
     });
     if(sheetsPromises.length === 0) sheetsPromises = [Promise.resolve({ok:true})];
     p = Promise.all(sheetsPromises)
@@ -1949,7 +1950,7 @@ function ynPick(cid, obj, k, val) {
 function msgHtml(){
   if(!S.msg)return'';
   if(S.msg==='load')return'<div class="msg-load">'+(S._sendSheet?'📤 Envoi vers '+S._sendCount+' sheet(s) ('+S._sendSheet+')...':'📤 Envoi en cours...')+'</div>';
-  if(S.msg==='ok')return'<div class="msg-ok">Enregistre dans Google Sheets !</div>';
+  if(S.msg.indexOf('ok:')===0)return'<div class="msg-ok">'+S.msg.replace('ok:','')+'</div>';
   return'<div class="msg-err">Erreur : '+S.msg.replace('err:','')+'</div>';
 }
 
@@ -2250,6 +2251,14 @@ function addStockLigne(mode){
   if (k <= 0) { S.msg = 'err:Quantité doit être > 0'; r(); return; }
 
   if (!S.fst.mvts) S.fst.mvts = [];
+  if (mode === 'consommer') {
+    var stockParT = calcStockParAliment();
+    var pendingNet = S.fst.mvts.reduce(function(s, mv) {
+      return mv.type === t ? s + (mv.mode === 'ajouter' ? mv.kg : -mv.kg) : s;
+    }, 0);
+    var dispo = Math.max(0, (stockParT[t] || 0) + pendingNet);
+    if (k > dispo) { S.msg = 'err:Stock insuffisant pour '+t+' (dispo\u00a0: '+dispo+'\u00a0kg)'; r(); return; }
+  }
 
   // Sauvegarder le type dans CYCLE.alimentTypes pour suggestions futures
   if (!CYCLE.alimentTypes) CYCLE.alimentTypes = [];
@@ -4353,7 +4362,7 @@ function viewSaisie(){
         var tableBody = allTypes.length === 0
           ? '<tr><td colspan="4" style="padding:14px 8px;text-align:center;color:#88aa88;font-size:12px">Aucun mouvement enregistré pour ce cycle.<br>Utilisez les boutons Ajouter / Consommer puis Enregistrer.</td></tr>'
           : allTypes.map(function(t){
-              var a = ajouts[t]||0, c = consos[t]||0, net = a - c;
+              var a = ajouts[t]||0, c = consos[t]||0, net = Math.max(0, a - c);
               return '<tr style="border-bottom:1px solid #1a2e1a">'
                 +'<td style="padding:7px 8px;font-size:13px">'+t+'</td>'
                 +'<td style="padding:7px 8px;text-align:right;color:#4caf50;font-weight:700">'+(a>0?'+'+a+' kg':'—')+'</td>'
