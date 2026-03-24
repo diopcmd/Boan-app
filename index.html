@@ -1181,7 +1181,19 @@ function loadLiveData() {
           try { if (row[13]) updates.betes      = JSON.parse(row[13]); } catch(e) {}
           try { if (row[14]) updates.stockLines = JSON.parse(row[14]); } catch(e) {}
           if (row[15]) updates.dureeMois      = parseInt(row[15])  || CYCLE.dureeMois; // col P
+          // Détection changement de cycle — wipe immédiat sur l'appareil des autres acteurs
+          var _prevDateDebut = CYCLE.dateDebut;
           Object.assign(CYCLE, updates);
+          if (updates.dateDebut && _prevDateDebut && updates.dateDebut !== _prevDateDebut) {
+            // Nouveau cycle détecté par un acteur non-fondateur (ou fondateur après sync)
+            HISTORY = []; lsSet('history', []);
+            LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = [];
+            CYCLE._lastFicheDate=''; CYCLE._lastSopDate=''; CYCLE._lastStockDate='';
+            CYCLE._lastPeseeDate=''; CYCLE._lastIncDate=''; CYCLE._lastSanteDate='';
+            CYCLE._lastBilanSem=''; MOCK.incidents=0;
+            STOCK_MVTS=[]; saveMvts();
+            lsSet('cycle', CYCLE);
+          }
         }
 
         // ── Config_App (clé-valeur extensible) ──
@@ -4740,12 +4752,9 @@ function viewSaisie(){
   } else if(S.sub==='inc'){
     var f=S.fin; if(!f.date)f.date=td;
     var prog=formProgress(countFilled([f.date,f.id,f.type,f.desc]),4);
+    var _incCount=(function(){ var t=today(); return HISTORY.filter(function(h){return h.type==='inc'&&h.date===t;}).length; })();
     form='<div class="card">'+prog
-      +calBadge(
-        bilanDejaFaitCetteSemaine(),
-        bilanDejaFaitCetteSemaine() ? 'Bilan du '+today()+' déjà envoyé' : 'À saisir aujourd\'hui — 1 seul par jour',
-        'resetBilan()'
-      )
+      +(_incCount>0?'<div class="al al-o" style="margin-bottom:8px">'+_incCount+' incident(s) saisi(s) aujourd\'hui — vous pouvez en ajouter un autre</div>':'')
       +'<div class="frow">'
       +fl('Date','<input type="date" value="'+f.date+'" oninput="S.fin.date=this.value">',f.date)
       +beteDropdown(f.id, 'S.fin.id', '')
@@ -4801,12 +4810,19 @@ function viewSaisie(){
   } else if(S.sub==='pesee'){
     var f=S.fp; if(!f.date)f.date=td;
 
-    // Auto-remplissage depuis LIVE quand l'ID est saisi
+    // Reset si l'ID a changé — AVANT l'auto-fill, pour vider les champs de l'ancienne bête
+    if (!f._autoFilledId) { f._autoFilledId = ''; S.fp._autoFilledId = ''; }
+    if (f._autoFilledId !== f.id) {
+      f.prev = ''; S.fp.prev = '';
+      f.datePrev = ''; S.fp.datePrev = '';
+      f.race = ''; S.fp.race = '';
+      f._autoFilled = false; S.fp._autoFilled = false;
+      f._autoFilledId = f.id; S.fp._autoFilledId = f.id;
+    }
+    // Auto-remplissage depuis LIVE quand l'ID est saisi (après le reset)
     if (f.id && LIVE.loaded && !f._autoFilled) {
-      // Trouver la dernière pesée de cette bête
       var poseesId = LIVE.pesees.filter(function(p){ return p.id === f.id; });
       if (poseesId.length > 0) {
-        // Trier par date desc, prendre la plus récente
         poseesId.sort(function(a,b){
           var da=a.date.split('/'), db=b.date.split('/');
           if(da.length===3&&db.length===3){
@@ -4815,19 +4831,11 @@ function viewSaisie(){
           return 0;
         });
         var derniere = poseesId[0];
-        if (!f.prev && derniere.poids) { f.prev = String(derniere.poids); S.fp.prev = f.prev; }
-        if (!f.datePrev && derniere.date) { f.datePrev = derniere.date.split('/').reverse().join('-'); S.fp.datePrev = f.datePrev; }
-        if (!f.race && derniere.race) { f.race = derniere.race; S.fp.race = f.race; }
-        f._autoFilled = true; S.fp._autoFilled = true;
+        if (derniere.poids) { f.prev = String(derniere.poids); S.fp.prev = f.prev; }
+        if (derniere.date) { f.datePrev = derniere.date.split('/').reverse().join('-'); S.fp.datePrev = f.datePrev; }
+        if (derniere.race) { f.race = derniere.race; S.fp.race = f.race; }
       }
-    }
-    // Reset autoFilled si l'ID change
-    if (!f._autoFilledId) { f._autoFilledId = ''; S.fp._autoFilledId = ''; }
-    if (f._autoFilledId !== f.id) {
-      S.fp._autoFilled = false;
-      S.fp._autoFilledId = f.id;
-      f._autoFilled = false;
-      f._autoFilledId = f.id;
+      f._autoFilled = true; S.fp._autoFilled = true;
     }
 
     // Calculs GMQ temps réel
