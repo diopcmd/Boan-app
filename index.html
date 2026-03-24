@@ -4705,11 +4705,14 @@ function viewSaisie(){
       +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'sop\')">Valider</button>'+msgHtml()+'</div>';
   } else if(S.sub==='stock'){
     var f=S.fst; if(!f.date)f.date=td;
-    // Pré-remplir ration depuis CYCLE si vide
-    if (!f.rat && CYCLE.ration && CYCLE.nbBetes) {
-      S.fst.rat = String(Math.round(CYCLE.ration * (CYCLE.nbBetes||4)));
-      f.rat = S.fst.rat;
+    // Synchroniser ration depuis CYCLE à chaque rendu
+    // Si le gérant n'a pas saisi de valeur différente du calcul CYCLE, on force la mise à jour
+    var _rationCycle = (CYCLE.ration && CYCLE.nbBetes)
+      ? String(Math.round(CYCLE.ration * (CYCLE.nbBetes||4))) : '';
+    if (_rationCycle && (!f.rat || f.rat === S._fstRatAuto)) {
+      S.fst.rat = _rationCycle; f.rat = _rationCycle;
     }
+    S._fstRatAuto = _rationCycle; // mémoriser la valeur auto pour détecter si l'utilisateur a changé manuellement
     if (!f.mvts) { f.mvts = []; S.fst.mvts = []; }
     // Calcul sem2 depuis stock total
     var mvts2 = f.mvts||[];
