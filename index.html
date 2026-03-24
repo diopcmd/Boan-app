@@ -4190,13 +4190,17 @@ function buildSidebar(){
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'stock\');closeSB()\' style="cursor:pointer">'
             +'<span class="sb-lbl">🌾 Stock</span>'
             +'<span class="sb-val '+(stkOk2b?'sb-ok':'sb-ko')+'">'+(stkJ2<999?'Il y a '+stkJ2+'j':'Jamais')+'</span></div>'
-            +(incNb2>0?'<div class="sb-row"><span class="sb-lbl">⚠️ Incidents</span><span class="sb-val sb-warn">'+incNb2+' auj.</span></div>':'')
+            +(incNb2>0?'<div class="sb-row" onclick="chTab(\'livrables\');chSub(\'incidents\');closeSB()" style="cursor:pointer"><span class="sb-lbl">⚠️ Incidents</span><span class="sb-val sb-warn">'+incNb2+' auj. →</span></div>':'')
             +(santeNb2>0?'<div class="sb-row"><span class="sb-lbl">💊 Santé</span><span class="sb-val sb-warn">'+santeNb2+' auj.</span></div>':'');
         })()
         +'</div>'
         +'<div class="sb-shortcut" onclick="chTab(\'livrables\');chSub(\'treso\');closeSB()">'
         +'<div class="sb-shortcut-ico" style="background:#1a2e3a">💰</div>'
         +'<div><div style="font-size:13px;font-weight:600">Trésorerie</div><div style="font-size:11px;color:#88aa88">Flux & solde</div></div>'
+        +'</div>'
+        +'<div class="sb-shortcut" onclick="chTab(\'livrables\');chSub(\'incidents\');closeSB()">'
+        +'<div class="sb-shortcut-ico" style="background:#2a1a0a">⚠️</div>'
+        +'<div><div style="font-size:13px;font-weight:600">Incidents</div><div style="font-size:11px;color:#88aa88">Gérer & clôturer</div></div>'
         +'</div>'
         +'<div class="sb-shortcut" onclick="chTab(\'livrables\');chSub(\'gonogo\');closeSB()">'
         +'<div class="sb-shortcut-ico" style="background:#2a1f0a">🎯</div>'
@@ -4920,7 +4924,7 @@ function viewSaisie(){
 }
 
 function viewLiv(){
-  var subs=[['treso','Trésorerie'],['kpi','KPI'],['betes','Bêtes'],['gonogo','Go/No-Go']];
+  var subs=[['treso','Trésorerie'],['kpi','KPI'],['betes','Bêtes'],['incidents','Incidents'],['gonogo','Go/No-Go']];
   var stabs=subs.map(function(s){return'<div class="stab '+(S.sub===s[0]?'on':'')+'" onclick="chSub(\''+s[0]+'\')">'+s[1]+'</div>';}).join('');
   var view='';
   if(S.sub==='treso'){
@@ -5127,6 +5131,79 @@ function viewLiv(){
           : '<div style="font-size:12px;color:#ff9800;margin-top:5px">→ '+( bete.poidsMin-bete.poids)+' kg manquants · encore ~'+Math.ceil((bete.poidsMin-bete.poids)/(bete.gmq||1))+' jours à ce GMQ</div>')
         +'</div>'
         +'</div>';
+    }
+  } else if(S.sub==='incidents'){
+    if (!LIVE.loaded) {
+      view = '<div class="card" style="text-align:center;padding:24px 16px"><div style="color:#88aa88;font-size:13px">⏳ Chargement des incidents…</div><div style="color:#445544;font-size:11px;margin-top:6px">Les données arrivent depuis Google Sheets</div></div>';
+    } else {
+      var ci2 = S._closeInc;
+      var gravCls2 = { '1':'kval-ok', '2':'kval-warn', '3':'kval-crit' };
+      var gravLbl  = { '1':'Mineur', '2':'Important', '3':'URGENCE' };
+      var openIncs2  = LIVE.incidents.filter(function(inc){ return inc.clos !== 'OUI'; });
+      var closedIncs = LIVE.incidents.filter(function(inc){ return inc.clos === 'OUI'; });
+
+      function renderIncRow(inc, origIdx) {
+        var closing2 = ci2 && ci2.idx === origIdx;
+        var gCl2 = gravCls2[inc.grav] || 'kval-ok';
+        return '<div style="border-bottom:1px solid #1e2e1e;padding:10px 0">'
+          +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+          +'<span style="font-size:11px;color:#88aa88;min-width:74px">'+inc.date+'</span>'
+          +'<span style="font-weight:700;color:#cfc;font-size:13px">'+inc.id+'</span>'
+          +'<span style="flex:1;color:#bbb;font-size:12px">'+inc.type+'</span>'
+          +'<span class="sb-val '+gCl2+'" style="font-size:11px">G'+inc.grav+' '+gravLbl[inc.grav]+'</span>'
+          +(inc.clos!=='OUI' ? '<button onclick="closeIncident('+origIdx+')" style="font-size:11px;padding:4px 10px;background:#1a2e1a;color:#8bc98b;border:1px solid #3a5a3a;border-radius:5px;cursor:pointer">Clôturer</button>' : '<span style="font-size:11px;color:#4caf50">✓ Clôturé</span>')
+          +'</div>'
+          +(inc.desc ? '<div style="font-size:12px;color:#99aa88;margin-top:3px">'+inc.desc+'</div>' : '')
+          +(inc.act  ? '<div style="font-size:11px;color:#6a8a6a;margin-top:2px">→ '+inc.act+'</div>' : '')
+          +(closing2
+            ? '<div style="margin-top:8px">'
+              +'<textarea rows="2" placeholder="Action effectuée (optionnel)..." '
+              +'style="width:100%;background:#1a1e1a;color:#ccc;border:1px solid #3a5a3a;border-radius:6px;padding:6px;font-size:12px;box-sizing:border-box;resize:vertical" '
+              +'oninput="S._closeInc.act=this.value">'+(ci2&&ci2.act||'')+'</textarea>'
+              +'<div style="display:flex;gap:8px;margin-top:6px">'
+              +'<button onclick="submitCloseInc()" '+(S.sending?'disabled':'')+' style="flex:1;font-size:12px;padding:7px 0;background:#2e5a1e;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700">✓ Confirmer clôture</button>'
+              +'<button onclick="S._closeInc=null;r()" style="padding:7px 12px;font-size:12px;background:#201414;color:#cc7777;border:1px solid #6a3a3a;border-radius:6px;cursor:pointer">Annuler</button>'
+              +'</div></div>'
+            : '')
+          +'</div>';
+      }
+
+      view = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+        +'<div class="stitle" style="margin-bottom:0">Incidents du cycle</div>'
+        +(LIVE.loaded?'<span style="font-size:10px;color:#4caf50">🟢 Live</span>':'')+'</div>';
+
+      if (LIVE.incidents.length === 0) {
+        view += '<div class="card"><div style="color:#66aa66;font-size:13px;padding:8px 0;text-align:center">✓ Aucun incident enregistré ce cycle</div></div>';
+      } else {
+        // ─ Incidents ouverts
+        view += '<div class="card"><div class="stitle" style="color:#ff9966">⚠️ Ouverts ('+openIncs2.length+')</div>';
+        if (openIncs2.length === 0) {
+          view += '<div style="font-size:12px;color:#66aa66;padding:6px 0">✓ Aucun incident ouvert</div>';
+        } else {
+          view += openIncs2.map(function(inc){ return renderIncRow(inc, LIVE.incidents.indexOf(inc)); }).join('');
+        }
+        view += (S.msg && ci2 !== null ? '<div style="margin-top:8px;font-size:13px">'+S.msg+'</div>' : '') + '</div>';
+
+        // ─ Incidents clôturés
+        if (closedIncs.length > 0) {
+          view += '<div class="card"><div class="stitle" style="color:#4caf50">✅ Clôturés ('+closedIncs.length+')</div>'
+            + closedIncs.map(function(inc){ return renderIncRow(inc, LIVE.incidents.indexOf(inc)); }).join('')
+            + '</div>';
+        }
+
+        // ─ Stats synthèse
+        var gravStats = {};
+        LIVE.incidents.forEach(function(inc){ gravStats[inc.grav]=(gravStats[inc.grav]||0)+1; });
+        view += '<div class="card">'
+          +'<div class="stitle">📊 Synthèse</div>'
+          +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+          +'<div style="background:#0f1f0f;border-radius:8px;padding:8px;text-align:center"><div style="font-size:22px;font-weight:800;color:#fff">'+LIVE.incidents.length+'</div><div style="font-size:10px;color:#88aa88">Total</div></div>'
+          +'<div style="background:#0f1f0f;border-radius:8px;padding:8px;text-align:center"><div style="font-size:22px;font-weight:800;color:#f44336">'+openIncs2.length+'</div><div style="font-size:10px;color:#88aa88">Ouverts</div></div>'
+          +'<div style="background:#0f1f0f;border-radius:8px;padding:8px;text-align:center"><div style="font-size:22px;font-weight:800;color:#4caf50">'+closedIncs.length+'</div><div style="font-size:10px;color:#88aa88">Clôturés</div></div>'
+          +'</div>'
+          +((gravStats['3']||0)>0 ? '<div style="margin-top:8px;padding:8px;background:#2e1010;border-radius:6px;font-size:12px;color:#f44336">🚨 '+gravStats['3']+' incident(s) URGENCE dans ce cycle</div>' : '')
+          +'</div>';
+      }
     }
   } else if(S.sub==='gonogo'){
     var ggCash  = MOCK.treso >= 600000;
