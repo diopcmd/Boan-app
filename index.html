@@ -1187,6 +1187,7 @@ function loadLiveData() {
           if (updates.dateDebut && _prevDateDebut && updates.dateDebut !== _prevDateDebut) {
             // Nouveau cycle détecté par un acteur non-fondateur (ou fondateur après sync)
             HISTORY = []; lsSet('history', []);
+            lsSet('last_fiche', null); // effacer le marqueur fiche du jour
             LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = [];
             CYCLE._lastFicheDate=''; CYCLE._lastSopDate=''; CYCLE._lastStockDate='';
             CYCLE._lastPeseeDate=''; CYCLE._lastIncDate=''; CYCLE._lastSanteDate='';
@@ -1203,13 +1204,22 @@ function loadLiveData() {
             try {
               var key = r[0]; var val = JSON.parse(r[1] || 'null');
               if (key === 'alimentTypes'  && Array.isArray(val) && val.length) CYCLE.alimentTypes   = val;
-              if (key === 'lastFicheDate' && val)  CYCLE._lastFicheDate = val;
-              if (key === 'lastSopDate'   && val)  CYCLE._lastSopDate   = val;
-              if (key === 'lastStockDate' && val)  CYCLE._lastStockDate = val;
-              if (key === 'lastPeseeDate' && val)  CYCLE._lastPeseeDate = val;
-              if (key === 'lastIncDate'   && val)  CYCLE._lastIncDate   = val;
-              if (key === 'lastSanteDate' && val)  CYCLE._lastSanteDate = val;
-              if (key === 'lastBilanSem'  && val)  CYCLE._lastBilanSem  = val;
+              // _last* : n'appliquer que si val est non-vide (une chaîne vide = cycle vient d'être réinitialisé)
+              if (key === 'lastFicheDate' && val && val.length) CYCLE._lastFicheDate = val;
+              if (key === 'lastSopDate'   && val && val.length) CYCLE._lastSopDate   = val;
+              if (key === 'lastStockDate' && val && val.length) CYCLE._lastStockDate = val;
+              if (key === 'lastPeseeDate' && val && val.length) CYCLE._lastPeseeDate = val;
+              if (key === 'lastIncDate'   && val && val.length) CYCLE._lastIncDate   = val;
+              if (key === 'lastSanteDate' && val && val.length) CYCLE._lastSanteDate = val;
+              if (key === 'lastBilanSem'  && val && val.length) CYCLE._lastBilanSem  = val;
+              // Si une clé _last* est explicitement vide → effacer localement aussi
+              if (key === 'lastFicheDate' && val === '') { CYCLE._lastFicheDate = ''; lsSet('last_fiche', null); }
+              if (key === 'lastSopDate'   && val === '') CYCLE._lastSopDate   = '';
+              if (key === 'lastStockDate' && val === '') CYCLE._lastStockDate = '';
+              if (key === 'lastPeseeDate' && val === '') CYCLE._lastPeseeDate = '';
+              if (key === 'lastIncDate'   && val === '') CYCLE._lastIncDate   = '';
+              if (key === 'lastSanteDate' && val === '') CYCLE._lastSanteDate = '';
+              if (key === 'lastBilanSem'  && val === '') CYCLE._lastBilanSem  = '';
               // dureeMois : Config_App est la source prioritaire (pas de race condition)
               if (key === 'dureeMois' && val && parseInt(val) > 0) CYCLE.dureeMois = parseInt(val);
             } catch(e) {}
@@ -1796,8 +1806,8 @@ function _submitActual(type) {
 // Écrit les variables étendues dans l'onglet Config_App (format clé-valeur)
 // L'onglet est créé automatiquement s'il n'existe pas encore
 function _syncConfigApp() {
-  if (!SID.fondateur) return;
-  getTok().then(function(tk) {
+  if (!SID.fondateur) return Promise.resolve();
+  return getTok().then(function(tk) {
     if (!tk) return;
     var sid = SID.fondateur;
     var rows = [
@@ -1809,24 +1819,22 @@ function _syncConfigApp() {
       ['lastIncDate',   JSON.stringify(CYCLE._lastIncDate    || '')],
       ['lastSanteDate', JSON.stringify(CYCLE._lastSanteDate  || '')],
       ['lastBilanSem',  JSON.stringify(CYCLE._lastBilanSem   || '')],
-      ['dureeMois',     JSON.stringify(CYCLE.dureeMois       || 8)]  // persisté ici pour éviter race condition avec Config_Cycle
+      ['dureeMois',     JSON.stringify(CYCLE.dureeMois       || 8)]
     ];
-    // addSheet silencieux : réussit si l'onglet n'existe pas, 400 ignoré s'il existe déjà
     var addUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + ':batchUpdate';
-    fetch(addUrl, {
+    return fetch(addUrl, {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
       body: JSON.stringify({ requests: [{ addSheet: { properties: { title: 'Config_App' } } }] })
     }).then(function() {
-      // Écrire (PUT = écrasement complet) les paires clé-valeur
       var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + '/values/' + encodeURIComponent('Config_App!A1') + '?valueInputOption=USER_ENTERED';
-      fetch(url, {
+      return fetch(url, {
         method: 'PUT',
         headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
         body: JSON.stringify({ values: rows })
       });
     }).catch(function(){});
-  });
+  }).catch(function(){ return Promise.resolve(); });
 }
 
 // ── SYNC CONFIG_CYCLE → SHEETS (fondateur/rga/fallou/gérant) ──
@@ -3459,6 +3467,7 @@ function saveCycle(){
   // ── Reset complet de l'état local (synchrone) ──
   HISTORY = [];
   lsSet('history', []);
+  lsSet('last_fiche', null); // effacer le marqueur localStorage de fiche du jour
   // Vider les dates du cycle précédent (sinon elles polluent Config_App + joursSince)
   CYCLE._lastFicheDate  = '';
   CYCLE._lastSopDate    = '';
@@ -3558,11 +3567,12 @@ function saveCycle(){
       }
       return Promise.all(stockInitPromises);
     }).then(function() {
-      // 4. Sync Config_App AVANT loadLiveData — évite la race condition sur dureeMois
-      // (Config_Cycle write n'est pas awaited, Config_App sera lu en priorité par step1)
-      _syncConfigApp();
-      // 5. Rechargement complet depuis Sheets après reset + écriture stocks initiaux
-      setTimeout(loadLiveData, 500); // délai court pour laisser Config_App s'écrire
+      // 4. Sync Config_App et ATTENDRE la réponse avant loadLiveData
+      // (sinon step1 relit les anciennes valeurs _last* et écrase le reset)
+      return _syncConfigApp();
+    }).then(function() {
+      // 5. Rechargement complet depuis Sheets — Config_App est définitivement à jour
+      loadLiveData();
     }).catch(function() {
       loadLiveData();
     });
