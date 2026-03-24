@@ -1137,30 +1137,50 @@ function loadLiveData() {
   var sidGerant   = SID.gerant;
   var sidFondateur = SID.fondateur;
 
-  // ── ÉTAPE 1 — Config_Cycle (bloquante) ──
+  // ── ÉTAPE 1 — Config_Cycle + Config_App (bloquante) ──
   // Lire depuis SID.fondateur pour synchroniser CYCLE sur tout appareil
   var step1 = sidFondateur
-    ? readSheet(sidFondateur, 'Config_Cycle!A1:P1').then(function(rows) {
-        if (!rows || !rows[0] || !rows[0][0]) return; // Sheets vide → garder CYCLE local
-        var row = rows[0];
-        var updates = {};
-        if (row[0])  updates.dateDebut      = row[0];
-        if (row[1])  updates.nbBetes        = parseInt(row[1])   || CYCLE.nbBetes;
-        if (row[2])  updates.poidsDepart    = parseInt(row[2])   || CYCLE.poidsDepart;
-        if (row[3])  updates.race           = row[3];
-        if (row[4])  updates.ration         = parseFloat(row[4]) || CYCLE.ration;
-        if (row[5])  updates.capital        = parseInt(row[5])   || CYCLE.capital;
-        if (row[6])  updates.objectifPrix   = parseInt(row[6])   || CYCLE.objectifPrix;
-        if (row[7])  updates.budgetSante    = parseInt(row[7])   || CYCLE.budgetSante;
-        if (row[8])  updates.veterinaire    = row[8];
-        if (row[9])  updates.foirail        = row[9];
-        if (row[10]) updates.commission     = parseFloat(row[10]) || CYCLE.commission;
-        if (row[11]) updates.contactUrgence = row[11];
-        if (row[12]) updates.peseeFreq      = parseInt(row[12])  || CYCLE.peseeFreq;
-        try { if (row[13]) updates.betes      = JSON.parse(row[13]); } catch(e) {}
-        try { if (row[14]) updates.stockLines = JSON.parse(row[14]); } catch(e) {}
-        if (row[15]) updates.dureeMois      = parseInt(row[15])  || CYCLE.dureeMois; // col P
-        Object.assign(CYCLE, updates);
+    ? Promise.all([
+        readSheet(sidFondateur, 'Config_Cycle!A1:P1'),
+        readSheet(sidFondateur, 'Config_App!A:B')
+      ]).then(function(res) {
+        var rows    = res[0];
+        var appRows = res[1];
+
+        // ── Config_Cycle ──
+        if (rows && rows[0] && rows[0][0]) {
+          var row = rows[0];
+          var updates = {};
+          if (row[0])  updates.dateDebut      = row[0];
+          if (row[1])  updates.nbBetes        = parseInt(row[1])   || CYCLE.nbBetes;
+          if (row[2])  updates.poidsDepart    = parseInt(row[2])   || CYCLE.poidsDepart;
+          if (row[3])  updates.race           = row[3];
+          if (row[4])  updates.ration         = parseFloat(row[4]) || CYCLE.ration;
+          if (row[5])  updates.capital        = parseInt(row[5])   || CYCLE.capital;
+          if (row[6])  updates.objectifPrix   = parseInt(row[6])   || CYCLE.objectifPrix;
+          if (row[7])  updates.budgetSante    = parseInt(row[7])   || CYCLE.budgetSante;
+          if (row[8])  updates.veterinaire    = row[8];
+          if (row[9])  updates.foirail        = row[9];
+          if (row[10]) updates.commission     = parseFloat(row[10]) || CYCLE.commission;
+          if (row[11]) updates.contactUrgence = row[11];
+          if (row[12]) updates.peseeFreq      = parseInt(row[12])  || CYCLE.peseeFreq;
+          try { if (row[13]) updates.betes      = JSON.parse(row[13]); } catch(e) {}
+          try { if (row[14]) updates.stockLines = JSON.parse(row[14]); } catch(e) {}
+          if (row[15]) updates.dureeMois      = parseInt(row[15])  || CYCLE.dureeMois; // col P
+          Object.assign(CYCLE, updates);
+        }
+
+        // ── Config_App (clé-valeur extensible) ──
+        if (appRows && appRows.length) {
+          appRows.forEach(function(r) {
+            if (!r || !r[0]) return;
+            try {
+              var key = r[0]; var val = JSON.parse(r[1] || 'null');
+              if (key === 'alimentTypes' && Array.isArray(val) && val.length) CYCLE.alimentTypes = val;
+            } catch(e) {}
+          });
+        }
+
         lsSet('cycle', CYCLE);
       }).catch(function() { /* Sheets inaccessible → garder CYCLE local existant */ })
     : Promise.resolve();
@@ -1724,6 +1744,36 @@ function _submitActual(type) {
   });
 }
 
+
+// ── SYNC CONFIG_APP → SHEETS (fondateur uniquement — source de vérité) ──
+// Écrit les variables étendues dans l'onglet Config_App (format clé-valeur)
+// L'onglet est créé automatiquement s'il n'existe pas encore
+function _syncConfigApp() {
+  if (!SID.fondateur) return;
+  getTok().then(function(tk) {
+    if (!tk) return;
+    var sid = SID.fondateur;
+    var rows = [
+      ['alimentTypes', JSON.stringify(CYCLE.alimentTypes || [])]
+      // Ajouter ici d'autres variables à persister dans le futur
+    ];
+    // addSheet silencieux : réussit si l'onglet n'existe pas, 400 ignoré s'il existe déjà
+    var addUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + ':batchUpdate';
+    fetch(addUrl, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests: [{ addSheet: { properties: { title: 'Config_App' } } }] })
+    }).then(function() {
+      // Écrire (PUT = écrasement complet) les paires clé-valeur
+      var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + '/values/' + encodeURIComponent('Config_App!A1') + '?valueInputOption=USER_ENTERED';
+      fetch(url, {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: rows })
+      });
+    }).catch(function(){});
+  });
+}
 
 // ── SYNC CONFIG_CYCLE → SHEETS (fondateur/rga/fallou/gérant) ──
 // Écrit toute la ligne Config_Cycle!A1:O1 dans les 4 sheets disponibles
@@ -2319,6 +2369,7 @@ function addStockLigne(mode){
     CYCLE.alimentTypes.push(t);
     lsSet('cycle', CYCLE);
     rebuildAlimList(); // mettre à jour le datalist immédiatement
+    _syncConfigApp();  // persister dans Config_App (fondateur sheet)
   }
 
   // Chaque clic = une entrée distincte (ajout OU consommation)
@@ -3256,7 +3307,7 @@ function addModalStock(){
   else MODAL.data.stockLines.push({type: t, kg: k});
   // Mémoriser le type pour suggestions futures
   if(!CYCLE.alimentTypes) CYCLE.alimentTypes = [];
-  if(CYCLE.alimentTypes.indexOf(t) === -1){ CYCLE.alimentTypes.push(t); lsSet('cycle',CYCLE); }
+  if(CYCLE.alimentTypes.indexOf(t) === -1){ CYCLE.alimentTypes.push(t); lsSet('cycle',CYCLE); _syncConfigApp(); }
   rebuildAlimList();
   MODAL.data._msi = '';
   MODAL.data._msk = '';
