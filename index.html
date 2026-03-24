@@ -1258,15 +1258,16 @@ function loadLiveData() {
       var rowsKpi    = results[2];
       var rowsSante  = results[3];
 
-      // Sante_Mortalite → MOCK.betes + SPARK.betes
+      // Sante_Mortalite → MOCK.betes + SPARK.betes (filtré par début de cycle)
       if (rowsSante && rowsSante.length) {
-        var deces = rowsSante.filter(function(r){ return r[6] && r[6].toString().toUpperCase()==='OUI'; }).length;
+        var santesCycle = rowsSante.filter(function(r){ return r[0] && apresDebut(r[0]); });
+        var deces = santesCycle.filter(function(r){ return r[6] && r[6].toString().toUpperCase()==='OUI'; }).length;
         var valBetes = Math.max(0, (CYCLE.nbBetes||4) - deces);
         if (!isNaN(valBetes)) {
           MOCK.betes = valBetes;
           var actives = (CYCLE.nbBetes||4);
           var sparkBetes = [];
-          rowsSante.slice(-7).forEach(function(r) {
+          santesCycle.slice(-7).forEach(function(r) {
             if (r[6] && r[6].toString().toUpperCase()==='OUI') actives = Math.max(0, actives - 1);
             sparkBetes.push(actives);
           });
@@ -1274,9 +1275,10 @@ function loadLiveData() {
         }
       }
 
-      // Pesées → MOCK.gmq + SPARK.gmq
+      // Pesées → MOCK.gmq + SPARK.gmq (filtré par début de cycle)
       if (rowsPesees && rowsPesees.length) {
-        var gains = rowsPesees.map(function(r){ return safeNum(r[5]); }).filter(function(v){ return v !== null && v > 0; });
+        var peseesCycle = rowsPesees.filter(function(r){ return r[0] && apresDebut(r[0]); });
+        var gains = peseesCycle.map(function(r){ return safeNum(r[5]); }).filter(function(v){ return v !== null && v > 0; });
         if (gains.length > 0) {
           var moy = gains.reduce(function(a,b){return a+b;},0) / gains.length;
           var gmq = Math.round((moy/7)*100)/100;
@@ -1287,11 +1289,11 @@ function loadLiveData() {
         }
       }
 
-      // Stock_Nourriture → MOCK.stock + SPARK.stk
+      // Stock_Nourriture → MOCK.stock + SPARK.stk (filtré par début de cycle)
       if (rowsStock && rowsStock.length) {
         var netKg = {};
         rowsStock.forEach(function(row) {
-          if (!row[0]) return;
+          if (!row[0] || !apresDebut(row[0])) return; // ignorer données hors cycle courant
           var type = row[1] || 'Inconnu';
           var kg   = safeNum(row[2]);
           if (kg !== null) netKg[type] = (netKg[type] || 0) + kg;
@@ -1802,9 +1804,8 @@ function _submitActual(type) {
       if (type==='sante')  CYCLE._lastSanteDate = _tdSync;
       if (type==='bilan')  CYCLE._lastBilanSem  = String(calcSemaine());
       lsSet('cycle', CYCLE);
-      _syncConfigApp(); // sync Config_App pour tous les acteurs
-      setTimeout(loadLiveData, 1000);
-      setTimeout(loadPesees, 1200);
+      // Attendre que Config_App soit mis à jour avant de recharger (évite race condition step1)
+      _syncConfigApp().then(function(){ loadLiveData(); setTimeout(loadPesees, 300); });
       // Reset formulaire après soumission réussie
       var td = todayISO();
       if(type==='fiche') S.fi={date:td,nb:'',nourris:'',eau:'',enclos:'',incident:'',desc:''};
@@ -3543,10 +3544,10 @@ function saveCycle(){
     var dataOnglets = [
       'Fiche_Quotidienne!A4:Z500',
       'SOP_Check!A4:Z200',
-      'Stock_Nourriture!A5:Z500',
-      'Incidents!A5:Z200',
+      'Stock_Nourriture!A4:Z500',
+      'Incidents!A4:Z200',
       'Pesees!A4:Z200',
-      'Sante_Mortalite!A5:Z200',
+      'Sante_Mortalite!A4:Z200',
       'Hebdomadaire!A4:Z200',
     ];
     var kpiOnglets = [
