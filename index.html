@@ -1228,9 +1228,9 @@ function loadLiveData() {
           var semCalc = Math.round((totalNet / (rationJour * 7)) * 10) / 10;
           if (semCalc >= 0 && semCalc <= 52) {
             MOCK.stock = semCalc;
-            // Reconstituer STOCK_MVTS depuis Sheets si localStorage vide (nouveau téléphone)
-            // ou si fondateur (pour qu'il voit toujours les mouvements réels du gérant)
-            if (!STOCK_MVTS || STOCK_MVTS.length === 0 || S.user === 'fondateur') {
+            // Reconstituer STOCK_MVTS depuis Sheets uniquement si Sheets a plus de données que le local
+            // (evite d'écraser le local qui vient d'être écrit ou les stockLines initiales du cycle)
+            if (!STOCK_MVTS || STOCK_MVTS.length === 0 || rowsStock.length >= STOCK_MVTS.length) {
               var cycleDebut = CYCLE.dateDebut || todayISO();
               STOCK_MVTS = [];
               rowsStock.forEach(function(row) {
@@ -1306,9 +1306,9 @@ function loadLiveData() {
         var pesees    = (hist[4] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
         var sops      = (hist[5] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
         var stocks    = (hist[6] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
-        // Sécurité : si STOCK_MVTS est vide (Vague 1 n'a pas pu le reconstruire),
-        // le reconstruire maintenant depuis les données de la Vague 2
-        if ((!STOCK_MVTS || STOCK_MVTS.length === 0 || S.user === 'fondateur') && stocks.length > 0) {
+        // Reconstruire STOCK_MVTS depuis Vague 2 uniquement si Sheets a plus ou autant de données
+        // (evite d'écraser le local après un submit récent ou les stockLines initiales non encore en Sheets)
+        if (stocks.length > 0 && (!STOCK_MVTS || STOCK_MVTS.length === 0 || stocks.length >= STOCK_MVTS.length)) {
           var cycleDebut2 = CYCLE.dateDebut || todayISO();
           STOCK_MVTS = [];
           stocks.forEach(function(row) {
@@ -1687,6 +1687,15 @@ function _submitActual(type) {
       haptic('success');
       // Mise à jour immédiate MOCK.stock depuis STOCK_MVTS
       if(type==='stock'){ var s=calcStockLocal(); if(s>=0) MOCK.stock=s; }
+      // Persister la ration saisie dans CYCLE.ration si elle diffère (+ sync Sheets)
+      if(type==='stock' && typeof rat !== 'undefined' && rat > 0 && (CYCLE.nbBetes||4) > 0) {
+        var _rationParBete = Math.round(rat / (CYCLE.nbBetes||4) * 100) / 100;
+        if(Math.abs(_rationParBete - (CYCLE.ration||12)) > 0.5) {
+          CYCLE.ration = _rationParBete;
+          lsSet('cycle', CYCLE);
+          _syncCycle();
+        }
+      }
       // Métas pour anti-doublons
       var _meta = {};
       if(type==='inc')   _meta = {_id: S.fin.id, _typeInc: S.fin.type};
@@ -3389,7 +3398,27 @@ function saveCycle(){
       });
     }
     Promise.all(clearPromises).then(function() {
-      // 3. Rechargement complet depuis Sheets après reset
+      // 3. Écrire les stocks initiaux (stockLines) dans Stock_Nourriture gerant + fondateur
+      // Indispensable : sans cela, Sheets est vide et loadLiveData écrase STOCK_MVTS local
+      var stockInitPromises = [];
+      if ((CYCLE.stockLines||[]).length > 0) {
+        var _cycleDebutFr = isoToFr(CYCLE.dateDebut || todayISO());
+        var _rationJourInit = Math.round((CYCLE.ration||12) * (CYCLE.nbBetes||4));
+        var _totalKgInit = (CYCLE.stockLines||[]).reduce(function(s,x){return s+(parseFloat(x.kg)||0);},0);
+        var _semInit = _rationJourInit > 0 ? (_totalKgInit/(_rationJourInit*7)).toFixed(1) : '0';
+        (CYCLE.stockLines||[]).forEach(function(sl) {
+          var _kg = parseFloat(sl.kg)||0;
+          if (_kg <= 0) return;
+          [SID.gerant, SID.fondateur].filter(Boolean).forEach(function(sid) {
+            stockInitPromises.push(
+              appendRow(sid, 'Stock_Nourriture!A:F', [_cycleDebutFr, sl.type, _kg, String(_rationJourInit), _semInit, parseFloat(_semInit)<6?'OUI':'NON'])
+            );
+          });
+        });
+      }
+      return Promise.all(stockInitPromises);
+    }).then(function() {
+      // 4. Rechargement complet depuis Sheets après reset + écriture stocks initiaux
       loadLiveData();
     }).catch(function() {
       loadLiveData();
