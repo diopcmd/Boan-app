@@ -4007,6 +4007,24 @@ function buildSidebar(){
         +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val kval-ok">'+MOCK.gmq+' kg/j</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Objectif</span><span style="font-size:12px;color:'+_calSub+'">&ge; 1.0 kg/j</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Incidents</span><span class="sb-val '+(HISTORY.filter(function(h){var d=new Date(_monday.getTime());var end=new Date(_monday.getTime()+6*86400000);var p=h.date.split('/');if(p.length!==3)return false;var hd=new Date(p[2],p[1]-1,p[0]);return h.type==='inc'&&hd>=d&&hd<=end;}).length>0?'kval-warn':'kval-ok')+'">'+(HISTORY.filter(function(h){var d=new Date(_monday.getTime());var end=new Date(_monday.getTime()+6*86400000);var p=h.date.split('/');if(p.length!==3)return false;var hd=new Date(p[2],p[1]-1,p[0]);return h.type==='inc'&&hd>=d&&hd<=end;}).length)+' cette sem.</span></div>'
+        +(function(){
+          var _wkSat = new Date(_monday.getTime()+5*86400000);
+          var _fichesSem = HISTORY.filter(function(h){
+            if(h.type!=='fiche') return false;
+            var p=h.date.split('/'); if(p.length!==3) return false;
+            var hd=new Date(p[2],p[1]-1,p[0]);
+            return hd>=_monday && hd<=_wkSat;
+          }).length;
+          var _stkSem = (STOCK_MVTS||[]).filter(function(m){
+            if(m.mode!=='consommer') return false;
+            var p=m.date.split('/'); if(p.length!==3) return false;
+            var md=new Date(p[2],p[1]-1,p[0]);
+            return md>=_monday && md<=_wkSat;
+          }).reduce(function(s,m){return s+(m.kg||0);},0);
+          var _fCl = _fichesSem>=5?'kval-ok':_fichesSem>=3?'kval-warn':'kval-crit';
+          return '<div class="sb-row"><span class="sb-lbl">Fiches envoyées</span><span class="sb-val '+_fCl+'">'+_fichesSem+'/6</span></div>'
+            +'<div class="sb-row"><span class="sb-lbl">Stock consommé</span><span style="font-size:12px;color:'+_calData+'">'+Math.round(_stkSem)+' kg</span></div>';
+        })()
         +'</div>';
     } else if(SB.tab==='month'){
       var _consoMois = Math.round((CYCLE.ration||12) * (CYCLE.nbBetes||4) * 30);
@@ -4029,6 +4047,21 @@ function buildSidebar(){
         +'<div class="sb-row"><span class="sb-lbl">GMQ moyen mensuel</span><span class="sb-val '+_gmqCl+'">'+MOCK.gmq+' kg/j <span style="color:'+_gmqTrendCol+';font-weight:700">'+_gmqTrend+'</span></span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Conso. aliments</span><span style="font-size:12px;color:'+_calData+'">~'+_consoMois+' kg/mois</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Budget santé/mois</span><span style="font-size:12px;color:'+_calData+'">~'+fmt(_coutVeto)+' FCFA</span></div>'
+        +(function(){
+          var _nbSop = HISTORY.filter(function(h){return h.type==='sop';}).length;
+          var _semCour = calcSemaine(); if(!_semCour||_semCour<1) _semCour=1;
+          var _sopPct = Math.min(100, Math.round(_nbSop/_semCour*100));
+          var _ndM = _nowDakar();
+          var _moisDeb = new Date(_ndM.year, _ndM.month-1, 1);
+          var _nbPeseesMois = HISTORY.filter(function(h){
+            if(h.type!=='pesee') return false;
+            var p=h.date.split('/'); if(p.length!==3) return false;
+            return new Date(p[2],p[1]-1,p[0]) >= _moisDeb;
+          }).length;
+          var _sopCl = _sopPct>=80?'kval-ok':_sopPct>=50?'kval-warn':'kval-crit';
+          return '<div class="sb-row"><span class="sb-lbl">Conformité SOP</span><span class="sb-val '+_sopCl+'">'+_sopPct+'%</span></div>'
+            +'<div class="sb-row"><span class="sb-lbl">Pesées ce mois</span><span style="font-size:12px;color:'+_calData+'">'+_nbPeseesMois+' faite'+(_nbPeseesMois!==1?'s':'')+'</span></div>';
+        })()
         +'</div>';
     } else {
       var histHtml = HISTORY.length
@@ -4117,12 +4150,47 @@ function buildSidebar(){
         })()
         +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val '+(MOCK.gmq>=1?'kval-ok':MOCK.gmq>=0.8?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Pesée à jour</span><span class="sb-val '+(joursSince('pesee')<=(CYCLE.peseeFreq||30)?'kval-ok':'kval-warn')+'">'+((function(){var j=joursSince('pesee');return j<999?('Il y a '+j+'j'):'Aucune';})())+'</span></div>'
+        +(function(){
+          var _n3=_nowDakar();
+          var _wd3=_n3.weekday;
+          var _mOff3=(_wd3===0)?-6:1-_wd3;
+          var _mon3=new Date(_n3.year,_n3.month-1,_n3.day+_mOff3);
+          var _sat3=new Date(_mon3.getTime()+5*86400000);
+          var _fOk3=HISTORY.filter(function(h){
+            if(h.type!=='fiche') return false;
+            var p=h.date.split('/'); if(p.length!==3) return false;
+            var hd=new Date(p[2],p[1]-1,p[0]);
+            return hd>=_mon3 && hd<=_sat3;
+          }).length;
+          var _saOk3=HISTORY.filter(function(h){
+            if(h.type!=='sante') return false;
+            var p=h.date.split('/'); if(p.length!==3) return false;
+            var hd=new Date(p[2],p[1]-1,p[0]);
+            return hd>=_mon3 && hd<=_sat3;
+          }).length;
+          var _fCl3=_fOk3>=5?'kval-ok':_fOk3>=3?'kval-warn':'kval-crit';
+          return '<div class="sb-row"><span class="sb-lbl">Fiches reçues</span><span class="sb-val '+_fCl3+'">'+_fOk3+'/6</span></div>'
+            +'<div class="sb-row"><span class="sb-lbl">Visites santé</span><span style="font-size:12px;color:'+_sbData+'">'+_saOk3+' cette sem.</span></div>';
+        })()
         +'</div>'
     } else if(SB.tab==='month'){
       body='<div class="sb-card">'
         +(function(){ var dep=Math.round(((CYCLE.capital||1450000)-MOCK.treso)/1000); return '<div class="sb-row"><span class="sb-lbl">Dépenses cumulées</span><span style="font-size:12px;color:#f44336">-'+dep+'k FCFA</span></div>'; })()
         +'<div class="sb-row"><span class="sb-lbl">Solde actuel</span><span class="sb-val '+(MOCK.treso>=600000?'kval-ok':'kval-crit')+'">'+Math.round(MOCK.treso/1000)+'k FCFA</span></div>'
         +(function(){ var gmqL=LIVE.loaded&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq; var sem=calcSemaine(); var totalSem=Math.round((CYCLE.dureeMois||8)*4.33); var joursR=(totalSem-sem)*7; var poidsF=Math.round((CYCLE.poidsDepart||270)+gmqL*sem*7+gmqL*joursR); var caProj=Math.round((CYCLE.nbBetes||4)*poidsF*(CYCLE.objectifPrix||2000)/1000000*10)/10; return '<div class="sb-row"><span class="sb-lbl">Projection vente</span><span style="font-size:12px;color:#C8A06A">~'+caProj+'M FCFA</span></div>'; })()
+        +(function(){
+          var _ndM2=_nowDakar();
+          var _moisDeb2=new Date(_ndM2.year,_ndM2.month-1,1);
+          var _nbIncMois=HISTORY.filter(function(h){
+            if(h.type!=='inc') return false;
+            var p=h.date.split('/'); if(p.length!==3) return false;
+            return new Date(p[2],p[1]-1,p[0]) >= _moisDeb2;
+          }).length;
+          var _mort=Math.max(0,(CYCLE.nbBetes||4)-MOCK.betes);
+          var _incCl=_nbIncMois===0?'kval-ok':_nbIncMois<=2?'kval-warn':'kval-crit';
+          return '<div class="sb-row"><span class="sb-lbl">Incidents ce mois</span><span class="sb-val '+_incCl+'">'+_nbIncMois+'</span></div>'
+            +'<div class="sb-row"><span class="sb-lbl">Décès cycle</span><span class="sb-val '+(_mort===0?'kval-ok':'kval-crit')+'">'+_mort+'</span></div>';
+        })()
         +'</div>';
     } else {
       var histHtml2 = HISTORY.length
