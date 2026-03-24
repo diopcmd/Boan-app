@@ -1176,7 +1176,8 @@ function loadLiveData() {
             if (!r || !r[0]) return;
             try {
               var key = r[0]; var val = JSON.parse(r[1] || 'null');
-              if (key === 'alimentTypes' && Array.isArray(val) && val.length) CYCLE.alimentTypes = val;
+              if (key === 'alimentTypes'  && Array.isArray(val) && val.length) CYCLE.alimentTypes   = val;
+              if (key === 'lastFicheDate' && val)                               CYCLE._lastFicheDate = val;
             } catch(e) {}
           });
         }
@@ -1722,7 +1723,11 @@ function _submitActual(type) {
       if(type==='sante') _meta = {_id: S.fsa.id, _sym: S.fsa.sym};
       var _label = type==='fiche' ? 'Fiche du '+isoToFr(S.fi.date||todayISO()) : type;
       addHistory(type, _label, _meta);
-      if (type==='fiche') marquerFicheAujourdhui();
+      if (type==='fiche') {
+        marquerFicheAujourdhui();
+        CYCLE._lastFicheDate = today(); lsSet('cycle', CYCLE); // persister pour fondateur
+        _syncConfigApp(); // écrire lastFicheDate dans Config_App → visible par fondateur dès step1
+      }
       setTimeout(loadLiveData, 1000);
       setTimeout(loadPesees, 1200);
       // Reset formulaire après soumission réussie
@@ -1754,8 +1759,8 @@ function _syncConfigApp() {
     if (!tk) return;
     var sid = SID.fondateur;
     var rows = [
-      ['alimentTypes', JSON.stringify(CYCLE.alimentTypes || [])]
-      // Ajouter ici d'autres variables à persister dans le futur
+      ['alimentTypes',  JSON.stringify(CYCLE.alimentTypes  || [])],
+      ['lastFicheDate', JSON.stringify(CYCLE._lastFicheDate || '')] // date DD/MM/YYYY de la dernière fiche soumise
     ];
     // addSheet silencieux : réussit si l'onglet n'existe pas, 400 ignoré s'il existe déjà
     var addUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + ':batchUpdate';
@@ -3996,7 +4001,8 @@ function buildSidebar(){
         +'<div class="sb-row"><span class="sb-lbl">GMQ</span><span class="sb-val '+(MOCK.gmq>=1?'kval-ok':MOCK.gmq>=0.8?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
         +(function(){
           var td2=today();
-          var fOk    = HISTORY.some(function(h){return h.type==='fiche'&&h.date===td2;});
+          // fOk : vérifie HISTORY (Vague 2) OU Config_App.lastFicheDate (step1, instantané)
+          var fOk    = HISTORY.some(function(h){return h.type==='fiche'&&h.date===td2;}) || CYCLE._lastFicheDate === td2;
           var sopJ2  = joursSince('sop'); var sopOk2b = sopJ2<=14;
           var bilOk2 = bilanDejaFaitCetteSemaine();
           var stkJ2  = joursSince('stock'); var stkOk2b= stkJ2<=14;
