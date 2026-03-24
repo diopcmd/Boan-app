@@ -606,8 +606,22 @@ function peseeDejaFaite(id) {
 // Jours écoulés depuis la dernière saisie d'un type donné (depuis HISTORY)
 function joursSince(type) {
   var h = HISTORY.filter(function(x){ return x.type === type; });
-  if (!h.length) return 999;
-  var p = h[0].date.split('/');
+  var lastDate = null;
+  if (h.length) {
+    lastDate = h[0].date; // HISTORY trié desc — premièr = le plus récent
+  } else {
+    // Fallback Config_App — disponible dès step1, avant Vague 2
+    var _fb = {
+      sop:   CYCLE._lastSopDate,
+      stock: CYCLE._lastStockDate,
+      pesee: CYCLE._lastPeseeDate,
+      inc:   CYCLE._lastIncDate,
+      sante: CYCLE._lastSanteDate
+    };
+    lastDate = _fb[type] || null;
+  }
+  if (!lastDate) return 999;
+  var p = lastDate.split('/');
   if (p.length !== 3) return 999;
   var _nd2 = _nowDakar();
   return Math.round((new Date(_nd2.year, _nd2.month-1, _nd2.day) - new Date(p[2], p[1]-1, p[0])) / 86400000);
@@ -766,7 +780,7 @@ function bilanDejaFaitCetteSemaine() {
   var sem = String(calcSemaine());
   return HISTORY.some(function(h){
     return h.type === 'bilan' && (h.date === td || h._sem === sem);
-  });
+  }) || CYCLE._lastBilanSem === sem; // fallback Config_App (dès step1, avant Vague 2)
 }
 
 // Inactivité 8h + auto-refresh Sheets toutes les 5 minutes
@@ -1177,7 +1191,13 @@ function loadLiveData() {
             try {
               var key = r[0]; var val = JSON.parse(r[1] || 'null');
               if (key === 'alimentTypes'  && Array.isArray(val) && val.length) CYCLE.alimentTypes   = val;
-              if (key === 'lastFicheDate' && val)                               CYCLE._lastFicheDate = val;
+              if (key === 'lastFicheDate' && val)  CYCLE._lastFicheDate = val;
+              if (key === 'lastSopDate'   && val)  CYCLE._lastSopDate   = val;
+              if (key === 'lastStockDate' && val)  CYCLE._lastStockDate = val;
+              if (key === 'lastPeseeDate' && val)  CYCLE._lastPeseeDate = val;
+              if (key === 'lastIncDate'   && val)  CYCLE._lastIncDate   = val;
+              if (key === 'lastSanteDate' && val)  CYCLE._lastSanteDate = val;
+              if (key === 'lastBilanSem'  && val)  CYCLE._lastBilanSem  = val;
             } catch(e) {}
           });
         }
@@ -1723,11 +1743,17 @@ function _submitActual(type) {
       if(type==='sante') _meta = {_id: S.fsa.id, _sym: S.fsa.sym};
       var _label = type==='fiche' ? 'Fiche du '+isoToFr(S.fi.date||todayISO()) : type;
       addHistory(type, _label, _meta);
-      if (type==='fiche') {
-        marquerFicheAujourdhui();
-        CYCLE._lastFicheDate = today(); lsSet('cycle', CYCLE); // persister pour fondateur
-        _syncConfigApp(); // écrire lastFicheDate dans Config_App → visible par fondateur dès step1
-      }
+      // Persister date de chaque type dans Config_App → visible par tous dès step1 (avant Vague 2)
+      var _tdSync = today();
+      if (type==='fiche')  { marquerFicheAujourdhui(); CYCLE._lastFicheDate = _tdSync; }
+      if (type==='sop')    CYCLE._lastSopDate   = _tdSync;
+      if (type==='stock')  CYCLE._lastStockDate = _tdSync;
+      if (type==='pesee')  CYCLE._lastPeseeDate = _tdSync;
+      if (type==='inc')    CYCLE._lastIncDate   = _tdSync;
+      if (type==='sante')  CYCLE._lastSanteDate = _tdSync;
+      if (type==='bilan')  CYCLE._lastBilanSem  = String(calcSemaine());
+      lsSet('cycle', CYCLE);
+      _syncConfigApp(); // sync Config_App pour tous les acteurs
       setTimeout(loadLiveData, 1000);
       setTimeout(loadPesees, 1200);
       // Reset formulaire après soumission réussie
@@ -1759,8 +1785,14 @@ function _syncConfigApp() {
     if (!tk) return;
     var sid = SID.fondateur;
     var rows = [
-      ['alimentTypes',  JSON.stringify(CYCLE.alimentTypes  || [])],
-      ['lastFicheDate', JSON.stringify(CYCLE._lastFicheDate || '')] // date DD/MM/YYYY de la dernière fiche soumise
+      ['alimentTypes',  JSON.stringify(CYCLE.alimentTypes   || [])],
+      ['lastFicheDate', JSON.stringify(CYCLE._lastFicheDate  || '')], // date DD/MM/YYYY de la dernière fiche
+      ['lastSopDate',   JSON.stringify(CYCLE._lastSopDate    || '')], // date dernièr SOP
+      ['lastStockDate', JSON.stringify(CYCLE._lastStockDate  || '')], // date dernier mouvement stock
+      ['lastPeseeDate', JSON.stringify(CYCLE._lastPeseeDate  || '')], // date dernière pesée
+      ['lastIncDate',   JSON.stringify(CYCLE._lastIncDate    || '')], // date dernier incident
+      ['lastSanteDate', JSON.stringify(CYCLE._lastSanteDate  || '')], // date dernière santé
+      ['lastBilanSem',  JSON.stringify(CYCLE._lastBilanSem   || '')]  // numéro semaine dernier bilan
     ];
     // addSheet silencieux : réussit si l'onglet n'existe pas, 400 ignoré s'il existe déjà
     var addUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + ':batchUpdate';
@@ -3844,8 +3876,9 @@ function buildSidebar(){
           var _heure    = nowHeure();
           var _jourSem  = nowJour(); // 0=dim 5=ven
           var bilanDu   = _jourSem === 5; // vendredi = jour bilan
-          var incNb     = HISTORY.filter(function(h){return h.type==='inc'&&h.date===today();}).length;
-          var santeNb   = HISTORY.filter(function(h){return h.type==='sante'&&h.date===today();}).length;
+          var _tdInc  = today();
+          var incNb   = HISTORY.filter(function(h){return h.type==='inc'  &&h.date===_tdInc;}).length || (CYCLE._lastIncDate   === _tdInc ? 1 : 0);
+          var santeNb = HISTORY.filter(function(h){return h.type==='sante'&&h.date===_tdInc;}).length || (CYCLE._lastSanteDate === _tdInc ? 1 : 0);
           return '<div class=\"sb-card\">'
             +'<div class=\"sb-section-title\">Calendrier des saisies</div>'
             // Fiche : 1/jour
@@ -4006,8 +4039,8 @@ function buildSidebar(){
           var sopJ2  = joursSince('sop'); var sopOk2b = sopJ2<=14;
           var bilOk2 = bilanDejaFaitCetteSemaine();
           var stkJ2  = joursSince('stock'); var stkOk2b= stkJ2<=14;
-          var incNb2 = HISTORY.filter(function(h){return h.type==='inc'&&h.date===td2;}).length;
-          var santeNb2=HISTORY.filter(function(h){return h.type==='sante'&&h.date===td2;}).length;
+          var incNb2   = HISTORY.filter(function(h){return h.type==='inc'  &&h.date===td2;}).length || (CYCLE._lastIncDate   === td2 ? 1 : 0);
+          var santeNb2 = HISTORY.filter(function(h){return h.type==='sante'&&h.date===td2;}).length || (CYCLE._lastSanteDate === td2 ? 1 : 0);
           return ''
             +'<div class="sb-section-title">Saisies gérant</div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'fiche\');closeSB()\' style="cursor:pointer">'
