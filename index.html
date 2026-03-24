@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <!-- v:4a1f5cf -->
 <html lang="fr">
 <head>
@@ -2384,6 +2384,26 @@ function beteSelect(val, stateKey, extra) {
   return '<div class="fl'+(hasVal?' has-val':'')+'">'+inputHtml+'<label>'+lbl+'</label></div>';
 }
 
+function beteDropdown(val, stateKey, extra) {
+  var beteIds = CYCLE.betes && CYCLE.betes.length
+    ? CYCLE.betes.map(function(b){ return b.id; })
+    : LIVE.beteIds && LIVE.beteIds.length
+      ? LIVE.beteIds
+      : (function(){
+          var n = CYCLE.nbBetes || MOCK.betes || 4;
+          var fb = [];
+          for (var i = 1; i <= n; i++) fb.push('B' + ('0'+i).slice(-2));
+          return fb;
+        })();
+  var extraJs = extra ? extra + ';' : '';
+  var opts = '<option value="">\u2014 Choisir une b\u00eate \u2014</option>'
+    + beteIds.map(function(id){
+        return '<option value="' + id + '"' + (val === id ? ' selected' : '') + '>' + id + '</option>';
+      }).join('');
+  return '<div class="fg"><label>B\u00eate (' + beteIds.length + ')</label>'
+    + '<select onchange="' + extraJs + stateKey + '=this.value;r()">' + opts + '</select></div>';
+}
+
 function addStockLigne(mode){
   mode = mode || 'ajouter';
   // Lire depuis le DOM en priorité (plus fiable qu'oninput avec datalist)
@@ -4580,10 +4600,7 @@ function viewSaisie(){
       )
       +'<div class="frow">'
       +fl('Date','<input type="date" value="'+f.date+'" oninput="S.fin.date=this.value">',f.date)
-      +(function(){
-  var beteIds = CYCLE.betes&&CYCLE.betes.length ? CYCLE.betes.map(function(b){return b.id;}) : LIVE.beteIds;
-  return beteSelect(f.id, 'S.fin.id', '');
-})()
+      +beteDropdown(f.id, 'S.fin.id', '')
       +'</div>'
       +fl('Type incident','<input placeholder=" " value="'+f.type+'" oninput="S.fin.type=this.value">',f.type)
       +'<div class="fg"><label>Gravité</label><div class="rg">'
@@ -4641,10 +4658,7 @@ function viewSaisie(){
     form='<div class="card">'+prog
       +'<div class="frow">'
       +fl('Date pesée','<input type="date" value="'+f.date+'" oninput="S.fp.date=this.value">',f.date)
-      +(function(){
-  var beteIds = CYCLE.betes&&CYCLE.betes.length ? CYCLE.betes.map(function(b){return b.id;}) : LIVE.beteIds;
-  return beteSelect(f.id, 'S.fp.id', 'S.fp._autoFilled=false');
-})()
+      +beteDropdown(f.id, 'S.fp.id', 'S.fp._autoFilled=false')
       +'</div>'
       +'<div class="fg"><label>Race</label><select onchange="S.fp.race=this.value;r()"><option'+((!f.race||f.race==='Djakoré')?' selected':'')+'>Djakoré</option><option'+(f.race==='Gobra'?' selected':'')+'>Gobra</option><option'+(f.race==='Autre'||(f.race&&f.race!=='Djakoré'&&f.race!=='Gobra')?' selected':'')+'>Autre</option></select></div>'  +((f.race==='Autre'||(f.race&&f.race!=='Djakoré'&&f.race!=='Gobra'))?fl('Préciser la race','<input placeholder=" " value="'+(f.raceCustom||'')+'" oninput="S.fp.raceCustom=this.value">',f.raceCustom):'')
       +'<div class="frow">'
@@ -4683,10 +4697,7 @@ function viewSaisie(){
       })()
       +'<div class="frow">'
       +fl('Date','<input type="date" value="'+f.date+'" oninput="S.fsa.date=this.value">',f.date)
-      +(function(){
-  var beteIds = CYCLE.betes&&CYCLE.betes.length ? CYCLE.betes.map(function(b){return b.id;}) : LIVE.beteIds;
-  return beteSelect(f.id, 'S.fsa.id', '');
-})()
+      +beteDropdown(f.id, 'S.fsa.id', '')
       +'</div>'
       +fl('Symptôme','<input placeholder=" " value="'+f.sym+'" oninput="S.fsa.sym=this.value">',f.sym)
       +fl('Traitement','<input placeholder=" " value="'+f.tra+'" oninput="S.fsa.tra=this.value">',f.tra)
