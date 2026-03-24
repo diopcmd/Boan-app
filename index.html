@@ -5814,6 +5814,19 @@ function pageGuide() {
       ]
     )
 
+  var _guideLivraisonJ = joursSince('stock');
+  var _tacheLivraison = _guideLivraisonJ < 999
+    ? ['📦', 'Saisir le stock reçu', 'Dernière entrée stock il y a '+_guideLivraisonJ+' jour(s). Saisissez chaque nouvelle livraison dès réception.', 'chTab(\'saisie\');chSub(\'stock\')']
+    : ['📦', 'Saisir le stock reçu', 'Aucune entrée stock enregistrée. Saisissez type d\'aliment + poids reçu à chaque livraison.', 'chTab(\'saisie\');chSub(\'stock\')'];
+
+  var _guidePeseeJ = joursSince('pesee');
+  var _guidePeseeOk = _guidePeseeJ <= peseeFreq;
+  var _tachePesee = (_guidePeseeJ === 999)
+    ? ['⚖️', 'Peser chaque bête', 'Aucune pesée enregistrée. Tous les '+peseeFreq+' jours : numéro de bête + race + poids.', 'chTab(\'saisie\');chSub(\'pesee\')']
+    : _guidePeseeOk
+      ? ['✅', 'Pesée à jour — prochaine dans '+Math.max(0, peseeFreq - _guidePeseeJ)+' jour(s)', 'Dernière pesée il y a '+_guidePeseeJ+' j. Prochain rappel dans '+Math.max(0, peseeFreq - _guidePeseeJ)+' jour(s).', null]
+      : ['🔴', 'PESÉE EN RETARD — '+(_guidePeseeJ - peseeFreq)+' jours de retard !', 'Dernière pesée il y a '+_guidePeseeJ+' jours (fréquence : tous les '+peseeFreq+' j). À faire le plus tôt possible.', 'chTab(\'saisie\');chSub(\'pesee\')'];
+
     // QUAND LIVRAISON
     +section(
       'linear-gradient(135deg,#001525,#001f35)',
@@ -5821,7 +5834,7 @@ function pageGuide() {
       '#003060','#66bbff',
       '🌾','LIVRAISON DE NOURRITURE','Chaque fois qu\'un sac ou camion arrive',
       [
-        ['📦','Saisir le stock reçu','Type d\'aliment + poids reçu. L\'app recalcule automatiquement les semaines restantes.','chTab(\'saisie\');chSub(\'stock\')'],
+        _tacheLivraison,
       ]
     )
 
@@ -5832,7 +5845,7 @@ function pageGuide() {
       '#3a0060','#cc99ff',
       '⚖️','PESÉE DES BÊTES','Tous les '+peseeFreq+' jours — l\'app vous rappelle',
       [
-        ['🐄','Peser chaque bête','Numéro de bête + race + poids actuel. L\'app calcule le gain de poids automatiquement.','chTab(\'saisie\');chSub(\'pesee\')'],
+        _tachePesee,
       ]
     )
 
