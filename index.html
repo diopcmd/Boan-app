@@ -3442,6 +3442,15 @@ function saveCycle(){
   // ── Reset complet de l'état local (synchrone) ──
   HISTORY = [];
   lsSet('history', []);
+  // Vider les dates du cycle précédent (sinon elles polluent Config_App + joursSince)
+  CYCLE._lastFicheDate  = '';
+  CYCLE._lastSopDate    = '';
+  CYCLE._lastStockDate  = '';
+  CYCLE._lastPeseeDate  = '';
+  CYCLE._lastIncDate    = '';
+  CYCLE._lastSanteDate  = '';
+  CYCLE._lastBilanSem   = '';
+  lsSet('cycle', CYCLE);
   LIVE.pesees  = [];
   LIVE.beteIds = [];
   LIVE.loaded  = false;
