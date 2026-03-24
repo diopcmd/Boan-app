@@ -1191,7 +1191,7 @@ function loadLiveData() {
             LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = [];
             CYCLE._lastFicheDate=''; CYCLE._lastSopDate=''; CYCLE._lastStockDate='';
             CYCLE._lastPeseeDate=''; CYCLE._lastIncDate=''; CYCLE._lastSanteDate='';
-            CYCLE._lastBilanSem=''; MOCK.incidents=0;
+            CYCLE._lastBilanSem=''; MOCK.incidents=0; MOCK.stock=0;
             STOCK_MVTS=[]; saveMvts();
             lsSet('cycle', CYCLE);
           }
@@ -1229,7 +1229,7 @@ function loadLiveData() {
                 LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = [];
                 CYCLE._lastFicheDate=''; CYCLE._lastSopDate=''; CYCLE._lastStockDate='';
                 CYCLE._lastPeseeDate=''; CYCLE._lastIncDate=''; CYCLE._lastSanteDate='';
-                CYCLE._lastBilanSem=''; MOCK.incidents=0;
+                CYCLE._lastBilanSem=''; MOCK.incidents=0; MOCK.stock=0;
                 STOCK_MVTS=[]; saveMvts();
               }
             } catch(e) {}
@@ -1327,6 +1327,9 @@ function loadLiveData() {
               return rationJour > 0 ? Math.max(0, Math.round(kg / (rationJour * 7) * 10) / 10) : 0;
             });
           }
+        } else {
+          // Sheets vide (pas encore de mouvement ce cycle) → calculer depuis STOCK_MVTS local
+          MOCK.stock = calcStockLocal();
         }
       }
 
@@ -1498,8 +1501,18 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
     sheetsKeys[e.type + '|' + e.date + '|' + (e._id || '')] = true;
   });
 
+  // Filtre cycle : rejeter les entrées locales antérieures au début du cycle courant
+  var _cycleStart = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : null;
   var localOnly = (HISTORY || []).filter(function(h) {
     if (h._src === 'sheets') return false; // déjà issu de Sheets
+    // Exclure les entrées d'un cycle précédent survivant en localStorage
+    if (_cycleStart && h.date) {
+      var _p = h.date.split('/');
+      if (_p.length === 3) {
+        var _hd = new Date(_p[2], _p[1]-1, _p[0]);
+        if (_hd < _cycleStart) return false;
+      }
+    }
     var key = h.type + '|' + h.date + '|' + (h._id || '');
     return !sheetsKeys[key]; // garder si pas de doublon Sheets
   });
@@ -3449,6 +3462,7 @@ function saveCycle(){
   lsSet('cycle', CYCLE);
   MOCK.betes = CYCLE.nbBetes || MOCK.betes;
   MOCK.sem = 1; // Nouveau cycle démarre à la semaine 1
+  MOCK.stock = 0; // Réinitialiser stock — sera recalculé depuis stockLines ou Sheets
   // Calculer semaines de stock depuis stockLines (stock initial du cycle)
   var stockTotalKg = (CYCLE.stockLines||[]).reduce(function(s,x){return s+(parseFloat(x.kg)||0);},0);
   if (CYCLE.ration && CYCLE.nbBetes) {
@@ -3839,9 +3853,9 @@ function pageApp(){
   var _alertStock  = (S.user==='gerant'||S.user==='fondateur') && _dernStock > 14;
   var _alertPesee  = (S.user==='gerant'||S.user==='fondateur') && _dernPesee > (CYCLE.peseeFreq||30);
   var _alertBilan  = (S.user==='gerant'||S.user==='fondateur') && _jour===5 && _heure>=18 && !_bilanOk;
-  // Synchroniser MOCK.stock depuis localStorage avant les alertes
+  // Synchroniser MOCK.stock depuis STOCK_MVTS (toujours, même si = 0)
   var _stkSync = calcStockLocal();
-  if(_stkSync > 0) MOCK.stock = _stkSync;
+  if(LIVE.source !== 'loading') MOCK.stock = _stkSync;
   var _alertStockCrit = MOCK.stock < 4;
 
   // Badge ☰
