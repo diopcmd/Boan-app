@@ -1198,6 +1198,8 @@ function loadLiveData() {
               if (key === 'lastIncDate'   && val)  CYCLE._lastIncDate   = val;
               if (key === 'lastSanteDate' && val)  CYCLE._lastSanteDate = val;
               if (key === 'lastBilanSem'  && val)  CYCLE._lastBilanSem  = val;
+              // dureeMois : Config_App est la source prioritaire (pas de race condition)
+              if (key === 'dureeMois' && val && parseInt(val) > 0) CYCLE.dureeMois = parseInt(val);
             } catch(e) {}
           });
         }
@@ -1786,13 +1788,14 @@ function _syncConfigApp() {
     var sid = SID.fondateur;
     var rows = [
       ['alimentTypes',  JSON.stringify(CYCLE.alimentTypes   || [])],
-      ['lastFicheDate', JSON.stringify(CYCLE._lastFicheDate  || '')], // date DD/MM/YYYY de la dernière fiche
-      ['lastSopDate',   JSON.stringify(CYCLE._lastSopDate    || '')], // date dernièr SOP
-      ['lastStockDate', JSON.stringify(CYCLE._lastStockDate  || '')], // date dernier mouvement stock
-      ['lastPeseeDate', JSON.stringify(CYCLE._lastPeseeDate  || '')], // date dernière pesée
-      ['lastIncDate',   JSON.stringify(CYCLE._lastIncDate    || '')], // date dernier incident
-      ['lastSanteDate', JSON.stringify(CYCLE._lastSanteDate  || '')], // date dernière santé
-      ['lastBilanSem',  JSON.stringify(CYCLE._lastBilanSem   || '')]  // numéro semaine dernier bilan
+      ['lastFicheDate', JSON.stringify(CYCLE._lastFicheDate  || '')],
+      ['lastSopDate',   JSON.stringify(CYCLE._lastSopDate    || '')],
+      ['lastStockDate', JSON.stringify(CYCLE._lastStockDate  || '')],
+      ['lastPeseeDate', JSON.stringify(CYCLE._lastPeseeDate  || '')],
+      ['lastIncDate',   JSON.stringify(CYCLE._lastIncDate    || '')],
+      ['lastSanteDate', JSON.stringify(CYCLE._lastSanteDate  || '')],
+      ['lastBilanSem',  JSON.stringify(CYCLE._lastBilanSem   || '')],
+      ['dureeMois',     JSON.stringify(CYCLE.dureeMois       || 8)]  // persisté ici pour éviter race condition avec Config_Cycle
     ];
     // addSheet silencieux : réussit si l'onglet n'existe pas, 400 ignoré s'il existe déjà
     var addUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + ':batchUpdate';
@@ -1835,7 +1838,9 @@ function _syncCycle() {
 function updateDureeMois(v) {
   v = parseInt(v);
   if (isNaN(v) || v < 1 || v > 60) return;
-  CYCLE.dureeMois = v; lsSet('cycle', CYCLE); r(); _syncCycle();
+  CYCLE.dureeMois = v; lsSet('cycle', CYCLE); r();
+  _syncCycle();      // écrit Config_Cycle col P sur tous les SIDs
+  _syncConfigApp();  // écrit Config_App.dureeMois sur SID.fondateur (source prioritaire à la lecture)
 }
 function updatePeseeFreq(v) {
   v = parseInt(v);
@@ -3506,8 +3511,11 @@ function saveCycle(){
       }
       return Promise.all(stockInitPromises);
     }).then(function() {
-      // 4. Rechargement complet depuis Sheets après reset + écriture stocks initiaux
-      loadLiveData();
+      // 4. Sync Config_App AVANT loadLiveData — évite la race condition sur dureeMois
+      // (Config_Cycle write n'est pas awaited, Config_App sera lu en priorité par step1)
+      _syncConfigApp();
+      // 5. Rechargement complet depuis Sheets après reset + écriture stocks initiaux
+      setTimeout(loadLiveData, 500); // délai court pour laisser Config_App s'écrire
     }).catch(function() {
       loadLiveData();
     });
