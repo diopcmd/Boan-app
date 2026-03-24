@@ -3372,7 +3372,9 @@ function addModalStock(){
   else MODAL.data.stockLines.push({type: t, kg: k});
   // Mémoriser le type pour suggestions futures
   if(!CYCLE.alimentTypes) CYCLE.alimentTypes = [];
+  if(!MODAL.data.alimentTypes) MODAL.data.alimentTypes = CYCLE.alimentTypes.slice();
   if(CYCLE.alimentTypes.indexOf(t) === -1){ CYCLE.alimentTypes.push(t); lsSet('cycle',CYCLE); _syncConfigApp(); }
+  if(MODAL.data.alimentTypes.indexOf(t) === -1) MODAL.data.alimentTypes.push(t);
   rebuildAlimList();
   MODAL.data._msi = '';
   MODAL.data._msk = '';
