@@ -1222,6 +1222,16 @@ function loadLiveData() {
               if (key === 'lastBilanSem'  && val === '') CYCLE._lastBilanSem  = '';
               // dureeMois : Config_App est la source prioritaire (pas de race condition)
               if (key === 'dureeMois' && val && parseInt(val) > 0) CYCLE.dureeMois = parseInt(val);
+              // cycleDebut dans Config_App = détection changement de cycle indépendante de Config_Cycle
+              if (key === 'cycleDebut' && val && val.length && val !== CYCLE.dateDebut) {
+                HISTORY = []; lsSet('history', []);
+                lsSet('last_fiche', null);
+                LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = [];
+                CYCLE._lastFicheDate=''; CYCLE._lastSopDate=''; CYCLE._lastStockDate='';
+                CYCLE._lastPeseeDate=''; CYCLE._lastIncDate=''; CYCLE._lastSanteDate='';
+                CYCLE._lastBilanSem=''; MOCK.incidents=0;
+                STOCK_MVTS=[]; saveMvts();
+              }
             } catch(e) {}
           });
         }
@@ -1819,21 +1829,23 @@ function _syncConfigApp() {
       ['lastIncDate',   JSON.stringify(CYCLE._lastIncDate    || '')],
       ['lastSanteDate', JSON.stringify(CYCLE._lastSanteDate  || '')],
       ['lastBilanSem',  JSON.stringify(CYCLE._lastBilanSem   || '')],
-      ['dureeMois',     JSON.stringify(CYCLE.dureeMois       || 8)]
+      ['dureeMois',     JSON.stringify(CYCLE.dureeMois       || 8)],
+      ['cycleDebut',    JSON.stringify(CYCLE.dateDebut       || '')] // clé comparée par les autres acteurs
     ];
+    // Tenter création de l'onglet (ignorer l'erreur s'il existe déjà)
     var addUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + ':batchUpdate';
-    return fetch(addUrl, {
+    fetch(addUrl, {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
       body: JSON.stringify({ requests: [{ addSheet: { properties: { title: 'Config_App' } } }] })
-    }).then(function() {
-      var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + '/values/' + encodeURIComponent('Config_App!A1') + '?valueInputOption=USER_ENTERED';
-      return fetch(url, {
-        method: 'PUT',
-        headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values: rows })
-      });
     }).catch(function(){});
+    // PUT direct — indépendant de la création de l'onglet (l'onglet existe dans 99% des cas)
+    var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + '/values/' + encodeURIComponent('Config_App!A1') + '?valueInputOption=USER_ENTERED';
+    return fetch(url, {
+      method: 'PUT',
+      headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: rows })
+    }).then(function(r){ return r.json(); }).catch(function(){ return {}; });
   }).catch(function(){ return Promise.resolve(); });
 }
 
