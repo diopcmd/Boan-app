@@ -5760,6 +5760,27 @@ function pageGuide() {
       +'</div>';
   }
 
+  // ── État dynamique des tâches pour le guide ──
+  var _guideFicheFait  = ficheDejaSoumise();
+  var _guideSopFait    = sopDejaFait();
+  var _guideBilanFait  = bilanDejaFaitCetteSemaine();
+  var _guideJourSem    = new Date().getDay(); // 0=dim…5=ven…6=sam
+  var _guideJoursVen   = (_guideJourSem === 5) ? 0 : (5 - _guideJourSem + 7) % 7;
+
+  var _tacheFiche = _guideFicheFait
+    ? ['✅', 'Fiche du matin — ✓ Envoyée', 'Fiche du jour déjà enregistrée.', null]
+    : ['🌅', 'Fiche du matin', 'Comptez les bêtes. Eau ? Nourriture ? Enclos OK ? Signalez tout problème.', 'chTab(\'saisie\');chSub(\'fiche\')'];
+
+  var _tacheSop = _guideSopFait
+    ? ['✅', 'Checklist du soir (SOP) — ✓ Fait', 'SOP déjà validé aujourd\'hui.', null]
+    : ['🌙', 'Checklist du soir (SOP)', 'Nettoyage fait ? Rations distribuées ? Stock OK ? Santé des bêtes ?', 'chTab(\'saisie\');chSub(\'sop\')'];
+
+  var _tacheBilan = _guideBilanFait
+    ? ['✅', 'Bilan Sem. '+calcSemaine()+' — ✓ Envoyé', 'Bilan de la semaine bien reçu. Prochain bilan vendredi prochain.', null]
+    : (_guideJoursVen === 0
+      ? ['🔴', 'Bilan hebdomadaire — À envoyer ce soir !', 'C\'est vendredi ! Envoyez le bilan avant 20h : bêtes, nourriture, incidents, message direction.', 'chTab(\'saisie\');chSub(\'bilan\')']
+      : ['📊', 'Bilan hebdomadaire', 'Dans '+_guideJoursVen+' jour(s) (vendredi). Résumé : nombre de bêtes, nourriture, incidents, message à la Direction.', 'chTab(\'saisie\');chSub(\'bilan\')']);
+
   var body = '<div style="padding:14px 16px 24px;overflow-y:auto;max-height:calc(90vh - 70px)">'
 
     // Intro
@@ -5775,8 +5796,8 @@ function pageGuide() {
       '#1a4a20','#88ee99',
       '☀️','CHAQUE JOUR','Matin + Soir — SANS EXCEPTION',
       [
-        ['🌅','Fiche du matin','Comptez les bêtes. Eau ? Nourriture ? Enclos OK ? Signalez tout problème.','chTab(\'saisie\');chSub(\'fiche\')'],
-        ['🌙','Checklist du soir (SOP)','Nettoyage fait ? Rations distribuées ? Stock OK ? Santé des bêtes ?','chTab(\'saisie\');chSub(\'sop\')'],
+        _tacheFiche,
+        _tacheSop,
         ['🤒','Bête malade → agir maintenant','Ne pas attendre. Saisir les symptômes et le traitement donné.','chTab(\'saisie\');chSub(\'sante\')'],
         ['🚨','Accident grave → appeler aussi','Saisir l\'incident ET appeler la Direction tout de suite.','chTab(\'saisie\');chSub(\'inc\')'],
       ]
@@ -5789,7 +5810,7 @@ function pageGuide() {
       '#3a2a00','#ffcc66',
       '📅','BILAN — VENDREDI SOIR','1 fois par semaine — avant 20h',
       [
-        ['📊','Bilan hebdomadaire','Résumé : nombre de bêtes, nourriture consommée, incidents, votre message à la Direction.','chTab(\'saisie\');chSub(\'bilan\')'],
+        _tacheBilan,
       ]
     )
 
