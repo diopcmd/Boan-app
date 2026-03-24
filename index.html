@@ -2088,6 +2088,12 @@ function loadPrix() {
     if (!rows) return;
     LIVE.prix = rows
       .filter(function(r){ return r[0] && (r[2]||r[3]); })
+      .filter(function(r){
+        if (!CYCLE.dateDebut) return true;
+        var _p = r[0].split('/');
+        if (_p.length !== 3) return true;
+        return new Date(_p[2], _p[1]-1, _p[0]) >= new Date(CYCLE.dateDebut);
+      })
       .map(function(r){
         return {
           date: r[0]||'',
@@ -5041,13 +5047,9 @@ function viewLiv(){
         var rows = [];
         rows.push('<tr><td>'+(CYCLE.dateDebut||'—')+'</td><td>Capital initial</td><td style="color:#4caf50">'+fmt(solde)+'</td><td>—</td><td>'+fmt(solde)+'</td></tr>');
         if (CYCLE.nbBetes) {
-          var va = Math.round(solde*0.35);
-          solde -= va;
-          rows.push('<tr><td>—</td><td>Achat '+CYCLE.nbBetes+' betes</td><td>—</td><td style="color:#f44336">'+fmt(va)+'</td><td>'+fmt(solde)+'</td></tr>');
+          rows.push('<tr><td>—</td><td>Achat '+CYCLE.nbBetes+' bêtes</td><td>—</td><td style="color:#88aa88;font-size:11px" colspan="2">Non ventilé — voir RGA</td></tr>');
         }
-        if (MOCK.treso && MOCK.treso !== (CYCLE.capital||0)) {
-          rows.push('<tr><td>Auj.</td><td>Solde actuel</td><td>—</td><td>—</td><td style="font-weight:700;color:'+(MOCK.treso>=600000?'#4caf50':'#f44336')+'">'+fmt(MOCK.treso)+'</td></tr>');
-        }
+        rows.push('<tr><td>Auj.</td><td>Solde actuel</td><td>—</td><td>—</td><td style="font-weight:700;color:'+(MOCK.treso>=600000?'#4caf50':MOCK.treso>0?'#ff9800':'#f44336')+'">'+fmt(MOCK.treso)+'</td></tr>');
         return '<div class="tw"><table><tr><th>Date</th><th>Libelle</th><th>Entree</th><th>Sortie</th><th>Solde</th></tr>'+rows.join('')+'</table></div>';
       })()
   } else if(S.sub==='kpi'){
@@ -5099,6 +5101,13 @@ function viewLiv(){
       +'<div class="card">'
       +'<div class="stitle">📊 Actuel vs Objectifs</div>'
       + kpiBar('GMQ moyen',          actGMQ,    objGMQ,          ' kg/j', true)
+      +(function(){
+        var _m = new Date().getMonth()+1;
+        var _saison = (_m >= 6 && _m <= 10);
+        return '<div style="font-size:10px;color:#445544;margin-top:-8px;margin-bottom:10px;padding:0 2px">'
+          +(_saison ? '🌧 Saison des pluies — pâturage naturel disponible, GMQ favorisé' : '🌞 Saison sèche — fourrage d\'appoint essentiel pour maintenir le GMQ')
+          +'</div>';
+      })()
       + kpiBar('Stock aliments',      actStock,  objStock,        ' sem.',  true)
       + kpiBar('Bêtes actives',       actBetes,  objBetes,        ' têtes', true)
       + kpiBar('Poids moyen actuel',  poidsProj, poidsObjActuel,  ' kg',    true)
@@ -5113,6 +5122,14 @@ function viewLiv(){
       +'<span style="font-size:12px;color:#88aa88">CA projeté</span>'
       +'<span style="font-size:14px;font-weight:700;color:'+(caProj>=caObj?'#4caf50':'#ff9800')+'">'+fmt(caProj)+' FCFA</span>'
       +'</div>'
+      +(LIVE.prix && LIVE.prix.length ? (function(){
+        var _lp = LIVE.prix[LIVE.prix.length-1];
+        var _caLive = objBetes * poidsFinalProj * _lp.moy;
+        return '<div style="display:flex;justify-content:space-between;margin-bottom:8px">'
+          +'<span style="font-size:12px;color:#88aa88">CA au prix marché ('+_lp.foi+')</span>'
+          +'<span style="font-size:13px;font-weight:700;color:'+(_caLive>=caObj?'#4caf50':'#ff9800')+'">'+fmt(Math.round(_caLive))+'</span>'
+          +'</div>';
+      })() : '')
       +'<div style="display:flex;justify-content:space-between;margin-bottom:10px">'
       +'<span style="font-size:12px;color:#88aa88">Objectif théorique</span>'
       +'<span style="font-size:12px;color:#88aa88">'+fmt(caObj)+' FCFA</span>'
@@ -5208,6 +5225,14 @@ function viewLiv(){
         +'<div style="text-align:right"><div style="font-size:22px;font-weight:900;color:'+gmqCol+'">'+bete.gmq+' kg/j</div>'
         +'<div style="font-size:10px;color:#88aa88">GMQ moyen</div></div>'
         +'</div>'
+        +(function(){
+          if (!bete.historique || bete.historique.length < 2) return '';
+          var _last2 = bete.historique.slice(-2);
+          if (_last2[0].gmq < 0.5 && _last2[1].gmq < 0.5) {
+            return '<div style="background:#2e1010;border:1px solid #8a2020;border-radius:6px;padding:5px 10px;font-size:11px;color:#f44336;font-weight:700;margin-bottom:8px">⚠️ Stagnation — GMQ < 0,5 kg/j sur les 2 dernières pesées</div>';
+          }
+          return '';
+        })()
         + courbeGrowth(bete.historique, poidsDepart)
         +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">'
         +'<div style="background:#0f1f0f;border-radius:8px;padding:10px;text-align:center">'
@@ -5375,8 +5400,17 @@ function viewMarche(){
         var x=pad+i*xStep;
         return '<text x="'+x+'" y="'+(h+2)+'" font-size="7" fill="#556655" text-anchor="middle">'+p.date.slice(-5)+'</text>';
       }).join('');
+      var _objRefLine = (function(){
+        var op = CYCLE.objectifPrix;
+        if (!op) return '';
+        var oy = h-pad-((op-minV)/rng)*(h-pad*2);
+        if (oy < pad-8 || oy > h+8) return '';
+        return '<line x1="'+pad+'" y1="'+oy+'" x2="'+(w-pad)+'" y2="'+oy+'" stroke="#8aaa5a" stroke-width="1" stroke-dasharray="4,3" opacity="0.7"/>'
+          +'<text x="'+(pad+3)+'" y="'+(oy-3)+'" font-size="7" fill="#8aaa5a">obj '+Math.round(op)+'</text>';
+      })();
       return '<div style="background:#0a150a;border-radius:8px;padding:8px 4px 14px;margin-bottom:10px">'
         +'<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:55px;overflow:visible">'
+        +_objRefLine
         +'<polyline points="'+poly+'" fill="none" stroke="#C8A06A" stroke-width="2" stroke-linejoin="round"/>'
         +dots+lbls+'</svg></div>';
     }
@@ -5390,7 +5424,11 @@ function viewMarche(){
         +'<div style="font-size:11px;color:#88aa88">'+p.foi+' — '+p.date+'</div>'
         +'</div><div style="color:'+tCol+';font-size:18px">'+trend+'</div></div>';
     }).join('');
-    view='<div class="stitle">Prix observés</div>'
+    var _lastMoyAlert = prixData.length ? prixData[prixData.length-1].moy : 0;
+    var _prixAlertBanner = (_lastMoyAlert && CYCLE.objectifPrix && _lastMoyAlert < CYCLE.objectifPrix)
+      ? '<div style="background:#2e1500;border:1px solid #8a4400;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#ffaa40">⚠️ Dernier prix relevé ('+fmt(Math.round(_lastMoyAlert))+' FCFA/kg) inférieur à votre objectif ('+fmt(CYCLE.objectifPrix)+' FCFA/kg) — prudence avant vente.</div>'
+      : '';
+    view=_prixAlertBanner+'<div class="stitle">Prix observés</div>'
       +(prixData.length ? courbesPrix(prixData) : '')
       +(histHtml || '<div style="font-size:12px;color:#445544;padding:8px 0">Aucun prix enregistré — saisissez ci-dessous</div>')
       +'<div class="sep"></div>'
@@ -5415,7 +5453,8 @@ function viewMarche(){
     // ── État — valeurs par défaut réalistes marché sénégalais ──
     var nb      = S.sn  !== null && S.sn  !== undefined ? S.sn  : (CYCLE.nbBetes||4);
     var sp      = S.sp  !== null && S.sp  !== undefined ? S.sp  : (CYCLE.poidsDepart ? Math.round(CYCLE.poidsDepart*1.5) : 420); // poids vente ≈ 1.5× départ
-    var px      = S.spx !== null && S.spx !== undefined ? S.spx : (CYCLE.objectifPrix||2000);
+    var _lastLiveMoy = LIVE.prix && LIVE.prix.length ? LIVE.prix[LIVE.prix.length-1].moy : 0;
+    var px      = S.spx !== null && S.spx !== undefined ? S.spx : (_lastLiveMoy || CYCLE.objectifPrix || 2000);
     var pveau   = S.sveau !== null && S.sveau !== undefined ? S.sveau : (CYCLE.capital && CYCLE.nbBetes ? Math.round(CYCLE.capital/CYCLE.nbBetes) : 450000);
     var calim   = S.salim    !== undefined ? S.salim    : 180000; // alim FCFA/mois troupeau entier
     var cvet    = S.svet     !== undefined ? S.svet     : 20000;  // vét FCFA/bête/cycle
@@ -5601,10 +5640,74 @@ function viewMarche(){
     +   '</div>'
     + '</div>';
   } else {
-    view='<div class="stitle">Recommandations — Commerciale</div>'
-      +'<div class="reco-card"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><div style="font-size:13px;font-weight:bold">Prix / Vente</div><div style="font-size:11px;color:#88bb88;background:#1a3a1a;padding:2px 8px;border-radius:10px">C1</div></div><div style="font-size:12px;color:#aaa;line-height:1.5">Cibler vente oct-dec 2026. Contacter 3 bouchers des aout pour pre-engagement prix.</div><div style="font-size:11px;color:#ffaa40;margin-top:5px">+8-15% CA — <span style="color:#88cc88">En cours</span></div></div>'
-      +'<div class="reco-card"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><div style="font-size:13px;font-weight:bold">Acheteurs</div><div style="font-size:11px;color:#88bb88;background:#1a3a1a;padding:2px 8px;border-radius:10px">C1</div></div><div style="font-size:12px;color:#aaa;line-height:1.5">Signer 1 accord cadre avec boucher Thies avant introduction veaux aout 2026.</div><div style="font-size:11px;color:#ffaa40;margin-top:5px">Securisation CA — <span style="color:#88cc88">En cours</span></div></div>'
-      +'<div class="reco-card"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><div style="font-size:13px;font-weight:bold">Marché</div><div style="font-size:11px;color:#88bb88;background:#1a3a1a;padding:2px 8px;border-radius:10px">C1-C2</div></div><div style="font-size:12px;color:#aaa;line-height:1.5">Priorité Tivaouane pour vente C1 — prix 5-8% supérieurs à Thiès sur Djakoré.</div><div style="font-size:11px;color:#ffaa40;margin-top:5px">+5% CA — <span style="color:#88cc88">À initier</span></div></div>';
+    // M3+L5: Dynamic reco from LIVE.prix
+    var _pdReco = LIVE.prix && LIVE.prix.length ? LIVE.prix : [];
+    var _recoCards = '';
+    if (_pdReco.length) {
+      // Best foirail (M3)
+      var _fStats = {};
+      _pdReco.forEach(function(p){
+        if (!_fStats[p.foi]) _fStats[p.foi] = {total:0, cnt:0};
+        _fStats[p.foi].total += (p.moy||0); _fStats[p.foi].cnt++;
+      });
+      var _bestFoi = null, _bestMoyF = 0;
+      Object.keys(_fStats).forEach(function(f){
+        var _mf = _fStats[f].total/_fStats[f].cnt;
+        if (_mf > _bestMoyF) { _bestMoyF = _mf; _bestFoi = f; }
+      });
+      var _cycFoi = CYCLE.foirail || 'Thiès';
+      var _foiTxt = (_bestFoi && _bestFoi !== _cycFoi)
+        ? _bestFoi+' offre les meilleurs prix ce cycle (moy. '+fmt(Math.round(_bestMoyF))+' FCFA/kg) — supérieur à votre foirail cible '+_cycFoi+'.'
+        : (_cycFoi+' reste le foirail le plus avantageux sur ce cycle (moy. '+fmt(Math.round(_bestMoyF))+' FCFA/kg).');
+      _recoCards += '<div class="reco-card">'
+        +'<div style="display:flex;justify-content:space-between;margin-bottom:6px">'
+        +'<div style="font-size:13px;font-weight:bold">Meilleur foirail</div>'
+        +'<div style="font-size:11px;color:#88bb88;background:#1a3a1a;padding:2px 8px;border-radius:10px">🟢 Live</div>'
+        +'</div>'
+        +'<div style="font-size:12px;color:#aaa;line-height:1.5">'+_foiTxt+'</div>'
+        +(_bestFoi&&_bestFoi!==_cycFoi?'<div style="font-size:11px;color:#4caf50;margin-top:5px">→ Privilégier <strong style="color:#fff">'+_bestFoi+'</strong> pour maximiser le CA</div>':'')
+        +'</div>';
+
+      // Tendance prix (L5)
+      if (_pdReco.length >= 2) {
+        var _prLast = _pdReco[_pdReco.length-1], _prPrev = _pdReco[_pdReco.length-2];
+        var _delta = (_prLast.moy||0) - (_prPrev.moy||0);
+        var _trendTxt = _delta > 50
+          ? 'Prix en hausse de +'+fmt(Math.round(_delta))+' FCFA/kg depuis la dernière observation. Moment favorable pour vendre ou pré-engager un acheteur.'
+          : _delta < -50
+            ? 'Prix en baisse de '+fmt(Math.round(Math.abs(_delta)))+' FCFA/kg. Attendre une remontée avant vente définitive si le calendrier le permet.'
+            : 'Marché stable (variation < 50 FCFA/kg). Surveiller l\'approche des fêtes pour optimiser le timing de vente.';
+        var _tCol = _delta > 50 ? '#4caf50' : _delta < -50 ? '#f44336' : '#ffaa40';
+        _recoCards += '<div class="reco-card">'
+          +'<div style="display:flex;justify-content:space-between;margin-bottom:6px">'
+          +'<div style="font-size:13px;font-weight:bold">Tendance prix</div>'
+          +'<div style="font-size:11px;color:#88bb88;background:#1a3a1a;padding:2px 8px;border-radius:10px">'+(_delta>50?'↑ Hausse':_delta<-50?'↓ Baisse':'→ Stable')+'</div>'
+          +'</div>'
+          +'<div style="font-size:12px;color:#aaa;line-height:1.5">'+_trendTxt+'</div>'
+          +'<div style="font-size:11px;color:'+_tCol+';margin-top:5px">Dernière obs. : '+fmt(Math.round(_prLast.moy))+' FCFA/kg — '+_prLast.foi+' ('+_prLast.date+')</div>'
+          +'</div>';
+      }
+
+      // Vs objectif (L5)
+      var _objP = CYCLE.objectifPrix || 2000;
+      var _lastPr = _pdReco[_pdReco.length-1].moy;
+      var _vsObj = _lastPr ? Math.round((_lastPr/_objP-1)*100) : null;
+      _recoCards += '<div class="reco-card">'
+        +'<div style="display:flex;justify-content:space-between;margin-bottom:6px">'
+        +'<div style="font-size:13px;font-weight:bold">Objectif prix</div>'
+        +'<div style="font-size:11px;color:#88bb88;background:#1a3a1a;padding:2px 8px;border-radius:10px">'+fmt(_objP)+' FCFA/kg</div>'
+        +'</div>'
+        +(_vsObj !== null
+          ? '<div style="font-size:12px;color:#aaa;line-height:1.5">Marché actuel '
+              +(_vsObj>=0?'<span style="color:#4caf50">+'+_vsObj+'%</span> au-dessus':'<span style="color:#f44336">'+_vsObj+'%</span> en dessous')
+              +' de votre objectif de vente.</div>'
+              +'<div style="font-size:11px;color:'+(_vsObj>=0?'#4caf50':'#f44336')+';margin-top:5px">'+(_vsObj>=0?'✅ Vente profitable dès maintenant.':'⚠️ Attendre ou renégocier le prix cible.')+'</div>'
+          : '<div style="font-size:12px;color:#445544;line-height:1.5">Saisissez des prix foirail pour obtenir cette analyse.</div>')
+        +'</div>';
+    } else {
+      _recoCards = '<div style="background:#0f1f0f;border-radius:10px;padding:16px;text-align:center;color:#445544;font-size:13px">Aucun prix enregistré ce cycle.<br><span style="color:#88aa88">Saisissez vos observations dans l\'onglet Prix pour des recommandations personnalisées.</span></div>';
+    }
+    view='<div class="stitle">Recommandations — Commerciale</div>'+_recoCards;
   }
   return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+view+'</div>';
 }
