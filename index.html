@@ -1409,9 +1409,11 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   });
 
   // Incidents [date, id, type, grav, desc, act, clos]
+  LIVE.incidents = [];
   (incidents || []).forEach(function(r) {
     if (!r[0]) return;
     var id = r[1] || '—'; var typeInc = r[2] || '—';
+    LIVE.incidents.push({ date:r[0], id:r[1]||'', type:r[2]||'', grav:r[3]||'1', desc:r[4]||'', act:r[5]||'', clos:r[6]||'' });
     entries.push({ type:'inc', label:id+' \u2014 '+typeInc, icon:icons.inc,
       date:r[0], time:'—', _id:id, _typeInc:typeInc, _src:'sheets' });
   });
@@ -1905,11 +1907,12 @@ var SPARK = {
 
 // Store des données live pour courbes de croissance + seuil de rentabilité
 var LIVE = {
-  pesees:  [],
-  beteIds: [],
-  prix:    [],  // [{date, foi, bas, moy, haut}] depuis Suivi_Marche
-  loaded:  false,
-  source:  'cache'  // 'live' | 'cache' | 'loading'
+  pesees:    [],
+  beteIds:   [],
+  prix:      [],  // [{date, foi, bas, moy, haut}] depuis Suivi_Marche
+  incidents: [],  // { date, id, type, grav, desc, act, clos } — chargées depuis Vague 2
+  loaded:    false,
+  source:    'cache'  // 'live' | 'cache' | 'loading'
 };
 // Charge les pesées depuis Sheets pour les courbes de croissance
 function loadPesees() {
@@ -3451,10 +3454,11 @@ function saveCycle(){
   CYCLE._lastSanteDate  = '';
   CYCLE._lastBilanSem   = '';
   lsSet('cycle', CYCLE);
-  LIVE.pesees  = [];
-  LIVE.beteIds = [];
-  LIVE.loaded  = false;
-  LIVE.source  = 'loading';
+  LIVE.pesees    = [];
+  LIVE.beteIds   = [];
+  LIVE.incidents = [];
+  LIVE.loaded    = false;
+  LIVE.source    = 'loading';
   MOCK.gmq       = 1.1;
   MOCK.incidents = 0;
   MOCK.treso     = CYCLE.capital || 0;
@@ -3548,6 +3552,67 @@ function saveCycle(){
     }).catch(function() {
       loadLiveData();
     });
+  });
+}
+
+// ── Clôture d'un incident existant ──
+// Ouvre le mini-formulaire inline (action + confirmation)
+function closeIncident(i) {
+  var inc = LIVE.incidents[i];
+  if (!inc) return;
+  S._closeInc = { idx: i, act: inc.act || '' };
+  r();
+}
+
+// Écrit la clôture dans Google Sheets (gérant + fondateur + rga) en trouvant la ligne exacte
+function submitCloseInc() {
+  var ci = S._closeInc;
+  if (!ci) return;
+  var inc = LIVE.incidents[ci.idx];
+  if (!inc) return;
+  var actNote = ci.act || '';
+  var sidHisto = SID.gerant || SID.fondateur;
+  if (!sidHisto) { S.msg = '❌ SID non configuré'; r(); return; }
+  S.sending = true; r();
+  getTok().then(function(tk) {
+    if (!tk) { S.sending = false; S.msg = '❌ Token invalide'; r(); return; }
+    readSheet(sidHisto, 'Incidents!A4:G200').then(function(rows) {
+      var rowIdx = -1;
+      (rows || []).forEach(function(row, i) {
+        if (rowIdx >= 0) return;
+        if (row[0] === inc.date && (row[1]||'') === inc.id && (row[2]||'') === inc.type) {
+          rowIdx = 4 + i;
+        }
+      });
+      if (rowIdx < 0) { S.sending = false; S.msg = '❌ Ligne introuvable dans Sheets'; r(); return; }
+      var newRow = [inc.date, inc.id, inc.type, inc.grav, inc.desc, actNote, 'OUI'];
+      var enc = encodeURIComponent('Incidents');
+      var sids = [SID.gerant, SID.fondateur, SID.rga].filter(Boolean);
+      var ps = sids.map(function(sid) {
+        var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid
+          +'/values/'+enc+'!A'+rowIdx+':G'+rowIdx+'?valueInputOption=USER_ENTERED';
+        return fetch(url, { method:'PUT',
+          headers:{ Authorization:'Bearer '+tk, 'Content-Type':'application/json' },
+          body: JSON.stringify({ values:[newRow] }) });
+      });
+      return Promise.all(ps);
+    }).then(function() {
+      LIVE.incidents[ci.idx].act  = actNote;
+      LIVE.incidents[ci.idx].clos = 'OUI';
+      S.sending = false;
+      S._closeInc = null;
+      S.msg = '✅ Incident clôturé';
+      r();
+      setTimeout(function(){ S.msg=''; r(); }, 3000);
+    }).catch(function(e) {
+      S.sending = false;
+      S.msg = '❌ ' + (e.message || 'Erreur réseau');
+      r();
+    });
+  }).catch(function(e) {
+    S.sending = false;
+    S.msg = '❌ ' + (e.message || 'Erreur réseau');
+    r();
   });
 }
 
@@ -4690,7 +4755,43 @@ function viewSaisie(){
       +fl('Description','<textarea rows="2" placeholder=" " oninput="S.fin.desc=this.value">'+f.desc+'</textarea>',f.desc)
       +fl('Action effectuée','<textarea rows="2" placeholder=" " oninput="S.fin.act=this.value">'+f.act+'</textarea>',f.act)
       +'<div class="fg"><label>Clôturée ?</label>'+yn(f.clos,'clos','fin')+'</div>'
-      +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'inc\')">Enregistrer</button>'+msgHtml()+'</div>';
+      +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'inc\')">Enregistrer</button>'+msgHtml()+'</div>'
+      +(LIVE.loaded ? (function(){
+        var ci = S._closeInc;
+        var openIncs = LIVE.incidents.filter(function(inc){ return inc.clos !== 'OUI'; });
+        if (!openIncs.length) return '<div class="card" style="margin-top:12px"><div style="color:#667766;font-size:12px;padding:4px 0">✓ Aucun incident ouvert</div></div>';
+        var gravCls = { '1':'kval-ok', '2':'kval-warn', '3':'kval-crit' };
+        return '<div class="card" style="margin-top:12px">'
+          +'<div class="sb-section-title" style="margin-bottom:6px">Incidents ouverts ('+openIncs.length+')</div>'
+          +openIncs.map(function(inc){
+            var origIdx = LIVE.incidents.indexOf(inc);
+            var closing = ci && ci.idx === origIdx;
+            var gCl = gravCls[inc.grav] || 'kval-ok';
+            return '<div style="border-bottom:1px solid #2a3a2a;padding:8px 0">'
+              +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+              +'<span style="font-size:11px;color:#88aa88">'+inc.date+'</span>'
+              +'<span style="font-weight:700;color:#cfc">'+inc.id+'</span>'
+              +'<span style="flex:1;color:#bbb;font-size:12px">'+inc.type+'</span>'
+              +'<span class="sb-val '+gCl+'" style="font-size:11px">G'+inc.grav+'</span>'
+              +(closing ? '' : '<button onclick="closeIncident('+origIdx+')" style="font-size:11px;padding:4px 10px;background:#1a2e1a;color:#8bc98b;border:1px solid #3a5a3a;border-radius:5px;cursor:pointer">Clôturer</button>')
+              +'</div>'
+              +(inc.desc ? '<div style="font-size:12px;color:#99aa88;margin-top:3px;padding-left:2px">'+inc.desc+'</div>' : '')
+              +(closing
+                ? '<div style="margin-top:8px">'
+                  +'<textarea rows="2" placeholder="Action effectuée (optionnel)..." '
+                  +'style="width:100%;background:#1a1e1a;color:#ccc;border:1px solid #3a5a3a;border-radius:6px;padding:6px;font-size:12px;box-sizing:border-box;resize:vertical" '
+                  +'oninput="S._closeInc.act=this.value">'+((ci&&ci.act)||'')+'</textarea>'
+                  +'<div style="display:flex;gap:8px;margin-top:6px">'
+                  +'<button onclick="submitCloseInc()" '+(S.sending?'disabled':'')+' style="flex:1;font-size:12px;padding:7px 0;background:#2e5a1e;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700">✓ Confirmer clôture</button>'
+                  +'<button onclick="S._closeInc=null;r()" style="padding:7px 12px;font-size:12px;background:#201414;color:#cc7777;border:1px solid #6a3a3a;border-radius:6px;cursor:pointer">Annuler</button>'
+                  +'</div>'
+                  +'</div>'
+                : '')
+              +'</div>';
+          }).join('')
+          +(S.msg && ci===null ? '<div style="margin-top:8px;font-size:13px">'+S.msg+'</div>' : '')
+          +'</div>';
+      })() : '');
   } else if(S.sub==='pesee'){
     var f=S.fp; if(!f.date)f.date=td;
 
