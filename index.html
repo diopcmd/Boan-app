@@ -1792,7 +1792,9 @@ function _submitActual(type) {
       var _meta = {};
       if(type==='inc')   _meta = {_id: S.fin.id, _typeInc: S.fin.type};
       if(type==='sante') _meta = {_id: S.fsa.id, _sym: S.fsa.sym};
-      var _label = type==='fiche' ? 'Fiche du '+isoToFr(S.fi.date||todayISO()) : type;
+      var _label = type==='fiche'  ? 'Fiche du '+isoToFr(S.fi.date||todayISO())
+                 : type==='marche' ? 'Marché '+(S.fm.foi==='Autre'&&S.fm.foiCustom ? S.fm.foiCustom : (S.fm.foi||''))
+                 : type;
       addHistory(type, _label, _meta);
       // Persister date de chaque type dans Config_App → visible par tous dès step1 (avant Vague 2)
       var _tdSync = today();
@@ -1805,7 +1807,7 @@ function _submitActual(type) {
       if (type==='bilan')  CYCLE._lastBilanSem  = String(calcSemaine());
       lsSet('cycle', CYCLE);
       // Attendre que Config_App soit mis à jour avant de recharger (évite race condition step1)
-      _syncConfigApp().then(function(){ loadLiveData(); setTimeout(loadPesees, 300); });
+      _syncConfigApp().then(function(){ loadLiveData(); setTimeout(loadPesees, 300); if(type==='marche') setTimeout(loadPrix, 400); });
       // Reset formulaire après soumission réussie
       var td = todayISO();
       if(type==='fiche') S.fi={date:td,nb:'',nourris:'',eau:'',enclos:'',incident:'',desc:''};
@@ -5353,10 +5355,10 @@ function viewMarche(){
         ?'<div class="fg"><label>Préciser la région</label><input placeholder="Nom du foirail..." value="'+(S.fm.foiCustom||'')+'" oninput="S.fm.foiCustom=this.value"></div>'
         :'')
       +'<div class="frow">'
-      +'<div class="fg"><label>Prix bas</label><input type="number" inputmode="decimal" placeholder="FCFA/kg" oninput="S.fm.bas=this.value"></div>'
-      +'<div class="fg"><label>Prix moyen</label><input type="number" inputmode="decimal" placeholder="FCFA/kg" oninput="S.fm.moy=this.value"></div>'
+      +'<div class="fg"><label>Prix bas</label><input type="number" inputmode="decimal" placeholder="FCFA/kg" value="'+(S.fm.bas||'')+'" oninput="S.fm.bas=this.value"></div>'
+      +'<div class="fg"><label>Prix moyen</label><input type="number" inputmode="decimal" placeholder="FCFA/kg" value="'+(S.fm.moy||'')+'" oninput="S.fm.moy=this.value"></div>'
       +'</div>'
-      +'<div class="fg"><label>Prix haut</label><input type="number" inputmode="decimal" placeholder="FCFA/kg" oninput="S.fm.haut=this.value"></div>'
+      +'<div class="fg"><label>Prix haut</label><input type="number" inputmode="decimal" placeholder="FCFA/kg" value="'+(S.fm.haut||'')+'" oninput="S.fm.haut=this.value"></div>'
       +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'marche\')">Enregistrer</button>'+msgHtml()
       +'</div>';
   } else if(S.sub==='sim'){
