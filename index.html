@@ -1105,7 +1105,29 @@ function appendRow(sid, range, vals) {
         });
       })
       .then(function(res){return res.json();})
-      .then(function(d){return d.error?{ok:false,err:d.error.message}:{ok:true};})
+      .then(function(d){
+        if (d.error) {
+          var _em = d.error.message || '';
+          // Onglet inexistant → le créer automatiquement et réessayer une fois
+          if (_em.indexOf('Unable to parse range') !== -1 || _em.indexOf('not found') !== -1) {
+            var _cu = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+':batchUpdate';
+            return fetch(_cu, {method:'POST', headers:{Authorization:'Bearer '+tk,'Content-Type':'application/json'},
+              body:JSON.stringify({requests:[{addSheet:{properties:{title:sheetName}}}]})})
+            .then(function(){
+              var _ru2 = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+enc+'!A'+tr.start+':A'+tr.end;
+              return fetch(_ru2, {headers:{Authorization:'Bearer '+tk}}).then(function(r){return r.json();})
+              .then(function(d2){
+                var _rows2=(d2.values||[]).filter(function(r2){return r2&&r2.length>0&&r2[0]!=='';});
+                var _tl2=Math.min(tr.start+_rows2.length,tr.end);
+                var _wu2='https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+enc+'!A'+_tl2+'?valueInputOption=USER_ENTERED';
+                return fetch(_wu2,{method:'PUT',headers:{Authorization:'Bearer '+tk,'Content-Type':'application/json'},body:JSON.stringify({values:[vals]})});
+              }).then(function(r){return r.json();}).then(function(d3){return d3.error?{ok:false,err:d3.error.message}:{ok:true};});
+            }).catch(function(){ return {ok:false, err:'Impossible de créer l\'onglet "'+sheetName+'" — vérifier les permissions'}; });
+          }
+          return {ok:false, err:_em};
+        }
+        return {ok:true};
+      })
       .catch(function(e){return{ok:false,err:e.message};});
   }).catch(function(e){return{ok:false,err:e.message};});
 }
@@ -1503,10 +1525,22 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
     sheetsKeys[e.type + '|' + e.date + '|' + (e._id || '')] = true;
   });
 
+  // Types pour lesquels Sheets est définitivement vide ce cycle (source de vérité)
+  // → tout orphelin local de ce type est invalide (cycle reset ou jamais soumis)
+  var _emptyInSheets = {};
+  if (!fiches.length)    _emptyInSheets['fiche']  = true;
+  if (!sops.length)      _emptyInSheets['sop']    = true;
+  if (!bilans.length)    _emptyInSheets['bilan']  = true;
+  if (!santes.length)    _emptyInSheets['sante']  = true;
+  if (!pesees.length)    _emptyInSheets['pesee']  = true;
+  if (!incidents.length) _emptyInSheets['inc']    = true;
+  if (!stocks.length)    _emptyInSheets['stock']  = true;
+
   // Filtre cycle : rejeter les entrées locales antérieures au début du cycle courant
   var _cycleStart = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : null;
   var localOnly = (HISTORY || []).filter(function(h) {
     if (h._src === 'sheets') return false; // déjà issu de Sheets
+    if (_emptyInSheets[h.type]) return false; // Sheets vide pour ce type → orphelin invalide
     // Exclure les entrées d'un cycle précédent survivant en localStorage
     if (_cycleStart && h.date) {
       var _p = h.date.split('/');
@@ -1551,6 +1585,17 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   // 6. Sauvegarder dans localStorage ET mettre à jour HISTORY global
   HISTORY = result;
   lsSet('history', HISTORY);
+
+  // Effacer les marqueurs locaux pour les types absents des Sheets (source de vérité)
+  var _cycleChanged = false;
+  if (_emptyInSheets['fiche'])  { lsSet('last_fiche', null); CYCLE._lastFicheDate = ''; _cycleChanged = true; }
+  if (_emptyInSheets['sop'])    { CYCLE._lastSopDate   = ''; _cycleChanged = true; }
+  if (_emptyInSheets['bilan'])  { CYCLE._lastBilanSem  = ''; _cycleChanged = true; }
+  if (_emptyInSheets['pesee'])  { CYCLE._lastPeseeDate = ''; _cycleChanged = true; }
+  if (_emptyInSheets['stock'])  { CYCLE._lastStockDate = ''; _cycleChanged = true; }
+  if (_emptyInSheets['inc'])    { CYCLE._lastIncDate   = ''; _cycleChanged = true; }
+  if (_emptyInSheets['sante'])  { CYCLE._lastSanteDate = ''; _cycleChanged = true; }
+  if (_cycleChanged) lsSet('cycle', CYCLE);
 
   // 7. Mettre à jour MOCK.incidents — incidents de la semaine courante (lun→dim, fuseau Dakar)
   var _n = _nowDakar();
