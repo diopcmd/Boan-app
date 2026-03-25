@@ -5424,95 +5424,90 @@ function viewMarche(){
     var fm=S.fm;
     var prixData = LIVE.prix && LIVE.prix.length ? LIVE.prix : [];
 
-    // ── Filtre foirail (Feature 3) ──
-    var _allFois = [];
-    prixData.forEach(function(p){ if(p.foi && _allFois.indexOf(p.foi)===-1) _allFois.push(p.foi); });
-    var _foiFilter = S._prixFoiFilter || 'Tous';
-    if (_foiFilter !== 'Tous' && _allFois.indexOf(_foiFilter) === -1) { S._prixFoiFilter = 'Tous'; _foiFilter = 'Tous'; }
-    var _prixFiltered = (_foiFilter === 'Tous' || _allFois.length <= 1)
-      ? prixData
-      : prixData.filter(function(p){ return p.foi === _foiFilter; });
-    var _filtreHtml = '';
-    if (_allFois.length > 1) {
-      _filtreHtml = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">';
-      ['Tous'].concat(_allFois).forEach(function(f){
-        var isA = f === _foiFilter;
-        _filtreHtml += '<button onclick="S._prixFoiFilter=\''+f+'\';r()" style="padding:4px 12px;font-size:11px;border-radius:14px;border:1px solid '+(isA?'#C8A06A':'#2a4a2a')+';background:'+(isA?'#C8A06A':'transparent')+';color:'+(isA?'#0f1a0f':'#88aa88')+';cursor:pointer;font-weight:600">'+f+'</button>';
-      });
-      _filtreHtml += '</div>';
-    }
-
-    // ── Courbe band bas/moy/haut (Feature 2) ──
+    // ── Courbe simplifiée : ligne nette + dernier point mis en valeur + objectif ──
     function courbesPrix(data) {
       if (!data.length) return '';
-      var pts = data.slice(-12);
+      var pts = data.slice(-10);
       var n = pts.length;
-      var allVals = [];
-      pts.forEach(function(p){
-        if(p.bas&&p.bas>0) allVals.push(p.bas);
-        if(p.moy&&p.moy>0) allVals.push(p.moy);
-        if(p.haut&&p.haut>0) allVals.push(p.haut);
-      });
-      if(!allVals.length) return '';
-      var minV = Math.min.apply(null,allVals), maxV = Math.max.apply(null,allVals);
-      if(CYCLE.objectifPrix){ if(CYCLE.objectifPrix<minV) minV=CYCLE.objectifPrix; if(CYCLE.objectifPrix>maxV) maxV=CYCLE.objectifPrix; }
-      var rng = maxV-minV||200;
-      minV = Math.max(0, minV-rng*0.12); maxV = maxV+rng*0.08; rng = maxV-minV;
-      var w=300, h=80, padX=12, padY=14;
-      var xStep = n>1 ? (w-padX*2)/(n-1) : 0;
+      var vals = pts.map(function(p){ return p.moy||p.bas||0; }).filter(function(v){ return v>0; });
+      if (!vals.length) return '';
+      var minV = Math.min.apply(null,vals), maxV = Math.max.apply(null,vals);
+      if (CYCLE.objectifPrix) { if(CYCLE.objectifPrix<minV) minV=CYCLE.objectifPrix; if(CYCLE.objectifPrix>maxV) maxV=CYCLE.objectifPrix; }
+      var rng = maxV - minV || 400;
+      minV = Math.max(0, minV - rng*0.15); maxV = maxV + rng*0.1; rng = maxV - minV;
+      var w=300, h=70, padX=14, padY=10, padR=56; // padR = espace droite pour label objectif
+      var xStep = n>1 ? (w-padX-padR)/(n-1) : 0;
       function yp(v){ return h-padY-((v-minV)/rng)*(h-padY*2); }
-      // Zone band bas→haut
-      var hasBand = pts.some(function(p){ return p.bas>0&&p.haut>0; });
-      var band = '';
-      if(hasBand){
-        var topPts = pts.map(function(p,i){ return (padX+i*xStep)+','+yp(p.haut||p.moy||0); }).join(' ');
-        var botPts = '';
-        for(var _bi=n-1;_bi>=0;_bi--){ botPts += (padX+_bi*xStep)+','+yp(pts[_bi].bas||pts[_bi].moy||0)+' '; }
-        band = '<polygon points="'+topPts+' '+botPts.trim()+'" fill="#C8A06A" opacity="0.13"/>';
-      }
       // Ligne prix moyen
       var polyMoy = pts.map(function(p,i){ return (padX+i*xStep)+','+yp(p.moy||p.bas||0); }).join(' ');
-      var dots = pts.map(function(p,i){
-        var x=padX+i*xStep, y=yp(p.moy||p.bas||0), v=Math.round(p.moy||0);
-        return '<circle cx="'+x+'" cy="'+y+'" r="3" fill="#C8A06A" stroke="#0a150a" stroke-width="1.5"/>'
-          +(v?'<text x="'+x+'" y="'+(y-7)+'" font-size="7.5" fill="#C8A06A" text-anchor="middle">'+fmt(v)+'</text>':'');
+      // Petit point gris pour tous les points sauf le dernier
+      var dots = pts.slice(0,-1).map(function(p,i){
+        return '<circle cx="'+(padX+i*xStep)+'" cy="'+yp(p.moy||p.bas||0)+'" r="2.5" fill="#444" stroke="none"/>';
       }).join('');
-      var lbls = pts.map(function(p,i){
-        if(n>7&&i%2!==0) return '';
-        return '<text x="'+(padX+i*xStep)+'" y="'+(h+5)+'" font-size="6.5" fill="#556655" text-anchor="middle">'+p.date.slice(-5)+'</text>';
-      }).join('');
-      // Ligne objectif
+      // Dernier point : cercle blanc gros + prix en gras
+      var _last = pts[n-1], _lx = padX+(n-1)*xStep, _ly = yp(_last.moy||_last.bas||0);
+      var _lastDot = '<circle cx="'+_lx+'" cy="'+_ly+'" r="5" fill="#C8A06A" stroke="#fff" stroke-width="1.5"/>';
+      // Dates : première + dernière seulement
+      var _lbl0 = '<text x="'+padX+'" y="'+(h+9)+'" font-size="8" fill="#556655" text-anchor="middle">'+String(pts[0].date||'').slice(-5)+'</text>';
+      var _lblN = n>1 ? '<text x="'+_lx+'" y="'+(h+9)+'" font-size="8" fill="#C8A06A" text-anchor="middle">'+String(_last.date||'').slice(-5)+'</text>' : '';
+      // Ligne objectif à droite avec label
       var _objLine = '';
-      if(CYCLE.objectifPrix){ var _oy=yp(CYCLE.objectifPrix); if(_oy>=padY-5&&_oy<=h){ _objLine='<line x1="'+padX+'" y1="'+_oy+'" x2="'+(w-padX)+'" y2="'+_oy+'" stroke="#8aaa5a" stroke-width="1" stroke-dasharray="4,3" opacity="0.8"/><text x="'+(padX+3)+'" y="'+(_oy-3)+'" font-size="7" fill="#8aaa5a">obj '+fmt(CYCLE.objectifPrix)+'</text>'; }}
-      var legend = '<div style="display:flex;gap:14px;justify-content:center;margin-top:6px">'
-        +(hasBand?'<div style="display:flex;align-items:center;gap:4px;font-size:9px;color:#88aa88"><div style="width:10px;height:6px;background:#C8A06A;opacity:0.3;border-radius:1px"></div>Fourchette</div>':'')
-        +'<div style="display:flex;align-items:center;gap:4px;font-size:9px;color:#C8A06A"><div style="width:14px;height:2px;background:#C8A06A;border-radius:1px"></div>Moyen</div>'
-        +(CYCLE.objectifPrix?'<div style="display:flex;align-items:center;gap:4px;font-size:9px;color:#8aaa5a"><div style="width:12px;height:0;border-top:1px dashed #8aaa5a"></div>Objectif</div>':'')
-        +'</div>';
-      return '<div style="background:#0a150a;border-radius:8px;padding:8px 4px 10px;margin-bottom:10px">'
-        +'<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:80px;overflow:visible">'
-        +band+_objLine
-        +'<polyline points="'+polyMoy+'" fill="none" stroke="#C8A06A" stroke-width="2" stroke-linejoin="round"/>'
-        +dots+lbls+'</svg>'+legend+'</div>';
+      if (CYCLE.objectifPrix) {
+        var _oy = yp(CYCLE.objectifPrix);
+        if (_oy >= padY-4 && _oy <= h) {
+          _objLine = '<line x1="'+padX+'" y1="'+_oy+'" x2="'+(w-padR+4)+'" y2="'+_oy+'" stroke="#8aaa5a" stroke-width="1" stroke-dasharray="5,3" opacity="0.9"/>'
+            +'<text x="'+(w-padR+7)+'" y="'+(_oy+4)+'" font-size="8.5" fill="#8aaa5a" font-weight="600">'+fmt(CYCLE.objectifPrix)+'</text>';
+        }
+      }
+      return '<div style="background:#0a150a;border-radius:10px;padding:10px 6px 16px;margin-bottom:12px">'
+        +'<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:70px;overflow:visible">'
+        +_objLine
+        +'<polyline points="'+polyMoy+'" fill="none" stroke="#C8A06A" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>'
+        +dots+_lastDot+_lbl0+_lblN
+        +'</svg></div>';
     }
-    var lastEntries = _prixFiltered.slice(-3).reverse();
-    var histHtml = lastEntries.map(function(p,idx){
-      var prev = lastEntries[idx+1];
-      var trend = prev && p.moy && prev.moy ? (p.moy>prev.moy?'&#8593;':p.moy<prev.moy?'&#8595;':'→') : '—';
-      var tCol  = prev && p.moy && prev.moy ? (p.moy>prev.moy?'#4caf50':p.moy<prev.moy?'#f44336':'#88aa88') : '#88aa88';
-      return '<div class="mkt"><div>'
-        +'<div style="font-size:17px;font-weight:bold">'+(p.moy?fmt(p.moy):'—')+' FCFA/kg</div>'
-        +'<div style="font-size:11px;color:#88aa88">'+p.foi+' — '+p.date+'</div>'
-        +'</div><div style="color:'+tCol+';font-size:18px">'+trend+'</div></div>';
-    }).join('');
-    var _lastMoyAlert = _prixFiltered.length ? _prixFiltered[_prixFiltered.length-1].moy : 0;
-    var _prixAlertBanner = (_lastMoyAlert && CYCLE.objectifPrix && _lastMoyAlert < CYCLE.objectifPrix)
-      ? '<div style="background:#2e1500;border:1px solid #8a4400;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#ffaa40">⚠️ Dernier prix relevé ('+fmt(Math.round(_lastMoyAlert))+' FCFA/kg) inférieur à votre objectif ('+fmt(CYCLE.objectifPrix)+' FCFA/kg) — prudence avant vente.</div>'
+
+    // ── Hero : prix actuel + tendance + foirail ──
+    var _heroHtml = '';
+    if (prixData.length) {
+      var _cur = prixData[prixData.length-1];
+      var _prev = prixData.length>1 ? prixData[prixData.length-2] : null;
+      var _delta = (_prev && _cur.moy && _prev.moy) ? Math.round(_cur.moy - _prev.moy) : null;
+      var _deltaCol = _delta===null ? '#88aa88' : _delta>0 ? '#4caf50' : _delta<0 ? '#f44336' : '#88aa88';
+      var _deltaStr = _delta===null ? '' : (_delta>0?'↑ +':_delta<0?'↓ ':'→ ')+fmt(Math.abs(_delta))+' FCFA vs préc.';
+      var _vsObj = (CYCLE.objectifPrix && _cur.moy) ? Math.round((_cur.moy/CYCLE.objectifPrix-1)*100) : null;
+      var _vsObjStr = _vsObj!==null ? (_vsObj>=0?'✅ +'+_vsObj+'% vs objectif':'⚠️ '+_vsObj+'% vs objectif') : '';
+      var _vsObjCol = _vsObj!==null ? (_vsObj>=0?'#4caf50':'#ffaa40') : '#88aa88';
+      _heroHtml = '<div style="background:#111f11;border-radius:12px;padding:16px;margin-bottom:14px;border:1px solid #1e3e1e">'
+        +'<div style="font-size:11px;color:#88aa88;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Dernier prix relevé — '+(_cur.foi||'')+'</div>'
+        +'<div style="font-size:36px;font-weight:900;color:#C8A06A;line-height:1">'+fmt(Math.round(_cur.moy||_cur.bas||0))+'<span style="font-size:14px;font-weight:400;color:#88aa88;margin-left:4px">FCFA/kg</span></div>'
+        +'<div style="display:flex;gap:14px;margin-top:8px;flex-wrap:wrap">'
+        +(_deltaStr?'<span style="font-size:12px;font-weight:700;color:'+_deltaCol+'">'+_deltaStr+'</span>':'')
+        +(_vsObjStr?'<span style="font-size:12px;font-weight:700;color:'+_vsObjCol+'">'+_vsObjStr+'</span>':'')
+        +'</div>'
+        +'<div style="font-size:10px;color:#556655;margin-top:4px">'+(_cur.date||'')+'</div>'
+        +'</div>';
+    }
+
+    // ── Historique compact (3 derniers) ──
+    var lastEntries = prixData.slice(-4,-1).reverse(); // 3 précédents (pas le dernier déjà affiché en hero)
+    var histHtml = lastEntries.length ? '<div style="font-size:10px;color:#556655;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Observations précédentes</div>'
+      +lastEntries.map(function(p){
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #1a2e1a">'
+          +'<div><div style="font-size:13px;color:#ccc;font-weight:600">'+(p.moy?fmt(p.moy):'—')+' FCFA/kg</div>'
+          +'<div style="font-size:10px;color:#556655">'+p.foi+' · '+p.date+'</div></div>'
+          +(p.bas||p.haut?'<div style="font-size:10px;color:#445544;text-align:right">'+(p.bas?fmt(p.bas)+' bas':'')+(p.bas&&p.haut?' · ':'')+(p.haut?fmt(p.haut)+' haut':'')+'</div>':'')
+          +'</div>';
+      }).join('') : '';
+
+    var _prixAlertBanner = (prixData.length && CYCLE.objectifPrix && prixData[prixData.length-1].moy && prixData[prixData.length-1].moy < CYCLE.objectifPrix)
+      ? '<div style="background:#2e1500;border:1px solid #8a4400;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#ffaa40">⚠️ Prix marché ('+fmt(Math.round(prixData[prixData.length-1].moy))+' FCFA/kg) inférieur à l\'objectif ('+fmt(CYCLE.objectifPrix)+' FCFA/kg) — prudence avant vente.</div>'
       : '';
-    view=_prixAlertBanner+'<div class="stitle">Prix observés</div>'
-      +_filtreHtml
-      +(_prixFiltered.length ? courbesPrix(_prixFiltered) : '')
-      +(histHtml || '<div style="font-size:12px;color:#445544;padding:8px 0">Aucun prix enregistré — saisissez ci-dessous</div>')
+
+    view=_prixAlertBanner
+      +_heroHtml
+      +(prixData.length ? courbesPrix(prixData) : '')
+      +(histHtml || (!prixData.length ? '<div style="font-size:12px;color:#445544;padding:8px 0">Aucun prix enregistré — saisissez ci-dessous</div>' : ''))
       +'<div class="sep"></div>'
       +'<div class="card">'
       +'<div class="frow">'
@@ -5526,7 +5521,7 @@ function viewMarche(){
       +'<div class="fg"><label>Prix bas</label><input type="number" inputmode="decimal" placeholder="FCFA/kg" value="'+(S.fm.bas||'')+'" oninput="S.fm.bas=this.value"></div>'
       +'<div class="fg"><label>Prix moyen</label><input type="number" inputmode="decimal" placeholder="FCFA/kg" value="'+(S.fm.moy||'')+'" oninput="S.fm.moy=this.value"></div>'
       +'</div>'
-      +'<div class="fg"><label>Prix haut</label><input type="number" inputmode="decimal" placeholder="FCFA/kg" value="'+(S.fm.haut||'')+'" oninput="S.fm.haut=this.value"></div>'
+      +'<div class="fg"><label>Prix haut (optionnel)</label><input type="number" inputmode="decimal" placeholder="FCFA/kg" value="'+(S.fm.haut||'')+'" oninput="S.fm.haut=this.value"></div>'
       +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'marche\')">Enregistrer</button>'+msgHtml()
       +'</div>';
   } else if(S.sub==='sim'){
