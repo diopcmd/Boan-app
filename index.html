@@ -1089,7 +1089,7 @@ function appendRow(sid, range, vals) {
     // on encode uniquement le nom de la feuille, pas la notation A1
     var enc = encodeURIComponent(sheetName);
     var readUrl = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid
-      +'/values/'+enc+'!A'+tr.start+':A'+tr.end;
+      +'/values/'+enc+'!A'+tr.start+':A'+tr.end+'?valueRenderOption=UNFORMATTED_VALUE';
     return fetch(readUrl, {headers:{Authorization:'Bearer '+tk}})
       .then(function(res){return res.json();})
       .then(function(d){
@@ -1140,7 +1140,9 @@ function readSheet(sid, range) {
     // ⚠️ encodeURIComponent(':') = '%3A' que l'API Sheets rejette — on encode uniquement le nom de la feuille
     var _rParts = range.split('!');
     var _rEnc = encodeURIComponent(_rParts[0]) + (_rParts[1] ? '!' + _rParts[1] : '');
-    var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+_rEnc;
+    // UNFORMATTED_VALUE : nombres sans séparateurs locaux ("2000" pas "2 000" en fr-FR)
+    // évite que parseFloat("2 000") = 2 pour les prix/stocks/poids
+    var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+_rEnc+'?valueRenderOption=UNFORMATTED_VALUE';
     return fetch(url, {headers:{Authorization:'Bearer '+tk}})
       .then(function(res){ return res.json(); })
       .then(function(d){ return d.values || []; })
