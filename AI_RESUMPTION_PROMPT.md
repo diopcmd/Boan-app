@@ -12,7 +12,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 - **GitHub** : https://github.com/diopcmd/Boan-app (branche `main`)
 - **Dossier local** : `C:\Temp\Boan-app\`
 - **Langue** : Tout en français (code, UI, communications)
-- **Dernier commit** : `6f2078f` — fix: PWA clavier mobile — viewport interactive-widget + manifest + touch-action
+- **Dernier commit** : `915ee49` — trigger deploy (simplification onglet Marché)
 
 ---
 
@@ -20,7 +20,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 
 | Couche | Technologie |
 |---|---|
-| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~4974 lignes) |
+| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~6011 lignes) |
 | Backend | Vercel Serverless Functions (ES Module `export default async function handler`) |
 | Auth | Session token custom HMAC-SHA256 (`base64(payload).hmac_hex`), 8h |
 | Données | Google Sheets API v4 via Service Account RS256 JWT |
@@ -34,7 +34,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 
 ```
 Boan-app/
-├── index.html              SPA complète (~4974 lignes)
+├── index.html              SPA complète (~6011 lignes)
 ├── vercel.json             Rewrites SPA (exclut /api/ et /manifest.json)
 ├── manifest.json           Web App Manifest (PWA — icône, nom, display:standalone)
 ├── api/
@@ -254,7 +254,13 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 - Recharge CYCLE depuis Config_Cycle Sheets après reset
 
 ### Marché
-- Simulateur de vente avec prix dynamique
+- `readSheet()` utilise `?valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING` — critique pour éviter prix 2 FCFA/kg et dates sérialisées
+- **Onglet Prix** : hero card prix actuel en grand + badge tendance (`↑ +150 FCFA vs préc.`) + badge vs objectif
+- **Courbe simplifiée** : ligne or épaisse, seul le dernier point highlighted (cercle blanc+or), dates premier/dernier seulement, ligne objectif tiretée verte avec prix à droite
+- **Bannière alerte** si dernier prix < objectif
+- Pas de boutons filtre foirail (supprimés — inutiles), pas de band bas/haut, pas de labels sur chaque point
+- Formulaire saisie : Date + Foirail (select) + Foirail custom si "Autre" + Prix bas/moy/haut
+- **Simulateur** : seuil de rentabilité `pxSeuil = ceil(cTotal / (nb * sp * (1-comm/100)))` + badge `_vsSeuilMkt` (% vs seuil)
 - Partage WhatsApp synthèse + KPI
 - Export PDF rapport mensuel
 
@@ -264,13 +270,16 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 
 | Commit | Description |
 |---|---|
+| `915ee49` | trigger deploy (push vide webhook cassé) |
+| `39b0e25` | marche: simplify chart — remove filter & band, hero price + trend badge + clean line |
+| `daadc18` | fix: dateTimeRenderOption=FORMATTED_STRING — p.date.slice not a function |
+| `eb181ef` | feat: onglet marché — band chart, filtre foirail, seuil rentabilité simulateur |
+| `e4ab9a8` | fix: readSheet UNFORMATTED_VALUE — prix 2000 affiché 2 FCFA/kg |
+| `319007e` | fix: 3 bugs init cycle fondateur (race stock, calcStockLocal, bilan sidebar) |
+| `ca8e541` | fix: bilan hebdo gérant incorrect |
+| `c40a723` | fix: bilan hebdo gérant — fallback sidFondateur + no wipe _lastBilanSem |
 | `6f2078f` | fix: PWA clavier mobile — viewport interactive-widget + manifest + touch-action |
 | `82cff3e` | ux: stepper durée cycle contraste élevé fond vert + valeur lisible |
 | `ca27beb` | ux: sidebar durée cycle stepper pur -/+ sans input (évite reset au re-render) |
-| `b6e4187` | ux: sidebar config dans body scrollable + footer réduit + stepper simu durée |
-| `0e85245` | fix: peseeFreq sidebar synchro Sheets via _syncCycle + refactor updateDureeMois |
-| `5245263` | ux: sidebar durée cycle compact (input inline + OK) |
 | `e34c505` | docs: mise à jour docs + chemin local + ligne count |
 | `3ea8929` | fix: bugs marché prix + durée cycle réel sidebar synchro sheets |
-| `d6a0cc8` | feat: saisie libre durée cycle simulateur + reset A4→A5 Stock/Incidents/Sante |
-| `462b641` | fix: message soumission, validation conso stock, cohérence net, alerte par aliment |

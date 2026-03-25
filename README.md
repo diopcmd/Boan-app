@@ -63,7 +63,7 @@ Interface de pilotage à distance multi-rôles : direction, gérant terrain, RGA
 
 ```
 Boan-app/
-├── index.html              SPA complète (HTML + CSS + JS inline, ~4974 lignes)
+├── index.html              SPA complète (HTML + CSS + JS inline, ~6011 lignes)
 ├── vercel.json             Rewrites SPA (exclut /api/ et /manifest.json)
 ├── manifest.json           Web App Manifest (PWA — icône, nom, display:standalone)
 ├── api/
@@ -156,7 +156,8 @@ cd Boan-app
 git add index.html                    # ou api/fichier.js
 git commit -m "type: description"
 git push origin main
-# Vercel déploie automatiquement en ~30-60 secondes
+# Vercel déploie automatiquement en ~30-60 secondes (si webhook GitHub actif)
+# En cas de webhook cassé : dashboard Vercel → Deployments → Redeploy
 ```
 
 ---
@@ -188,15 +189,16 @@ vercel dev
 
 | Commit | Description |
 |---|---|
+| `915ee49` | trigger deploy (push vide) |
+| `39b0e25` | marche: simplify chart — remove filter & band, hero price + trend badge + clean line |
+| `daadc18` | fix: dateTimeRenderOption=FORMATTED_STRING — p.date.slice not a function |
+| `eb181ef` | feat: onglet marché — band chart, filtre foirail, seuil rentabilité simulateur |
+| `e4ab9a8` | fix: readSheet UNFORMATTED_VALUE — prix 2000 affiché 2 FCFA/kg |
+| `319007e` | fix: 3 bugs init cycle fondateur (race stock, calcStockLocal, bilan sidebar) |
+| `ca8e541` | fix: bilan hebdo gérant incorrect |
+| `c40a723` | fix: bilan hebdo gérant — fallback sidFondateur + no wipe _lastBilanSem |
 | `e34c505` | docs: mise à jour docs + chemin local + ligne count |
-| `3ea8929` | fix: bugs marché prix + durée cycle réel sidebar synchro tous sheets (fondateur/rga/fallou) |
-| `d6a0cc8` | feat: saisie libre durée cycle simulateur + reset A4→A5 pour Stock/Incidents/Sante |
-| `462b641` | fix: message soumission, validation conso stock, cohérence net formule, alerte par aliment |
-| `6f8cfb2` | fix: stock fondateur — Vague1 lit sidGerant\|\|sidFondateur + Vague2 reconstruit STOCK_MVTS |
-| `d7a8a4b` | fix: STOCK_MVTS reconstitué depuis Sheets pour le fondateur à chaque login |
-| `5588542` | docs: mise à jour AI_RESUMPTION_PROMPT + README (URL prod, nouvelles features) |
-| `71e3354` | fix: reset cycle vide _lastSyncTS, _lastFondVisitTS, MOCK._tresoFromSante |
-| `e601921` | ux: sidebar durée cycle + rappel pesée compacts sur une ligne |
-| `03e5df9` | ux: bouton rapport WhatsApp dans dashboard + pré-remplissage fiche OUI/NON |
+| `3ea8929` | fix: bugs marché prix + durée cycle réel sidebar synchro tous sheets |
+| `d6a0cc8` | feat: saisie libre durée cycle simulateur + reset A4→A5 |
 | `62ebeb1` | feat: Auth multi-SID, loadLiveData 3-vagues, buildHistoryFromSheets |
 | `133cada` | fix: tous les `/35` hardcodés → `CYCLE.dureeMois` dynamique |
