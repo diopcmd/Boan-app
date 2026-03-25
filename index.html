@@ -662,6 +662,8 @@ function ficheDejaSoumise() {
   var last = lsGet('last_fiche');
   if (last === todayISO()) return true;
   var td = today();
+  // Fallback Config_App — disponible dès step1 (avant Vague 2), couvre autres appareils
+  if (CYCLE._lastFicheDate === td) return true;
   return HISTORY.some(function(h){ return h.type === 'fiche' && h.date === td; });
 }
 function marquerFicheAujourdhui() {
@@ -735,14 +737,8 @@ function dejaSoumisAujourdhui(type) {
 
 // Vérifie si le SOP a été soumis dans les 14 derniers jours (2 semaines)
 function sopDejaFait() {
-  var h = HISTORY.filter(function(x){ return x.type === 'sop'; });
-  if (!h.length) return false;
-  var parts = h[0].date.split('/');
-  if (parts.length !== 3) return false;
-  var last = new Date(parts[2], parts[1]-1, parts[0]);
-  var _nd = _nowDakar();
-  var diff = Math.floor((new Date(_nd.year, _nd.month-1, _nd.day) - last) / 86400000);
-  return diff < 14;
+  // joursSince('sop') utilise HISTORY + CYCLE._lastSopDate (step1) comme fallback
+  return joursSince('sop') < 14;
 }
 
 // Vérifie si un mouvement stock identique (même type+mode) a déjà été soumis aujourd'hui
@@ -4560,7 +4556,7 @@ function viewDash(){
     +'</div>'
     +'<button type="button" onclick="exportKpiPDF()" style="width:100%;padding:10px;border-radius:8px;background:#1a3a6a;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer;margin-bottom:8px">📄 Télécharger le rapport KPI en PDF</button>'
     +(S.user==='gerant'
-      ?'<button type="button" onclick="S._guideOpen=true;r()" '
+      ?'<button type="button" onclick="S._guideOpen=true;r();if(Date.now()-_lastAutoRefresh>60000){loadLiveData();}" '
         +'style="width:100%;padding:13px 16px;border-radius:12px;margin-bottom:8px;cursor:pointer;'
         +'background:linear-gradient(135deg,#0f2a10,#162e18);'
         +'border:1px solid #3a9a4a;color:#fff;font-size:14px;font-weight:700;'
