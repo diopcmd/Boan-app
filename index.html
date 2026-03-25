@@ -1566,17 +1566,26 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   });
   var result = deduped.map(function(k) { return seen[k]; });
 
-  // 4. Trier par date décroissante
+  // 4. Trier par date décroissante — les bilans utilisent une date synthétique
+  // basée sur CYCLE.dateDebut + _sem semaines pour ne pas être éjectés en queue
+  var _cycleDebutD = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : null;
+  function _entryDate(e) {
+    if (e.type === 'bilan' && e._sem && _cycleDebutD) {
+      var _d = new Date(_cycleDebutD.getTime() + (parseInt(e._sem, 10) - 1) * 7 * 86400000);
+      return _d;
+    }
+    return parseFR(e.date);
+  }
   result.sort(function(a, b) {
-    var da = parseFR(a.date), db = parseFR(b.date);
+    var da = _entryDate(a), db = _entryDate(b);
     if (!da && !db) return 0;
     if (!da) return 1;
     if (!db) return -1;
     return db - da;
   });
 
-  // 5. Limiter à 50 entrées
-  result = result.slice(0, 50);
+  // 5. Limiter à 100 entrées (les bilans (max ~40/cycle) doivent survivre au slice)
+  result = result.slice(0, 100);
 
   // 6. Sauvegarder dans localStorage ET mettre à jour HISTORY global
   HISTORY = result;
@@ -3891,9 +3900,9 @@ function pageApp(){
   }
 
   var _fichOk   = ficheDejaSoumise();
-  var _sopOk    = HISTORY.some(function(h){ return h.type==='sop' && h.date===_td; });
-  // _bilanOk : vérifie par date locale (soumis aujourd'hui) OU par numéro de semaine (depuis Sheets)
-  var _bilanOk  = HISTORY.some(function(h){ return h.type==='bilan' && (h.date===_td || h._sem===String(calcSemaine())); });
+  var _sopOk    = sopDejaFait();
+  // _bilanOk : vérifie HISTORY + CYCLE._lastBilanSem (Config_App, dès step1)
+  var _bilanOk  = bilanDejaFaitCetteSemaine();
   var _dernStock = _jourDepuis(_dernierType('stock'));
   var _dernPesee = _jourDepuis(_dernierType('pesee'));
 
