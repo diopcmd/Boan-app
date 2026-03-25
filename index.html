@@ -1058,10 +1058,10 @@ function getTok() {
 var TABLE_RANGES = {
   'Fiche_Quotidienne': { start: 4, end: 500 },
   'SOP_Check':         { start: 4, end: 200 },
-  'Stock_Nourriture':  { start: 4, end: 500 },
-  'Incidents':         { start: 4, end: 200 },
+  'Stock_Nourriture':  { start: 5, end: 500 },
+  'Incidents':         { start: 5, end: 200 },
   'Pesees':            { start: 4, end: 200 },
-  'Sante_Mortalite':   { start: 4, end: 200 },
+  'Sante_Mortalite':   { start: 5, end: 200 },
   'Hebdomadaire':      { start: 4, end: 200 },
   'Suivi_Marche':      { start: 4, end: 200 },
   'KPI_Mensuels':      { start: 4, end: 50  },
@@ -3597,10 +3597,10 @@ function saveCycle(){
     var dataOnglets = [
       'Fiche_Quotidienne!A4:Z500',
       'SOP_Check!A4:Z200',
-      'Stock_Nourriture!A4:Z500',
-      'Incidents!A4:Z200',
+      'Stock_Nourriture!A5:Z500',
+      'Incidents!A5:Z200',
       'Pesees!A4:Z200',
-      'Sante_Mortalite!A4:Z200',
+      'Sante_Mortalite!A5:Z200',
       'Hebdomadaire!A4:Z200',
     ];
     var kpiOnglets = [
