@@ -1391,7 +1391,12 @@ function loadLiveData() {
         sidHisto ? readSheet(sidHisto, 'Fiche_Quotidienne!A4:G500')  : Promise.resolve(null),
         sidHisto ? readSheet(sidHisto, 'Incidents!A4:G200')          : Promise.resolve(null),
         sidHisto ? readSheet(sidHisto, 'Sante_Mortalite!A4:G200')    : Promise.resolve(null),
-        sidHisto ? readSheet(sidHisto, 'Hebdomadaire!A4:H200')       : Promise.resolve(null),
+        // Hebdomadaire : lecture avec fallback sidFondateur si sidHisto (gérant) est vide
+        // (couvre le cas où writeAll a écrit sur fondateur mais pas gérant)
+        (sidHisto ? readSheet(sidHisto,'Hebdomadaire!A4:H200').then(function(rows){
+          if(rows&&rows.length) return rows;
+          return (sidFondateur&&sidFondateur!==sidHisto)?readSheet(sidFondateur,'Hebdomadaire!A4:H200'):(rows||[]);
+        }) : Promise.resolve(null)),
         sidHisto ? readSheet(sidHisto, 'Pesees!A4:G200')             : Promise.resolve(null),
         sidHisto ? readSheet(sidHisto, 'SOP_Check!A4:H200')          : Promise.resolve(null),
         sidHisto ? readSheet(sidHisto, 'Stock_Nourriture!A4:F200')   : Promise.resolve(null),
@@ -1595,7 +1600,8 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   var _cycleChanged = false;
   if (_emptyInSheets['fiche'])  { lsSet('last_fiche', null); CYCLE._lastFicheDate = ''; _cycleChanged = true; }
   if (_emptyInSheets['sop'])    { CYCLE._lastSopDate   = ''; _cycleChanged = true; }
-  if (_emptyInSheets['bilan'])  { CYCLE._lastBilanSem  = ''; _cycleChanged = true; }
+  // Note : _lastBilanSem n'est pas effacé ici — saveCycle() s'en charge au reset cycle.
+  // Le fallback sidFondateur sur Hebdomadaire évite les faux _emptyInSheets['bilan'].
   if (_emptyInSheets['pesee'])  { CYCLE._lastPeseeDate = ''; _cycleChanged = true; }
   if (_emptyInSheets['stock'])  { CYCLE._lastStockDate = ''; _cycleChanged = true; }
   if (_emptyInSheets['inc'])    { CYCLE._lastIncDate   = ''; _cycleChanged = true; }
@@ -1842,6 +1848,7 @@ function _submitActual(type) {
       var _meta = {};
       if(type==='inc')   _meta = {_id: S.fin.id, _typeInc: S.fin.type};
       if(type==='sante') _meta = {_id: S.fsa.id, _sym: S.fsa.sym};
+      if(type==='bilan') _meta._sem = String(calcSemaine()); // pour bilanDejaFaitCetteSemaine() via h._sem
       var _label = type==='fiche'  ? 'Fiche du '+isoToFr(S.fi.date||todayISO())
                  : type==='marche' ? 'Marché '+(S.fm.foi==='Autre'&&S.fm.foiCustom ? S.fm.foiCustom : (S.fm.foi||''))
                  : type;
