@@ -5422,37 +5422,79 @@ function viewMarche(){
   if(S.sub==='prix'){
     var fm=S.fm;
     var prixData = LIVE.prix && LIVE.prix.length ? LIVE.prix : [];
+
+    // ── Filtre foirail (Feature 3) ──
+    var _allFois = [];
+    prixData.forEach(function(p){ if(p.foi && _allFois.indexOf(p.foi)===-1) _allFois.push(p.foi); });
+    var _foiFilter = S._prixFoiFilter || 'Tous';
+    if (_foiFilter !== 'Tous' && _allFois.indexOf(_foiFilter) === -1) { S._prixFoiFilter = 'Tous'; _foiFilter = 'Tous'; }
+    var _prixFiltered = (_foiFilter === 'Tous' || _allFois.length <= 1)
+      ? prixData
+      : prixData.filter(function(p){ return p.foi === _foiFilter; });
+    var _filtreHtml = '';
+    if (_allFois.length > 1) {
+      _filtreHtml = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">';
+      ['Tous'].concat(_allFois).forEach(function(f){
+        var isA = f === _foiFilter;
+        _filtreHtml += '<button onclick="S._prixFoiFilter=\''+f+'\';r()" style="padding:4px 12px;font-size:11px;border-radius:14px;border:1px solid '+(isA?'#C8A06A':'#2a4a2a')+';background:'+(isA?'#C8A06A':'transparent')+';color:'+(isA?'#0f1a0f':'#88aa88')+';cursor:pointer;font-weight:600">'+f+'</button>';
+      });
+      _filtreHtml += '</div>';
+    }
+
+    // ── Courbe band bas/moy/haut (Feature 2) ──
     function courbesPrix(data) {
       if (!data.length) return '';
-      var pts = data.slice(-10);
-      var vals = pts.map(function(p){ return p.moy||p.bas||0; });
-      var minV=Math.min.apply(null,vals), maxV=Math.max.apply(null,vals), rng=maxV-minV||1;
-      var w=280, h=55, pad=8, xStep=(w-pad*2)/(Math.max(pts.length-1,1));
-      var poly=pts.map(function(p,i){ return (pad+i*xStep)+','+(h-pad-(((p.moy||p.bas||0)-minV)/rng)*(h-pad*2)); }).join(' ');
-      var dots=pts.map(function(p,i){
-        var x=pad+i*xStep, y=h-pad-(((p.moy||p.bas||0)-minV)/rng)*(h-pad*2);
-        return '<circle cx="'+x+'" cy="'+y+'" r="3.5" fill="#C8A06A" stroke="#0f1a0f" stroke-width="1"/>'+
-          '<text x="'+x+'" y="'+(y-7)+'" font-size="8" fill="#C8A06A" text-anchor="middle">'+Math.round(p.moy||0)+'</text>';
+      var pts = data.slice(-12);
+      var n = pts.length;
+      var allVals = [];
+      pts.forEach(function(p){
+        if(p.bas&&p.bas>0) allVals.push(p.bas);
+        if(p.moy&&p.moy>0) allVals.push(p.moy);
+        if(p.haut&&p.haut>0) allVals.push(p.haut);
+      });
+      if(!allVals.length) return '';
+      var minV = Math.min.apply(null,allVals), maxV = Math.max.apply(null,allVals);
+      if(CYCLE.objectifPrix){ if(CYCLE.objectifPrix<minV) minV=CYCLE.objectifPrix; if(CYCLE.objectifPrix>maxV) maxV=CYCLE.objectifPrix; }
+      var rng = maxV-minV||200;
+      minV = Math.max(0, minV-rng*0.12); maxV = maxV+rng*0.08; rng = maxV-minV;
+      var w=300, h=80, padX=12, padY=14;
+      var xStep = n>1 ? (w-padX*2)/(n-1) : 0;
+      function yp(v){ return h-padY-((v-minV)/rng)*(h-padY*2); }
+      // Zone band bas→haut
+      var hasBand = pts.some(function(p){ return p.bas>0&&p.haut>0; });
+      var band = '';
+      if(hasBand){
+        var topPts = pts.map(function(p,i){ return (padX+i*xStep)+','+yp(p.haut||p.moy||0); }).join(' ');
+        var botPts = '';
+        for(var _bi=n-1;_bi>=0;_bi--){ botPts += (padX+_bi*xStep)+','+yp(pts[_bi].bas||pts[_bi].moy||0)+' '; }
+        band = '<polygon points="'+topPts+' '+botPts.trim()+'" fill="#C8A06A" opacity="0.13"/>';
+      }
+      // Ligne prix moyen
+      var polyMoy = pts.map(function(p,i){ return (padX+i*xStep)+','+yp(p.moy||p.bas||0); }).join(' ');
+      var dots = pts.map(function(p,i){
+        var x=padX+i*xStep, y=yp(p.moy||p.bas||0), v=Math.round(p.moy||0);
+        return '<circle cx="'+x+'" cy="'+y+'" r="3" fill="#C8A06A" stroke="#0a150a" stroke-width="1.5"/>'
+          +(v?'<text x="'+x+'" y="'+(y-7)+'" font-size="7.5" fill="#C8A06A" text-anchor="middle">'+fmt(v)+'</text>':'');
       }).join('');
-      var lbls=pts.map(function(p,i){
-        var x=pad+i*xStep;
-        return '<text x="'+x+'" y="'+(h+2)+'" font-size="7" fill="#556655" text-anchor="middle">'+p.date.slice(-5)+'</text>';
+      var lbls = pts.map(function(p,i){
+        if(n>7&&i%2!==0) return '';
+        return '<text x="'+(padX+i*xStep)+'" y="'+(h+5)+'" font-size="6.5" fill="#556655" text-anchor="middle">'+p.date.slice(-5)+'</text>';
       }).join('');
-      var _objRefLine = (function(){
-        var op = CYCLE.objectifPrix;
-        if (!op) return '';
-        var oy = h-pad-((op-minV)/rng)*(h-pad*2);
-        if (oy < pad-8 || oy > h+8) return '';
-        return '<line x1="'+pad+'" y1="'+oy+'" x2="'+(w-pad)+'" y2="'+oy+'" stroke="#8aaa5a" stroke-width="1" stroke-dasharray="4,3" opacity="0.7"/>'
-          +'<text x="'+(pad+3)+'" y="'+(oy-3)+'" font-size="7" fill="#8aaa5a">obj '+Math.round(op)+'</text>';
-      })();
-      return '<div style="background:#0a150a;border-radius:8px;padding:8px 4px 14px;margin-bottom:10px">'
-        +'<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:55px;overflow:visible">'
-        +_objRefLine
-        +'<polyline points="'+poly+'" fill="none" stroke="#C8A06A" stroke-width="2" stroke-linejoin="round"/>'
-        +dots+lbls+'</svg></div>';
+      // Ligne objectif
+      var _objLine = '';
+      if(CYCLE.objectifPrix){ var _oy=yp(CYCLE.objectifPrix); if(_oy>=padY-5&&_oy<=h){ _objLine='<line x1="'+padX+'" y1="'+_oy+'" x2="'+(w-padX)+'" y2="'+_oy+'" stroke="#8aaa5a" stroke-width="1" stroke-dasharray="4,3" opacity="0.8"/><text x="'+(padX+3)+'" y="'+(_oy-3)+'" font-size="7" fill="#8aaa5a">obj '+fmt(CYCLE.objectifPrix)+'</text>'; }}
+      var legend = '<div style="display:flex;gap:14px;justify-content:center;margin-top:6px">'
+        +(hasBand?'<div style="display:flex;align-items:center;gap:4px;font-size:9px;color:#88aa88"><div style="width:10px;height:6px;background:#C8A06A;opacity:0.3;border-radius:1px"></div>Fourchette</div>':'')
+        +'<div style="display:flex;align-items:center;gap:4px;font-size:9px;color:#C8A06A"><div style="width:14px;height:2px;background:#C8A06A;border-radius:1px"></div>Moyen</div>'
+        +(CYCLE.objectifPrix?'<div style="display:flex;align-items:center;gap:4px;font-size:9px;color:#8aaa5a"><div style="width:12px;height:0;border-top:1px dashed #8aaa5a"></div>Objectif</div>':'')
+        +'</div>';
+      return '<div style="background:#0a150a;border-radius:8px;padding:8px 4px 10px;margin-bottom:10px">'
+        +'<svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:80px;overflow:visible">'
+        +band+_objLine
+        +'<polyline points="'+polyMoy+'" fill="none" stroke="#C8A06A" stroke-width="2" stroke-linejoin="round"/>'
+        +dots+lbls+'</svg>'+legend+'</div>';
     }
-    var lastEntries = prixData.slice(-3).reverse();
+    var lastEntries = _prixFiltered.slice(-3).reverse();
     var histHtml = lastEntries.map(function(p,idx){
       var prev = lastEntries[idx+1];
       var trend = prev && p.moy && prev.moy ? (p.moy>prev.moy?'&#8593;':p.moy<prev.moy?'&#8595;':'→') : '—';
@@ -5462,12 +5504,13 @@ function viewMarche(){
         +'<div style="font-size:11px;color:#88aa88">'+p.foi+' — '+p.date+'</div>'
         +'</div><div style="color:'+tCol+';font-size:18px">'+trend+'</div></div>';
     }).join('');
-    var _lastMoyAlert = prixData.length ? prixData[prixData.length-1].moy : 0;
+    var _lastMoyAlert = _prixFiltered.length ? _prixFiltered[_prixFiltered.length-1].moy : 0;
     var _prixAlertBanner = (_lastMoyAlert && CYCLE.objectifPrix && _lastMoyAlert < CYCLE.objectifPrix)
       ? '<div style="background:#2e1500;border:1px solid #8a4400;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#ffaa40">⚠️ Dernier prix relevé ('+fmt(Math.round(_lastMoyAlert))+' FCFA/kg) inférieur à votre objectif ('+fmt(CYCLE.objectifPrix)+' FCFA/kg) — prudence avant vente.</div>'
       : '';
     view=_prixAlertBanner+'<div class="stitle">Prix observés</div>'
-      +(prixData.length ? courbesPrix(prixData) : '')
+      +_filtreHtml
+      +(_prixFiltered.length ? courbesPrix(_prixFiltered) : '')
       +(histHtml || '<div style="font-size:12px;color:#445544;padding:8px 0">Aucun prix enregistré — saisissez ci-dessous</div>')
       +'<div class="sep"></div>'
       +'<div class="card">'
@@ -5516,8 +5559,13 @@ function viewMarche(){
     var benNet  = ben - commVal;
     var margeNet = ca > 0 ? Math.round((benNet / ca) * 100) : 0;
     var roi      = cTotal > 0 ? Math.round((benNet / cTotal) * 100) : 0;
-
-    // ── Verdict ──
+    // ── Prix seuil de rentabilité (Feature 1) : prix minimum pour que benNet = 0 ──
+    // ca*(1-comm/100) = cTotal  =>  px_seuil = cTotal / (nb*sp*(1-comm/100))
+    var pxSeuil = (nb > 0 && sp > 0 && comm < 100)
+      ? Math.ceil(cTotal / (nb * sp * (1 - comm / 100)))
+      : 0;
+    var _vsSeuilMkt = (_lastLiveMoy && pxSeuil)
+      ? Math.round((_lastLiveMoy / pxSeuil - 1) * 100) : null;
     var dec, bg, bc, tc, ico;
     if      (margeNet < 0)  { dec='PERTE';           bg='#2e1010'; bc='#8a0000'; tc='#f44336'; ico='🔴'; }
     else if (margeNet < 10) { dec="VENTE D'URGENCE"; bg='#2e1010'; bc='#8a0000'; tc='#f44336'; ico='🟠'; }
@@ -5665,6 +5713,17 @@ function viewMarche(){
     +     '<span style="font-size:12px;color:#88aa88">ROI (retour sur charges)</span>'
     +     '<span style="font-size:14px;font-weight:700;color:' + (roi>=25?'#4caf50':roi>=10?'#ff9800':'#f44336') + '">' + sign(roi) + roi + '%</span>'
     +   '</div>'
+    +   '<div style="height:1px;background:#2a4a2a;margin:10px 0 6px"></div>'
+    +   '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">'
+    +     '<div><div style="font-size:12px;color:#88aa88">💡 Prix seuil rentabilité</div>'
+    +     '<div style="font-size:10px;color:#556655;margin-top:1px">en dessous = perte nette</div></div>'
+    +     '<span style="font-size:16px;font-weight:800;color:#ffaa40">' + fmt(pxSeuil) + ' FCFA/kg</span>'
+    +   '</div>'
+    + (_vsSeuilMkt !== null
+      ? '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0 2px">'
+      +   '<span style="font-size:11px;color:#88aa88">Marché actuel vs seuil</span>'
+      +   '<span style="font-size:12px;font-weight:700;color:'+(_vsSeuilMkt>=0?'#4caf50':'#f44336')+'">'+(_vsSeuilMkt>=0?'+':'')+_vsSeuilMkt+'%</span>'
+      + '</div>' : '')
     + '</div>'
 
     // ── Verdict ──
@@ -5676,6 +5735,7 @@ function viewMarche(){
     +     ' · Marge : ' + margeNet + '%'
     +     ' · ROI : ' + sign(roi) + roi + '%'
     +   '</div>'
+    +   '<div style="font-size:11px;margin-top:6px;opacity:.7;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px">Seuil de rentabilité : <strong>' + fmt(pxSeuil) + ' FCFA/kg</strong></div>'
     + '</div>';
   } else {
     // M3+L5: Dynamic reco from LIVE.prix
