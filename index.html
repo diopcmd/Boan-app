@@ -2071,8 +2071,11 @@ function loadPesees() {
       });
       pesees.forEach(function(p, i){
         if (i === 0 || !p.prev || !p.gain) {
-          // Première pesée : utiliser 30j par défaut si gain connu
-          p.gmq = p.gain ? Math.round((p.gain/30)*100)/100 : 0;
+          // Première pesée : utiliser jours réels depuis début du cycle, sinon 30j
+          var _dP0 = parseDate(p.date);
+          var _dRef0 = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : null;
+          var _jP0 = (_dP0 && _dRef0) ? Math.round((_dP0 - _dRef0) / 86400000) : 30;
+          p.gmq = (p.gain && _jP0 > 0) ? Math.round((p.gain / _jP0) * 100) / 100 : 0;
         } else {
           var prev = pesees[i-1];
           var dCurr = parseDate(p.date);
@@ -4607,10 +4610,14 @@ function viewDash(){
   if(stkLocal > 0) MOCK.stock = stkLocal;
   var totalSemCycle = Math.round((CYCLE.dureeMois||8)*4.33);
   var pct=Math.round((semActuelle/totalSemCycle)*100);
-  var gmqC=MOCK.gmq>=1?'kval-ok':MOCK.gmq>=0.8?'kval-warn':'kval-crit';
+  // GMQ affiché : LIVE.pesees (intervalles réels) prioritaire sur MOCK.gmq (toujours /7)
+  var _gmqDisplay = LIVE.loaded && LIVE.pesees && LIVE.pesees.length
+    ? Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100
+    : MOCK.gmq;
+  var gmqC=_gmqDisplay>=1?'kval-ok':_gmqDisplay>=0.8?'kval-warn':'kval-crit';
   var stkC=MOCK.stock>=6?'kval-ok':MOCK.stock>=4?'kval-warn':'kval-crit';
   var trC =MOCK.treso>=600000?'kval-ok':MOCK.treso>=400000?'kval-warn':'kval-crit';
-  var gmqBg=MOCK.gmq>=1?'kcard-ok':MOCK.gmq>=0.8?'kcard-warn':'kcard-crit';
+  var gmqBg=_gmqDisplay>=1?'kcard-ok':_gmqDisplay>=0.8?'kcard-warn':'kcard-crit';
   var stkBg=MOCK.stock>=6?'kcard-ok':MOCK.stock>=4?'kcard-warn':'kcard-crit';
   var trBg =MOCK.treso>=600000?'kcard-ok':MOCK.treso>=400000?'kcard-warn':'kcard-crit';
   // Trésorerie nette : capital - charges engagées à date (santé + alim estimée)
@@ -4666,7 +4673,7 @@ function viewDash(){
     +'<div class="stitle">Indicateurs Cycle</div>'
     +'<div class="kgrid">'
     +'<div class="kcard kcard-ok"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">Bêtes actives</div><div class="kval-ok" style="font-size:26px;font-weight:700" data-count="'+MOCK.betes+'">'+MOCK.betes+'</div>'+(function(){var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;var col=mort===0?'#4caf50':mort<=5?'#ff9800':'#f44336';var ico=mort===0?' ✓':mort<=5?' ⚠':' 🔴';return '<div style="font-size:11px;margin-top:4px;color:'+col+'">'+mort+'% mortalité'+ico+'</div><div class="sparkline-wrap">'+sparkline(SPARK.betes,col)+'</div></div>';})()
-    +'<div class="kcard '+gmqBg+'"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">GMQ moyen</div><div class="'+gmqC+'" style="font-size:26px;font-weight:700" data-count="'+MOCK.gmq+'">'+MOCK.gmq+'</div><div style="font-size:11px;margin-top:4px;color:'+gc('gmq',MOCK.gmq)+'">kg/j — Cible ≥ 1.0</div><div class="sparkline-wrap">'+sparkline(SPARK.gmq,gc('gmq',MOCK.gmq))+'</div></div>'
+    +'<div class="kcard '+gmqBg+'"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">GMQ moyen</div><div class="'+gmqC+'" style="font-size:26px;font-weight:700" data-count="'+_gmqDisplay+'">'+_gmqDisplay+'</div><div style="font-size:11px;margin-top:4px;color:'+gc('gmq',_gmqDisplay)+'">kg/j — Cible ≥ 1.0'+(LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?' <span style="font-size:9px;color:#4caf50">🟢 live</span>':'')+'</div><div class="sparkline-wrap">'+sparkline(SPARK.gmq,gc('gmq',_gmqDisplay))+'</div></div>'
     +(function(){
     var stkDisplay = MOCK.stock > 0 ? MOCK.stock : calcStockLocal();
     var stkCl = stkDisplay>=6?'kval-ok':stkDisplay>=4?'kval-warn':'kval-crit';
