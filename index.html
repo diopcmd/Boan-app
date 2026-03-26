@@ -5763,74 +5763,182 @@ function viewMarche(){
     +   '<div style="font-size:11px;margin-top:6px;opacity:.7;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px">Seuil de rentabilité : <strong>' + fmt(pxSeuil) + ' FCFA/kg</strong></div>'
     + '</div>';
   } else {
-    // M3+L5: Dynamic reco from LIVE.prix
+    // ── Recommandations par bête + signal global achat/vente ──
     var _pdReco = LIVE.prix && LIVE.prix.length ? LIVE.prix : [];
-    var _recoCards = '';
-    if (_pdReco.length) {
-      // Best foirail (M3)
-      var _fStats = {};
-      _pdReco.forEach(function(p){
-        if (!_fStats[p.foi]) _fStats[p.foi] = {total:0, cnt:0};
-        _fStats[p.foi].total += (p.moy||0); _fStats[p.foi].cnt++;
+    var _objP   = CYCLE.objectifPrix || 2000;
+    var _prixRef = CYCLE.objectifPrix || 2000; // seuil rentabilité bête
+    var _lastPrix = _pdReco.length ? (_pdReco[_pdReco.length-1].moy || 0) : 0;
+    var _prevPrix = _pdReco.length >= 2 ? (_pdReco[_pdReco.length-2].moy || 0) : 0;
+    var _tendance = _pdReco.length >= 2 ? (_lastPrix - _prevPrix) : 0; // positif = hausse
+    var _semRest  = Math.max(0, Math.round((CYCLE.dureeMois||8)*4.33) - calcSemaine());
+    var _joursRest = _semRest * 7;
+    var _poidsDepBete = CYCLE.poidsDepart || 270;
+    var _coutBete = (CYCLE.capital||1450000) / (CYCLE.nbBetes||4);
+    var _poidsMin = Math.ceil(_coutBete / _prixRef); // poids minimum pour rentabilité à objectifPrix
+    var _treso = MOCK.treso || 0;
+    var _tresoOkAchat = _treso >= (_coutBete * 1.2); // tréso couvre coût bête + 20% marge
+    var _foiRef = CYCLE.foirail || 'Thiès';
+
+    // Meilleur foirail par prix moyen sur toutes les observations
+    var _fStats = {};
+    _pdReco.forEach(function(p){
+      if(!_fStats[p.foi]) _fStats[p.foi]={total:0,cnt:0};
+      _fStats[p.foi].total+=(p.moy||0); _fStats[p.foi].cnt++;
+    });
+    var _bestFoi=null, _bestMoyF=0;
+    Object.keys(_fStats).forEach(function(f){
+      var _mf=_fStats[f].total/_fStats[f].cnt;
+      if(_mf>_bestMoyF){_bestMoyF=_mf;_bestFoi=f;}
+    });
+
+    // ── Données bêtes (depuis LIVE si chargé, sinon vide)
+    var _recoBetes = [];
+    var _poidsDepBeteCycle = CYCLE.poidsDepart || 270;
+    if (LIVE.loaded && LIVE.beteIds.length > 0) {
+      LIVE.beteIds.forEach(function(id) {
+        var _pb = LIVE.pesees.filter(function(p){ return p.id===id; });
+        _pb.sort(function(a,b){
+          var pa=a.date.split('/'),pb2=b.date.split('/');
+          var da=pa.length===3?new Date(pa[2],pa[1]-1,pa[0]):new Date(a.date);
+          var db=pb2.length===3?new Date(pb2[2],pb2[1]-1,pb2[0]):new Date(b.date);
+          return da-db;
+        });
+        var _dern = _pb[_pb.length-1]||{};
+        var _gmq = 0;
+        if (_pb.length>=2) {
+          var _pp0=_pb[0],_ppN=_pb[_pb.length-1];
+          var _s0=_pp0.date.split('/'),_sN=_ppN.date.split('/');
+          var _d0=_s0.length===3?new Date(_s0[2],_s0[1]-1,_s0[0]):null;
+          var _dN=_sN.length===3?new Date(_sN[2],_sN[1]-1,_sN[0]):null;
+          var _jj=(_d0&&_dN)?Math.round((_dN-_d0)/86400000):0;
+          if(_jj>0&&_ppN.poids>_pp0.poids) _gmq=Math.round((_ppN.poids-_pp0.poids)/_jj*100)/100;
+          else { var _gs=_pb.slice(1).map(function(p){return p.gmq||0;}).filter(function(g){return g>0;}); _gmq=_gs.length?Math.round(_gs.reduce(function(s,g){return s+g;},0)/_gs.length*100)/100:(MOCK.gmq||1); }
+        } else { _gmq = MOCK.gmq||1; }
+        // GMQ récent = moyen des 2 dernières pesées pour détecter stagnation
+        var _gmqRecent = _pb.length>=2 ? ((_pb[_pb.length-1].gmq||0)+(_pb[_pb.length-2].gmq||0))/2 : _gmq;
+        var _poidsCur = _dern.poids || _poidsDepBeteCycle;
+        var _projFinal = Math.round(_poidsCur + _gmq * _joursRest);
+        var _rentableNow = _poidsCur >= _poidsMin;
+        var _joursAvantRent = (!_rentableNow && _gmq > 0) ? Math.ceil((_poidsMin - _poidsCur) / _gmq) : 0;
+        // Signal vente individuel
+        var _sig, _sigCol, _sigBg, _sigTxt;
+        if (!_lastPrix) {
+          _sig='❓'; _sigCol='#88aa88'; _sigBg='#0f1f0f';
+          _sigTxt='Aucun prix marché enregistré — impossible de calculer la signal de vente.';
+        } else if (_lastPrix < _poidsMin * 0.85) {
+          // Prix tellement bas que même à objectif la bête ne rentabilise pas → ne pas vendre
+          _sig='🔴'; _sigCol='#f44336'; _sigBg='#2e1010';
+          _sigTxt='Prix marché ('+fmt(_lastPrix)+' FCFA/kg) très insuffisant — vendre serait une perte sèche. Attendre la hausse.';
+        } else if (_rentableNow && _lastPrix >= _objP && _tendance >= 0 && _semRest <= 4) {
+          _sig='🟢'; _sigCol='#4caf50'; _sigBg='#0f2a0f';
+          _sigTxt='VENDRE MAINTENANT — poids atteint ('+_poidsCur+' kg ≥ '+_poidsMin+' kg), prix favorable ('+fmt(_lastPrix)+' FCFA/kg) et fin de cycle à '+_semRest+' sem. Gain estimé : +'+fmt(Math.round((_poidsCur-_poidsMin)*_lastPrix))+' FCFA.';
+        } else if (_rentableNow && _lastPrix >= _objP && _tendance < -50) {
+          // Prix au-dessus de l'objectif mais en baisse → vendre avant que ça chute
+          _sig='🟡'; _sigCol='#ffaa40'; _sigBg='#2e2010';
+          _sigTxt='VENDRE BIENTÔT — poids OK et prix encore favorable mais en baisse ('+fmt(Math.round(_tendance))+' FCFA/kg). Ne pas attendre davantage.';
+        } else if (_rentableNow && _lastPrix >= _objP && _semRest > 4) {
+          _sig='🟡'; _sigCol='#ffaa40'; _sigBg='#2e2010';
+          _sigTxt='Bête rentable et prix OK ('+fmt(_lastPrix)+' FCFA/kg). Encore '+_semRest+' sem. au cycle — surveiller le marché et les prix.';
+        } else if (!_rentableNow && _gmqRecent < 0.5 && _pb.length >= 2) {
+          // Stagnation + pas encore rentable → problème
+          _sig='⚠️'; _sigCol='#f44336'; _sigBg='#2e1010';
+          _sigTxt='STAGNATION — GMQ récent < 0,5 kg/j. '+(_poidsCur>=_poidsMin?'Vendre maintenant avant dégradation.':'Poids insuffisant ('+_poidsCur+' kg / '+_poidsMin+' kg min). Revoir alimentation en urgence.');
+        } else if (!_rentableNow && _joursAvantRent > 0) {
+          _sig='🔵'; _sigCol='#4fc3f7'; _sigBg='#0a1a2a';
+          _sigTxt='En cours — '+(_poidsMin-_poidsCur)+' kg manquants. Au GMQ actuel ('+_gmq+' kg/j) : rentable dans ~'+_joursAvantRent+' jours'+(_semRest>0?' ('+_semRest+' sem. restantes au cycle)':'')+'.'+((_joursAvantRent > _joursRest && _joursRest>0)?' ⚠️ Projection dépasserait la fin du cycle.':'');
+        } else if (_rentableNow && _lastPrix < _objP) {
+          _sig='🟡'; _sigCol='#ffaa40'; _sigBg='#2e2010';
+          _sigTxt='Poids atteint mais prix marché ('+fmt(_lastPrix)+' FCFA/kg) en dessous de l\'objectif ('+fmt(_objP)+' FCFA/kg). Attendre la hausse sauf si fin de cycle imminente.';
+        } else {
+          _sig='🔵'; _sigCol='#4fc3f7'; _sigBg='#0a1a2a';
+          _sigTxt='Croissance en cours — '+(peseesBete?'':'aucune pesée enregistrée, ')+'continuer le suivi.';
+        }
+        _recoBetes.push({id:id, poids:_poidsCur, poidsMin:_poidsMin, gmq:_gmq, gmqRecent:_gmqRecent,
+          projFinal:_projFinal, rentable:_rentableNow, joursAvantRent:_joursAvantRent,
+          nPesees:_pb.length, sig:_sig, sigCol:_sigCol, sigBg:_sigBg, sigTxt:_sigTxt});
       });
-      var _bestFoi = null, _bestMoyF = 0;
-      Object.keys(_fStats).forEach(function(f){
-        var _mf = _fStats[f].total/_fStats[f].cnt;
-        if (_mf > _bestMoyF) { _bestMoyF = _mf; _bestFoi = f; }
-      });
-      var _cycFoi = CYCLE.foirail || 'Thiès';
-      var _foiTxt = (_bestFoi && _bestFoi !== _cycFoi)
-        ? _bestFoi+' offre les meilleurs prix ce cycle (moy. '+fmt(Math.round(_bestMoyF))+' FCFA/kg) — supérieur à votre foirail cible '+_cycFoi+'.'
-        : (_cycFoi+' reste le foirail le plus avantageux sur ce cycle (moy. '+fmt(Math.round(_bestMoyF))+' FCFA/kg).');
-      _recoCards += '<div class="reco-card">'
-        +'<div style="display:flex;justify-content:space-between;margin-bottom:6px">'
-        +'<div style="font-size:13px;font-weight:bold">Meilleur foirail</div>'
-        +'<div style="font-size:11px;color:#88bb88;background:#1a3a1a;padding:2px 8px;border-radius:10px">🟢 Live</div>'
+    }
+
+    // ── Signal global marché (achat / vente) ──
+    var _globalSig = '', _globalAchat = '';
+    if (_lastPrix) {
+      var _vsObj2 = Math.round((_lastPrix/_objP-1)*100);
+      var _tendStr = _tendance > 50 ? '↑ hausse' : _tendance < -50 ? '↓ baisse' : '→ stable';
+      var _tendCol = _tendance > 50 ? '#4caf50' : _tendance < -50 ? '#f44336' : '#ffaa40';
+      // Signal marché global selon niveau de prix vs objectif + tendance
+      var _gmSig, _gmBg, _gmBc, _gmCol, _gmTxt;
+      if (_lastPrix >= _objP * 1.1 && _tendance >= 0) {
+        _gmSig='🟢 MARCHÉ FAVORABLE — VENDRE'; _gmBg='#0f2a0f'; _gmBc='#2d6a2d'; _gmCol='#4caf50';
+        _gmTxt='Prix ('+fmt(_lastPrix)+' FCFA/kg) '+_vsObj2+'% au-dessus de l\'objectif et en hausse. Les bêtes prêtes doivent partir maintenant.';
+      } else if (_lastPrix >= _objP && _tendance < -50) {
+        _gmSig='🟡 VENDRE AVANT BAISSE'; _gmBg='#2e2010'; _gmBc='#8a5a00'; _gmCol='#ffaa40';
+        _gmTxt='Prix encore au-dessus de l\'objectif ('+fmt(_lastPrix)+' FCFA/kg) mais en baisse ('+fmt(Math.round(_tendance))+' FCFA/kg vs obs. précédente). Ne pas trop attendre.';
+      } else if (_lastPrix >= _objP) {
+        _gmSig='🟡 PRIX OK — SURVEILLER'; _gmBg='#2e2010'; _gmBc='#8a5a00'; _gmCol='#ffaa40';
+        _gmTxt='Prix actuel ('+fmt(_lastPrix)+' FCFA/kg) à l\'objectif. Marché stable ('+ _tendStr+'). Vendre les bêtes à maturité.';
+      } else if (_lastPrix < _objP * 0.85) {
+        // Prix bien en dessous → signal achat prochain lot
+        _gmSig='🔵 PRIX BAS — OPPORTUNITÉ ACHAT'; _gmBg='#0a1a2a'; _gmBc='#004a8a'; _gmCol='#4fc3f7';
+        _gmTxt='Prix marché bas ('+fmt(_lastPrix)+' FCFA/kg, −'+Math.abs(_vsObj2)+'% vs objectif). Ne pas vendre ce cycle-ci. En revanche : si trésorerie disponible, moment idéal pour négocier l\'achat du prochain lot de veaux.';
+      } else {
+        _gmSig='🔴 PRIX INSUFFISANT — ATTENDRE'; _gmBg='#2e1010'; _gmBc='#8a0000'; _gmCol='#f44336';
+        _gmTxt='Prix ('+fmt(_lastPrix)+' FCFA/kg) en dessous de l\'objectif ('+fmt(_objP)+' FCFA/kg). Vente = perte probable. Patience.';
+      }
+      _globalSig = '<div style="background:'+_gmBg+';border:1px solid '+_gmBc+';border-radius:12px;padding:14px 16px;margin-bottom:14px">'
+        +'<div style="font-size:13px;font-weight:800;color:'+_gmCol+';margin-bottom:6px">'+_gmSig+'</div>'
+        +'<div style="font-size:12px;color:#bbb;line-height:1.6">'+_gmTxt+'</div>'
+        +'<div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">'
+        +'<span style="font-size:11px;color:'+_tendCol+'">'+_tendStr+(Math.abs(_tendance)>50?' '+fmt(Math.round(Math.abs(_tendance)))+' FCFA/kg':'')+'</span>'
+        +(_bestFoi?'<span style="font-size:11px;color:#88aa88">Meilleur foirail : <strong style="color:#eee">'+_bestFoi+'</strong> (moy. '+fmt(Math.round(_bestMoyF))+' FCFA/kg)</span>':'')
         +'</div>'
-        +'<div style="font-size:12px;color:#aaa;line-height:1.5">'+_foiTxt+'</div>'
-        +(_bestFoi&&_bestFoi!==_cycFoi?'<div style="font-size:11px;color:#4caf50;margin-top:5px">→ Privilégier <strong style="color:#fff">'+_bestFoi+'</strong> pour maximiser le CA</div>':'')
         +'</div>';
 
-      // Tendance prix (L5)
-      if (_pdReco.length >= 2) {
-        var _prLast = _pdReco[_pdReco.length-1], _prPrev = _pdReco[_pdReco.length-2];
-        var _delta = (_prLast.moy||0) - (_prPrev.moy||0);
-        var _trendTxt = _delta > 50
-          ? 'Prix en hausse de +'+fmt(Math.round(_delta))+' FCFA/kg depuis la dernière observation. Moment favorable pour vendre ou pré-engager un acheteur.'
-          : _delta < -50
-            ? 'Prix en baisse de '+fmt(Math.round(Math.abs(_delta)))+' FCFA/kg. Attendre une remontée avant vente définitive si le calendrier le permet.'
-            : 'Marché stable (variation < 50 FCFA/kg). Surveiller l\'approche des fêtes pour optimiser le timing de vente.';
-        var _tCol = _delta > 50 ? '#4caf50' : _delta < -50 ? '#f44336' : '#ffaa40';
-        _recoCards += '<div class="reco-card">'
-          +'<div style="display:flex;justify-content:space-between;margin-bottom:6px">'
-          +'<div style="font-size:13px;font-weight:bold">Tendance prix</div>'
-          +'<div style="font-size:11px;color:#88bb88;background:#1a3a1a;padding:2px 8px;border-radius:10px">'+(_delta>50?'↑ Hausse':_delta<-50?'↓ Baisse':'→ Stable')+'</div>'
-          +'</div>'
-          +'<div style="font-size:12px;color:#aaa;line-height:1.5">'+_trendTxt+'</div>'
-          +'<div style="font-size:11px;color:'+_tCol+';margin-top:5px">Dernière obs. : '+fmt(Math.round(_prLast.moy))+' FCFA/kg — '+_prLast.foi+' ('+_prLast.date+')</div>'
+      // Carte achat séparée si prix très bas et tréso OK
+      if (_lastPrix < _objP * 0.85 && _tresoOkAchat) {
+        _globalAchat = '<div style="background:#0a1a2a;border:1px solid #004a8a;border-radius:10px;padding:12px 14px;margin-bottom:14px">'
+          +'<div style="font-size:12px;font-weight:700;color:#4fc3f7;margin-bottom:5px">💡 Opportunité achat prochain lot</div>'
+          +'<div style="font-size:12px;color:#aaa;line-height:1.5">Trésorerie disponible ('+fmt(_treso)+' FCFA) et prix veaux probablement en corrélation avec le marché — moment favorable pour négocier les achats du prochain cycle.</div>'
+          +'</div>';
+      } else if (_lastPrix < _objP * 0.85 && !_tresoOkAchat) {
+        _globalAchat = '<div style="background:#0a1a2a;border:1px solid #334;border-radius:10px;padding:10px 14px;margin-bottom:14px">'
+          +'<div style="font-size:11px;color:#556688">💡 Prix bas favorable à l\'achat mais trésorerie insuffisante ('+fmt(_treso)+' FCFA) — consolider la tréso avant d\'engager le prochain lot.</div>'
           +'</div>';
       }
-
-      // Vs objectif (L5)
-      var _objP = CYCLE.objectifPrix || 2000;
-      var _lastPr = _pdReco[_pdReco.length-1].moy;
-      var _vsObj = _lastPr ? Math.round((_lastPr/_objP-1)*100) : null;
-      _recoCards += '<div class="reco-card">'
-        +'<div style="display:flex;justify-content:space-between;margin-bottom:6px">'
-        +'<div style="font-size:13px;font-weight:bold">Objectif prix</div>'
-        +'<div style="font-size:11px;color:#88bb88;background:#1a3a1a;padding:2px 8px;border-radius:10px">'+fmt(_objP)+' FCFA/kg</div>'
-        +'</div>'
-        +(_vsObj !== null
-          ? '<div style="font-size:12px;color:#aaa;line-height:1.5">Marché actuel '
-              +(_vsObj>=0?'<span style="color:#4caf50">+'+_vsObj+'%</span> au-dessus':'<span style="color:#f44336">'+_vsObj+'%</span> en dessous')
-              +' de votre objectif de vente.</div>'
-              +'<div style="font-size:11px;color:'+(_vsObj>=0?'#4caf50':'#f44336')+';margin-top:5px">'+(_vsObj>=0?'✅ Vente profitable dès maintenant.':'⚠️ Attendre ou renégocier le prix cible.')+'</div>'
-          : '<div style="font-size:12px;color:#445544;line-height:1.5">Saisissez des prix foirail pour obtenir cette analyse.</div>')
-        +'</div>';
     } else {
-      _recoCards = '<div style="background:#0f1f0f;border-radius:10px;padding:16px;text-align:center;color:#445544;font-size:13px">Aucun prix enregistré ce cycle.<br><span style="color:#88aa88">Saisissez vos observations dans l\'onglet Prix pour des recommandations personnalisées.</span></div>';
+      _globalSig = '<div style="background:#0f1f0f;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:12px;color:#445544;text-align:center">Aucun prix foirail enregistré — saisissez des prix dans l\'onglet Prix pour des recommandations.</div>';
     }
-    view='<div class="stitle">Recommandations — Commerciale</div>'+_recoCards;
+
+    // ── Cartes par bête ──
+    var _betesCards = '';
+    if (_recoBetes.length) {
+      // Trier : urgence en premier (🟢 VENDRE > ⚠️ STAGNATION > 🟡 > 🔵 > 🔴 prix bas > ❓)
+      var _ordre = {'🟢':0,'⚠️':1,'🟡':2,'🔵':3,'🔴':4,'❓':5};
+      _recoBetes.sort(function(a,b){ return (_ordre[a.sig]||9)-(_ordre[b.sig]||9); });
+      _betesCards = '<div style="font-size:11px;color:#556655;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Recommandations par bête</div>'
+        + _recoBetes.map(function(b){
+          return '<div style="background:'+b.sigBg+';border:1px solid '+b.sigCol+'44;border-radius:10px;padding:12px 14px;margin-bottom:10px">'
+            +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+            +'<div style="font-size:15px;font-weight:800;color:#eee">'+b.sig+' '+b.id+'</div>'
+            +'<div style="display:flex;gap:8px;font-size:10px;color:#88aa88">'
+            +(b.nPesees>0?'<span>'+b.poids+' kg</span>':'<span style="color:#445544">— kg</span>')
+            +'<span>GMQ '+b.gmq+' kg/j</span>'
+            +'</div>'
+            +'</div>'
+            +'<div style="font-size:12px;color:#bbb;line-height:1.5">'+b.sigTxt+'</div>'
+            +(b.rentable&&_lastPrix?'<div style="font-size:11px;font-weight:700;color:'+b.sigCol+';margin-top:6px">Bénéfice estimé : +'+fmt(Math.round((b.poids-b.poidsMin)*(_lastPrix||_objP)))+' FCFA si vendue maintenant</div>':'')
+            +(b.nPesees===0?'<div style="font-size:10px;color:#445544;margin-top:4px">Aucune pesée — saisir pour obtenir une recommandation personnalisée</div>':'')
+            +'</div>';
+        }).join('');
+    } else if (LIVE.loaded) {
+      _betesCards = '<div style="font-size:12px;color:#445544;padding:8px 0">Aucune bête enregistrée — configurez le troupeau dans les paramètres du cycle.</div>';
+    } else {
+      _betesCards = '<div style="font-size:12px;color:#445544;padding:8px 0">⏳ Chargement des données des bêtes…</div>';
+    }
+
+    view='<div class="stitle">Recommandations — Commerciale</div>'
+      +_globalSig
+      +_globalAchat
+      +_betesCards;
   }
   return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+view+'</div>';
 }
