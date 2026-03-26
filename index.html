@@ -4625,6 +4625,31 @@ function viewDash(){
     ? Math.round((CYCLE.capital - _tresoNette) / _joursEcoules) : null;
   var _budgetJourCible = CYCLE.capital && totalSemCycle > 0
     ? Math.round(CYCLE.capital / (totalSemCycle * 7)) : null;
+  // Alertes (recalculées ici pour rester dans le scope viewDash)
+  var _semRest = Math.max(0, totalSemCycle - semActuelle);
+  var _alertFinCycle = (S.user==='fondateur'||S.user==='rga') && _semRest <= 2 && CYCLE.dateDebut;
+  var _alertMeteo = METEO.loaded && !METEO.error && METEO.temp >= 38;
+  var _alertGmqChute = (function(){
+    if (!LIVE.loaded || !LIVE.pesees || LIVE.pesees.length < 4) return false;
+    var byWeek = {};
+    LIVE.pesees.forEach(function(p){
+      if (!p.date || !p.gmq) return;
+      var _dp = p.date.split('/');
+      if (_dp.length !== 3) return;
+      var _d = new Date(_dp[2],_dp[1]-1,_dp[0]);
+      var _ref = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : _d;
+      var wk = Math.floor((_d - _ref) / (7*24*3600*1000));
+      if (!byWeek[wk]) byWeek[wk] = [];
+      byWeek[wk].push(p.gmq||0);
+    });
+    var wks = Object.keys(byWeek).sort(function(a,b){return a-b;});
+    if (wks.length < 3) return false;
+    var avg = function(arr){ return arr.reduce(function(s,v){return s+v;},0)/arr.length; };
+    var g1 = avg(byWeek[wks[wks.length-3]]);
+    var g2 = avg(byWeek[wks[wks.length-2]]);
+    var g3 = avg(byWeek[wks[wks.length-1]]);
+    return g3 < g2 * 0.85 && g2 < g1 * 0.85;
+  })();
   setTimeout(animateCounters, 50);
   var _heroRole = S.user==='gerant' ? 'Tableau de bord gerant' : S.user==='fondateur' ? 'Vue ensemble fondateur' : 'Tableau de bord';
   return '<div class="cnt">'
