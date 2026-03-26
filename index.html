@@ -3943,13 +3943,44 @@ function pageApp(){
   var _alertStock  = (S.user==='gerant'||S.user==='fondateur') && _dernStock > 14;
   var _alertPesee  = (S.user==='gerant'||S.user==='fondateur') && _dernPesee > (CYCLE.peseeFreq||30);
   var _alertBilan  = (S.user==='gerant'||S.user==='fondateur') && _jour===5 && _heure>=18 && !_bilanOk;
+  // Alerte bilan en retard (même si pas vendredi) — plus de 8 jours sans bilan
+  var _dernBilan = _jourDepuis(_dernierType('bilan'));
+  var _alertBilanRetard = (S.user==='gerant'||S.user==='fondateur') && _dernBilan > 8 && !_bilanOk;
+  // Alerte fin de cycle imminente (≤ 14 jours)
+  var _semRest = Math.max(0, Math.round((CYCLE.dureeMois||8)*4.33) - calcSemaine());
+  var _alertFinCycle = (S.user==='fondateur'||S.user==='rga') && _semRest <= 2 && CYCLE.dateDebut;
+  // Alerte météo chaleur (T° > 38°C — impact GMQ)
+  var _alertMeteo = METEO.loaded && !METEO.error && METEO.temp >= 38;
+  // Alerte GMQ en chute 2 semaines consécutives
+  var _alertGmqChute = (function(){
+    if (!LIVE.loaded || LIVE.pesees.length < 4) return false;
+    var byWeek = {};
+    LIVE.pesees.forEach(function(p){
+      if (!p.date || !p.gmq) return;
+      var _dp = p.date.split('/');
+      if (_dp.length !== 3) return;
+      var _d = new Date(_dp[2],_dp[1]-1,_dp[0]);
+      var _ref = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : _d;
+      var wk = Math.floor((_d - _ref) / (7*24*3600*1000));
+      if (!byWeek[wk]) byWeek[wk] = [];
+      byWeek[wk].push(p.gmq||0);
+    });
+    var wks = Object.keys(byWeek).sort(function(a,b){return a-b;});
+    if (wks.length < 3) return false;
+    var avg = function(arr){ return arr.reduce(function(s,v){return s+v;},0)/arr.length; };
+    var g1 = avg(byWeek[wks[wks.length-3]]);
+    var g2 = avg(byWeek[wks[wks.length-2]]);
+    var g3 = avg(byWeek[wks[wks.length-1]]);
+    return g3 < g2 * 0.85 && g2 < g1 * 0.85;
+  })();
   // Synchroniser MOCK.stock depuis STOCK_MVTS (toujours, même si = 0)
   var _stkSync = calcStockLocal();
   if(LIVE.source !== 'loading') MOCK.stock = _stkSync;
   var _alertStockCrit = MOCK.stock < 4;
 
   // Badge ☰
-  var hasAlert = _alertStockCrit || _alertFiche || _alertSOP || _alertStock || _alertPesee || _alertBilan;
+  var hasAlert = _alertStockCrit || _alertFiche || _alertSOP || _alertStock || _alertPesee || _alertBilan
+    || _alertBilanRetard || _alertFinCycle || _alertMeteo || _alertGmqChute;
 
   // Badge nouvelles données (fondateur uniquement — entrées Sheets plus récentes que dernière visite)
   var _nbNewEntries = 0;
@@ -4033,15 +4064,18 @@ function buildSidebar(){
 
   // ── GÉRANT TERRAIN ──
   if(u==='gerant'){
-    // Score santé : GMQ (50pts) + Stock (30pts) + Bêtes actives (20pts)
+    // Score santé : GMQ (50pts) + Stock (30pts) + Bêtes actives (20pts) − malus incidents urgents
     var _mort = CYCLE.nbBetes>0 ? Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100) : 0;
     var _scoreBetes = _mort===0 ? 20 : _mort<=5 ? 12 : _mort<=10 ? 5 : 0;
+    // Malus incidents ouverts : -8 pts par incident gravité 3, -4 pts par gravité 2
+    var _incOuverts = (LIVE.incidents||[]).filter(function(i){ return i.clos !== 'OUI'; });
+    var _malusInc = _incOuverts.reduce(function(s,i){ return s + (i.grav==='3'?8:i.grav==='2'?4:2); }, 0);
     var sante = Math.round(
       Math.min(50, (MOCK.gmq/1.2)*50) +
       (MOCK.stock>=6?30:MOCK.stock>=4?15:MOCK.stock>0?5:0) +
       _scoreBetes
     );
-    sante = Math.min(100, Math.max(0, sante));
+    sante = Math.min(100, Math.max(0, sante - _malusInc));
     var santeCol = sante>=70?'#4caf50':sante>=40?'#ff9800':'#f44336';
 
     if(SB.tab==='today'){
@@ -4568,6 +4602,18 @@ function viewDash(){
   var gmqBg=MOCK.gmq>=1?'kcard-ok':MOCK.gmq>=0.8?'kcard-warn':'kcard-crit';
   var stkBg=MOCK.stock>=6?'kcard-ok':MOCK.stock>=4?'kcard-warn':'kcard-crit';
   var trBg =MOCK.treso>=600000?'kcard-ok':MOCK.treso>=400000?'kcard-warn':'kcard-crit';
+  // Trésorerie nette : capital - charges engagées à date (santé + alim estimée)
+  var _joursEcoules = Math.max(0, calcSemaine() * 7);
+  var _coutAlimJour = Math.round((CYCLE.ration||12) * (CYCLE.nbBetes||4) * 0.15); // ~0.15 FCFA/kg/j estimation
+  var _chargesAlim  = _coutAlimJour * _joursEcoules;
+  var _chargesSante = CYCLE.capital && MOCK._tresoFromSante !== null && MOCK._tresoFromSante !== undefined
+    ? Math.max(0, (CYCLE.capital||0) - MOCK._tresoFromSante) : 0;
+  var _tresoNette = Math.max(0, MOCK.treso); // MOCK.treso est déjà la tréso réelle depuis KPI_Mensuels
+  // Coût/jour actuel = charges totales connues / jours écoulés
+  var _budgetJour = CYCLE.capital && _joursEcoules > 0
+    ? Math.round((CYCLE.capital - _tresoNette) / _joursEcoules) : null;
+  var _budgetJourCible = CYCLE.capital && totalSemCycle > 0
+    ? Math.round(CYCLE.capital / (totalSemCycle * 7)) : null;
   setTimeout(animateCounters, 50);
   var _heroRole = S.user==='gerant' ? 'Tableau de bord gerant' : S.user==='fondateur' ? 'Vue ensemble fondateur' : 'Tableau de bord';
   return '<div class="cnt">'
@@ -4597,7 +4643,9 @@ function viewDash(){
       +'<div class="sparkline-wrap">'+sparkline(SPARK.stk,gc('stk',stkDisplay))+'</div>'
       +'</div>';
   })()
-    +'<div class="kcard '+trBg+'"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">Trésorerie</div><div class="'+trC+'" style="font-size:26px;font-weight:700" data-count="'+Math.round(MOCK.treso/1000)+'">'+Math.round(MOCK.treso/1000)+'</div><div style="font-size:11px;margin-top:4px;color:'+gc('tr',MOCK.treso)+'">k FCFA — Min. 600k</div><div class="sparkline-wrap">'+sparkline(SPARK.treso.map(function(v){return v/1000;}),gc('tr',MOCK.treso))+'</div></div>'
+    +'<div class="kcard '+trBg+'"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">Trésorerie</div><div class="'+trC+'" style="font-size:26px;font-weight:700" data-count="'+Math.round(MOCK.treso/1000)+'">'+Math.round(MOCK.treso/1000)+'</div>'
+    +(_budgetJour!==null?'<div style="font-size:11px;margin-top:4px;color:'+(_budgetJour<=(_budgetJourCible||9999)?'#4caf50':'#f44336')+'">'+fmt(_budgetJour)+' FCFA/j'+(_budgetJourCible?' (cible '+fmt(_budgetJourCible)+'FCFA/j)':'')+'</div>':'<div style="font-size:11px;margin-top:4px;color:'+gc('tr',MOCK.treso)+'">k FCFA — Min. 600k</div>')
+    +'<div class="sparkline-wrap">'+sparkline(SPARK.treso.map(function(v){return v/1000;}),gc('tr',MOCK.treso))+'</div></div>'
     +'</div>'
     +'<div class="card">'
     +'<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:13px;color:#aaa">Avancement cycle</span><span style="font-size:11px;background:#2a1f0a;color:#C8A06A;padding:3px 10px;border-radius:12px">Mois '+MOCK.mois+'/'+(CYCLE.dureeMois||8)+'</span></div>'
@@ -4677,8 +4725,12 @@ function viewDash(){
       return '<div class="al al-r">🔴 Stock inconnu — saisir les stocks dans l\'onglet Stock</div>';
     })()
     +(MOCK.treso>=600000
-      ?'<div class="al al-g">Trésorerie '+Math.round(MOCK.treso/1000)+'k FCFA — OK</div>'
-      :'<div class="al al-r">🔴 Trésorerie '+Math.round(MOCK.treso/1000)+'k — en dessous du minimum</div>')
+      ?'<div class="al al-g">Trésorerie '+Math.round(MOCK.treso/1000)+'k FCFA — OK'+(_budgetJour!==null&&_budgetJourCible?'  · '+fmt(_budgetJour)+' FCFA/j brûlés (cible : '+fmt(_budgetJourCible)+' FCFA/j)':'')+'</div>'
+      :'<div class="al al-r">🔴 Trésorerie '+Math.round(MOCK.treso/1000)+'k — en dessous du minimum'+(_budgetJour!==null&&_budgetJourCible?' · '+fmt(_budgetJour)+' FCFA/j brûlés':'')+'</div>')
+    +(_alertGmqChute ? '<div class="al al-r">📉 Alerte : GMQ en chute 2 semaines consécutives — vérifier alimentation et état de santé.</div>' : '')
+    +(_alertFinCycle ? '<div class="al al-o">⏰ Fin de cycle dans '+_semRest+' sem. — préparer la vente dès maintenant.</div>' : '')
+    +(_alertMeteo ? '<div class="al al-o">🌡️ Chaleur extrême '+METEO.temp+'°C — Augmenter les points d\'eau et l\'ombrage.</div>' : '')
+    +(function(){ var _inc=(LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';}); return _inc.length ? '<div class="al al-r">⚠️ '+_inc.length+' incident(s) ouvert(s) — traiter en priorité (impact score santé).</div>' : ''; })()
     +'<div class="sep"></div>'
     +(function(){
       var types=Object.keys((STOCK_MVTS||[]).reduce(function(acc,m){acc[m.type]=1;return acc;},{}));
