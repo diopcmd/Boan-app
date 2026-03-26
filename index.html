@@ -4210,6 +4210,10 @@ function buildSidebar(){
         +'<div class="sb-shortcut-ico" style="background:#1a3a1a">✅</div>'
         +'<div><div style="font-size:13px;font-weight:600">Checklist SOP</div><div style="font-size:11px;color:#88aa88">Validation quotidienne</div></div>'
         +'</div>'
+        +'<div class="sb-shortcut" onclick="chTab(\'saisie\');chSub(\'pesee\');closeSB()">'
+        +'<div class="sb-shortcut-ico" style="background:#1a2a3a">⚖️</div>'
+        +'<div><div style="font-size:13px;font-weight:600">Pesée</div><div style="font-size:11px;color:#88aa88">Enregistrer le poids</div></div>'
+        +'</div>'
         +'<button onclick="S.page=\'login\';S.user=null;SB.open=false;r()" style="background:#2e1010;color:#ff7070;border:1px solid #8a0000;font-size:13px;padding:10px;margin-top:8px">Déconnexion</button>';
     } else if(SB.tab==='week'){
       // ── Calendrier semaine dynamique (fuseau Dakar) ──
@@ -4262,7 +4266,7 @@ function buildSidebar(){
         +'<div class="sb-section-title">Fiches cette semaine</div>'
         +daysHtml+'</div>'
         +'<div class="sb-card">'
-        +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val kval-ok">'+MOCK.gmq+' kg/j</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val '+(((LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq))>=1?'kval-ok':'kval-warn')+'">'+((LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq))+' kg/j'+(LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?' <span style="font-size:10px;color:#4caf50">🟢 live</span>':'')+'</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Objectif</span><span style="font-size:12px;color:'+_calSub+'">&ge; 1.0 kg/j</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Incidents</span><span class="sb-val '+(HISTORY.filter(function(h){var d=new Date(_monday.getTime());var end=new Date(_monday.getTime()+6*86400000);var p=h.date.split('/');if(p.length!==3)return false;var hd=new Date(p[2],p[1]-1,p[0]);return h.type==='inc'&&hd>=d&&hd<=end;}).length>0?'kval-warn':'kval-ok')+'">'+(HISTORY.filter(function(h){var d=new Date(_monday.getTime());var end=new Date(_monday.getTime()+6*86400000);var p=h.date.split('/');if(p.length!==3)return false;var hd=new Date(p[2],p[1]-1,p[0]);return h.type==='inc'&&hd>=d&&hd<=end;}).length)+' cette sem.</span></div>'
         +(function(){
@@ -4471,9 +4475,10 @@ function buildSidebar(){
         +'<div class="sb-section-title">Activité récente</div>'
         +(function(){
           var gg2=CYCLE.gonogo||{};
-          var goOk2=MOCK.treso>=600000&&!!(CYCLE.veterinaire&&CYCLE.veterinaire.trim())&&MOCK.betes>=(CYCLE.nbBetes||4)&&gg2.contrats&&gg2.infra&&gg2.assurance&&gg2.securite;
-          var score2=[MOCK.treso>=600000,!!(CYCLE.veterinaire&&CYCLE.veterinaire.trim()),MOCK.betes>=(CYCLE.nbBetes||4),gg2.contrats,gg2.infra,gg2.assurance,gg2.securite].filter(Boolean).length;
-          return '<div class="sb-shortcut" style="margin-top:10px;border-color:#2a3a2a" onclick="verifyAndReset()">'            +'<div class="sb-shortcut-ico" style="background:#2a2a1a">'+(goOk2?'🚀':'⚙️')+'</div>'            +'<div>'            +'<div style="font-size:13px;font-weight:600">Nouveau cycle</div>'            +'<div class="sb-sub">Go/No-Go : '+score2+'/7'+(goOk2?' ✓':'')+'</div>'            +'</div>'            +'</div>'            +'<div class="sb-shortcut" style="margin-top:8px;border-color:#2a2a3a" onclick="closeSB();openPwdManager()">'            +'<div class="sb-shortcut-ico" style="background:#1a1a2e">🔑</div>'            +'<div>'            +'<div style="font-size:13px;font-weight:600">Mots de passe</div>'            +'<div class="sb-sub">Gérer les accès équipe</div>'            +'</div>'            +'</div>';
+          var _ggSante2=!(LIVE.incidents||[]).some(function(i){return i.grav==='3'&&i.clos!=='OUI';});
+          var goOk2=MOCK.treso>=600000&&!!(CYCLE.veterinaire&&CYCLE.veterinaire.trim())&&MOCK.betes>=(CYCLE.nbBetes||4)&&_ggSante2&&gg2.contrats&&gg2.infra&&gg2.assurance&&gg2.securite;
+          var score2=[MOCK.treso>=600000,!!(CYCLE.veterinaire&&CYCLE.veterinaire.trim()),MOCK.betes>=(CYCLE.nbBetes||4),_ggSante2,gg2.contrats,gg2.infra,gg2.assurance,gg2.securite].filter(Boolean).length;
+          return '<div class="sb-shortcut" style="margin-top:10px;border-color:#2a3a2a" onclick="verifyAndReset()">'            +'<div class="sb-shortcut-ico" style="background:#2a2a1a">'+(goOk2?'🚀':'⚙️')+'</div>'            +'<div>'            +'<div style="font-size:13px;font-weight:600">Nouveau cycle</div>'            +'<div class="sb-sub">Go/No-Go : '+score2+'/8'+(goOk2?' ✓':'')+'</div>'            +'</div>'            +'</div>'            +'<div class="sb-shortcut" style="margin-top:8px;border-color:#2a2a3a" onclick="closeSB();openPwdManager()">'            +'<div class="sb-shortcut-ico" style="background:#1a1a2e">🔑</div>'            +'<div>'            +'<div style="font-size:13px;font-weight:600">Mots de passe</div>'            +'<div class="sb-sub">Gérer les accès équipe</div>'            +'</div>'            +'</div>';
         })()
         +histHtml2;
     }
