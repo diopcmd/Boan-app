@@ -10,31 +10,34 @@ Interface de pilotage à distance multi-rôles : direction, gérant terrain, RGA
 ## Fonctionnalités
 
 ### Saisies quotidiennes (gérant terrain)
-- **Fiche journalière** — nb bêtes, alimentation, eau, état enclos, incidents
-- **Checklist SOP** — vérification des procédures (nettoyage, désinfection, quarantaine…)
+- **Fiche journalière** — nb bêtes, alimentation, eau, état enclos, incidents + alertes rouges si nourris=NON ou eau=NON
+- **Checklist SOP** — vérification des procédures (nettoyage, désinfection, quarantaine…) + score compliance X/6
 - **Mouvements de stock** — ajout, consommation, inventaire aliments
 - **Incidents** — signalement avec gravité, action corrective, clôture
-- **Pesées** — poids individuel par bête avec calcul gain moyen quotidien (GMQ)
-- **Santé / Mortalité** — symptômes, traitement, coût, issue
+- **Pesées** — poids individuel par bête avec calcul gain moyen quotidien (GMQ) + alerte si bête déjà pesée aujourd'hui
+- **Santé / Mortalité** — symptômes, traitement, coût, issue (résultat préservé dans le select)
+- **Bilan hebdo** — affiche nb pesées de la semaine + GMQ moyen avant envoi
 
 ### Tableau de bord
-- **Score santé troupeau** — GMQ (50pts) + Stock (30pts) + Bêtes actives (20pts)
-- **4 KPI cards** — nb bêtes, GMQ, semaines de stock, trésorerie
-- **Alertes intelligentes** — fiche manquante, stock critique, pesée en retard, incidents
+- **Score santé troupeau** — GMQ (50pts) + Stock (30pts) + Bêtes actives (20pts) − malus incidents ouverts (−8/G3, −4/G2, −2/G1)
+- **4 KPI cards** — nb bêtes, GMQ live (intervalles réels par bête, badge 🟢), semaines de stock, trésorerie + coût/jour brûlés vs cible
+- **Alertes intelligentes** — fiche manquante, stock critique, pesée en retard, incidents ouverts, GMQ chute 2 sem., bilan retard >8j, fin cycle ≤2 sem., météo chaleur ≥38°C
+- **Bannieres dismissables** — bouton × pour fermer, reset quotidien
 - **Sparklines** — tendance sur 7 points pour chaque indicateur
-- **Météo Thiès** — température, pluie, vent en temps réel (Open-Meteo)
+- **Météo Thiès** — température, pluie, vent en temps réel (Open-Meteo) + prévisions 7 jours
 
 ### Livrables (fondateur / RGA)
-- **Projection vente** — poids final estimé × prix marché × nb bêtes
+- **Projection vente** — poids final estimé × prix marché × nb bêtes + budget restant/jour
 - **ROI projeté** — basé sur capital investi et durée cycle
 - **Bilan hebdomadaire** — synthèse automatique en PDF
-- **Trésorerie** — suivi capital et dépenses cumulées
+- **Trésorerie** — suivi capital, dépenses cumulées + flux frais santé depuis HISTORY
+- **Go/No-Go** — 8 critères (dont aucun incident G3 ouvert) pour lancer le cycle suivant
 - **Gestion des accès** — modification identifiants et mots de passe par le fondateur
 
 ### Marché (fondateur / commerciale)
-- **Suivi prix** — bas / moyen / haut par foirail
-- **Simulateur** — calcul bénéfice selon prix et commission
-- **Recommandations** — timing de vente optimal
+- **Suivi prix** — bas / moyen / haut par foirail + hero card + indicateur de fraîcheur
+- **Simulateur** — calcul bénéfice selon prix et commission + bouton Reset aux valeurs réelles
+- **Recommandations** — signal global achat/vente + cartes par bête triées par urgence
 
 ### UX mobile
 - Navigation par **swipe tactile** entre onglets
@@ -63,7 +66,7 @@ Interface de pilotage à distance multi-rôles : direction, gérant terrain, RGA
 
 ```
 Boan-app/
-├── index.html              SPA complète (HTML + CSS + JS inline, ~6011 lignes)
+├── index.html              SPA complète (HTML + CSS + JS inline, ~6282 lignes)
 ├── vercel.json             Rewrites SPA (exclut /api/ et /manifest.json)
 ├── manifest.json           Web App Manifest (PWA — icône, nom, display:standalone)
 ├── api/
@@ -189,16 +192,20 @@ vercel dev
 
 | Commit | Description |
 |---|---|
-| `915ee49` | trigger deploy (push vide) |
-| `39b0e25` | marche: simplify chart — remove filter & band, hero price + trend badge + clean line |
-| `daadc18` | fix: dateTimeRenderOption=FORMATTED_STRING — p.date.slice not a function |
+| `0e956ed` | fix: GMQ moyen KPI = LIVE.pesees (intervalles réels) + 1ère pesée / jours cycle |
+| `6d4762c` | fix: _alertGmqChute not defined — recalculer dans scope viewDash |
+| `1791066` | feat: ia+export — GMQ live contexte AI + incidents ouverts, GMQ live PDF |
+| `5f66808` | feat: sidebar — gonogo score 8 + ggSante, GMQ semaine live, raccourci pesée gérant |
+| `125e79c` | feat: marche — bugfix peseesBete, fraîcheur données reco, bouton reset simulateur |
+| `be169ae` | feat: livrables — bugfix treso, KPI GMQ live, flux santé, gonogo santé G3, budget restant/jour |
+| `d6ca102` | feat: saisie — alertes fiche NON, bugfix sante res, alerte pesée doublon, score SOP, GMQ bilan |
+| `3cecd3f` | feat: dashboard — score santé incidents, alertes meteo/gmq/bilan/fin-cycle, treso cout-jour, bannières dismissables |
+| `004a8d2` | feat: recommandations par bête + signal global achat/vente |
+| `facdf90` | fix: gmqMoy not defined — utilise bete.gmq (scope correct) |
+| `3eb6f53` | fix: loadPrix SID fondateur prioritaire + chTab marche refresh + gmqMoy global |
+| `ebb4982` | fix: courbe croissance — date slice 0-5, tri chronologique DD/MM/YYYY |
+| `b4dbd5a` | fix: pesée dropdown — LIVE.beteIds conserve toutes les bêtes après soumission |
+| `f9ebd8f` | docs: maj README + AI_RESUMPTION_PROMPT |
+| `39b0e25` | marche: simplify chart — hero price + trend badge + clean line |
+| `daadc18` | fix: dateTimeRenderOption=FORMATTED_STRING |
 | `eb181ef` | feat: onglet marché — band chart, filtre foirail, seuil rentabilité simulateur |
-| `e4ab9a8` | fix: readSheet UNFORMATTED_VALUE — prix 2000 affiché 2 FCFA/kg |
-| `319007e` | fix: 3 bugs init cycle fondateur (race stock, calcStockLocal, bilan sidebar) |
-| `ca8e541` | fix: bilan hebdo gérant incorrect |
-| `c40a723` | fix: bilan hebdo gérant — fallback sidFondateur + no wipe _lastBilanSem |
-| `e34c505` | docs: mise à jour docs + chemin local + ligne count |
-| `3ea8929` | fix: bugs marché prix + durée cycle réel sidebar synchro tous sheets |
-| `d6a0cc8` | feat: saisie libre durée cycle simulateur + reset A4→A5 |
-| `62ebeb1` | feat: Auth multi-SID, loadLiveData 3-vagues, buildHistoryFromSheets |
-| `133cada` | fix: tous les `/35` hardcodés → `CYCLE.dureeMois` dynamique |

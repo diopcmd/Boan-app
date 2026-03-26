@@ -12,7 +12,8 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 - **GitHub** : https://github.com/diopcmd/Boan-app (branche `main`)
 - **Dossier local** : `C:\Temp\Boan-app\`
 - **Langue** : Tout en français (code, UI, communications)
-- **Dernier commit** : `915ee49` — trigger deploy (simplification onglet Marché)
+- **Dernier commit** : `0e956ed` — fix GMQ moyen KPI (intervalles réels) + premier pesée / jours cycle
+- **Webhook Vercel** : cassé → redeploy manuel sur vercel.com (Deployments → Redeploy)
 
 ---
 
@@ -20,7 +21,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 
 | Couche | Technologie |
 |---|---|
-| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~6011 lignes) |
+| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~6282 lignes) |
 | Backend | Vercel Serverless Functions (ES Module `export default async function handler`) |
 | Auth | Session token custom HMAC-SHA256 (`base64(payload).hmac_hex`), 8h |
 | Données | Google Sheets API v4 via Service Account RS256 JWT |
@@ -34,7 +35,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 
 ```
 Boan-app/
-├── index.html              SPA complète (~6011 lignes)
+├── index.html              SPA complète (~6282 lignes)
 ├── vercel.json             Rewrites SPA (exclut /api/ et /manifest.json)
 ├── manifest.json           Web App Manifest (PWA — icône, nom, display:standalone)
 ├── api/
@@ -212,9 +213,15 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 ## Features implémentées (état mars 2026)
 
 ### Dashboard
+- **KPI GMQ moyen** : utilise `LIVE.pesees` (intervalles réels inter-pesées par bête) prioritaire sur `MOCK.gmq` (toujours /7) — badge 🟢 live affiché sur la carte
+- **1ère pesée par bête** : GMQ calculé sur jours réels depuis `CYCLE.dateDebut` (plus /30 fixe)
 - KPIs live : bêtes, GMQ, stock, trésorerie (avec sparklines)
 - Alerte GMQ prédictive (comparaison sem. vs sem. -1)
 - Synthèse stock cycle (par type d'aliment)
+- **Score santé troupeau** : GMQ (50pts) + Stock (30pts) + Bêtes actives (20pts) − malus incidents ouverts (−8/G3, −4/G2, −2/G1)
+- **Alertes intelligentes** : fiche manquante, stock critique, pesée en retard, incidents ouverts, GMQ chute 2 sem., bilan retard >8j, fin cycle ≤2 sem., météo chaleur ≥38°C — toutes dismissables (bouton ×)
+- **Bannières dismissables** : reset quotidien automatique
+- **Coût/jour** : charges brûlées vs cible (capital/durée cycle)
 - Bouton "Rapport du jour WhatsApp" (gérant uniquement)
 - Bouton IA analyse troupeau (fondateur uniquement)
 - Guide gérant "Quoi faire et quand"
@@ -270,6 +277,19 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 
 | Commit | Description |
 |---|---|
+| `0e956ed` | fix: GMQ moyen KPI = LIVE.pesees (intervalles réels) + 1ère pesée / jours cycle vs /30 |
+| `6d4762c` | fix: _alertGmqChute not defined — recalculer dans scope viewDash |
+| `1791066` | feat: ia+export — GMQ live contexte AI + incidents ouverts, GMQ live PDF |
+| `5f66808` | feat: sidebar — gonogo score 8 + ggSante, GMQ semaine live, raccourci pesée gérant |
+| `125e79c` | feat: marche — bugfix peseesBete, fraîcheur données reco, bouton reset simulateur |
+| `be169ae` | feat: livrables — bugfix treso, KPI GMQ live, flux santé, gonogo santé G3, budget restant/jour |
+| `d6ca102` | feat: saisie — alertes fiche NON, bugfix sante res, alerte pesée doublon, score SOP, GMQ bilan |
+| `3cecd3f` | feat: dashboard — score santé incidents, alertes meteo/gmq/bilan/fin-cycle, treso cout-jour, bannières dismissables |
+| `004a8d2` | feat: recommandations par bête + signal global achat/vente |
+| `facdf90` | fix: gmqMoy not defined — utilise bete.gmq (scope correct) |
+| `3eb6f53` | fix: loadPrix SID fondateur prioritaire + chTab marche refresh + gmqMoy global |
+| `ebb4982` | fix: courbe croissance — date slice 0-5, tri chronologique DD/MM/YYYY |
+| `b4dbd5a` | fix: pesée dropdown — LIVE.beteIds conserve toutes les bêtes après soumission |
 | `915ee49` | trigger deploy (push vide webhook cassé) |
 | `39b0e25` | marche: simplify chart — remove filter & band, hero price + trend badge + clean line |
 | `daadc18` | fix: dateTimeRenderOption=FORMATTED_STRING — p.date.slice not a function |
