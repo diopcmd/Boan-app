@@ -5162,29 +5162,34 @@ function viewLiv(){
       })()
       +'</div>'
       +(function(){
-        if (!CYCLE.capital) return '      +\'<div style="color:#88aa88;font-size:12px;padding:12px 0">Initialisez le cycle pour voir les flux.</div>\'';
+        if (!CYCLE.capital) return '<div style="color:#88aa88;font-size:12px;padding:12px 0">Initialisez le cycle pour voir les flux.</div>';
         var solde = CYCLE.capital||0;
         var rows = [];
         rows.push('<tr><td>'+(CYCLE.dateDebut||'—')+'</td><td>Capital initial</td><td style="color:#4caf50">'+fmt(solde)+'</td><td>—</td><td>'+fmt(solde)+'</td></tr>');
         if (CYCLE.nbBetes) {
           rows.push('<tr><td>—</td><td>Achat '+CYCLE.nbBetes+' bêtes</td><td>—</td><td style="color:#88aa88;font-size:11px" colspan="2">Non ventilé — voir RGA</td></tr>');
         }
+        var _coutSante = HISTORY.filter(function(h){return h.type==='sante';}).reduce(function(s,h){return s+(parseFloat(h.cout)||0);},0);
+        var _nbSante = HISTORY.filter(function(h){return h.type==='sante';}).length;
+        if (_coutSante > 0) {
+          rows.push('<tr><td>Cycle</td><td>Frais santé ('+_nbSante+' fiche(s))</td><td>—</td><td style="color:#f44336">-'+fmt(Math.round(_coutSante))+'</td><td style="font-size:11px;color:#88aa88">inclus ci-dessous</td></tr>');
+        }
         rows.push('<tr><td>Auj.</td><td>Solde actuel</td><td>—</td><td>—</td><td style="font-weight:700;color:'+(MOCK.treso>=600000?'#4caf50':MOCK.treso>0?'#ff9800':'#f44336')+'">'+fmt(MOCK.treso)+'</td></tr>');
-        return '<div class="tw"><table><tr><th>Date</th><th>Libelle</th><th>Entree</th><th>Sortie</th><th>Solde</th></tr>'+rows.join('')+'</table></div>';
+        return '<div class="tw"><table><tr><th>Date</th><th>Libelle</th><th>Entrée</th><th>Sortie</th><th>Solde</th></tr>'+rows.join('')+'</table></div>';
       })()
   } else if(S.sub==='kpi'){
     var objPoids   = CYCLE.objectifPrix || 2000;
     var objGMQ     = 1.0;
     var objStock   = 6;
     var objBetes   = CYCLE.nbBetes || 4;
-    var actGMQ     = MOCK.gmq;
     var actStock   = MOCK.stock;
     var actBetes   = MOCK.betes;
     var semCourante = calcSemaine();
     var totalSemCycle = Math.round((CYCLE.dureeMois||8)*4.33);
-    var gmqLive = LIVE.loaded && LIVE.pesees.length
+    var gmqLive = LIVE.loaded && LIVE.pesees && LIVE.pesees.length
       ? Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100
       : MOCK.gmq;
+    var actGMQ = gmqLive;
     var poidsProj    = Math.round((CYCLE.poidsDepart||270) + gmqLive*semCourante*7);
     var poidsObjActuel = Math.round((CYCLE.poidsDepart||270) + objGMQ*semCourante*7);
     var joursRestants = Math.max(0,(totalSemCycle-semCourante)*7);
@@ -5254,6 +5259,10 @@ function viewLiv(){
       +'<span style="font-size:12px;color:#88aa88">Objectif théorique</span>'
       +'<span style="font-size:12px;color:#88aa88">'+fmt(caObj)+' FCFA</span>'
       +'</div>'
+      +(joursRestants > 0 && MOCK.treso > 0 ? '<div style="display:flex;justify-content:space-between;margin-bottom:10px">'
+        +'<span style="font-size:12px;color:#88aa88">Budget restant / jour</span>'
+        +'<span style="font-size:13px;font-weight:700;color:#C8A06A">'+fmt(Math.round(MOCK.treso/joursRestants))+' FCFA/j</span>'
+        +'</div>' : '')
       +'<div style="padding:8px 12px;border-radius:8px;background:'+(caProj>=caObj?'#0f2a0f':'#1a1800')+';font-size:12px;font-weight:600;color:'+(caProj>=caObj?'#4caf50':'#ffaa40')+'">'
       +(caProj>=caObj?'✅ Trajectoire conforme aux objectifs':'⚠️ Trajectoire en dessous — améliorer le GMQ')
       +'</div>'
@@ -5473,6 +5482,7 @@ function viewLiv(){
     var ggCash  = MOCK.treso >= 600000;
     var ggVeto  = !!(CYCLE.veterinaire && CYCLE.veterinaire.trim());
     var ggBetes = MOCK.betes >= (CYCLE.nbBetes||4);
+    var ggSante = !(LIVE.incidents||[]).some(function(i){ return i.grav==='3' && i.clos!=='OUI'; });
     var gg = CYCLE.gonogo || {contrats:false,infra:false,assurance:false,securite:false};
     var canEdit = (S.user==='fondateur'||S.user==='rga');
 
@@ -5485,11 +5495,11 @@ function viewLiv(){
       return '<div onclick="'+onclick+'" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #1a2e1a'+(onclick?';cursor:pointer':'')+'">'        +checkbox        +'<div style="flex:1">'        +'<div style="font-size:13px;color:#ccc">'+label+(auto?' <span style="font-size:9px;color:#556655;background:#1a2a1a;padding:1px 5px;border-radius:5px;letter-spacing:.03em">AUTO</span>':'')+'</div>'        +(hint?'<div style="font-size:10px;color:#445544;margin-top:2px">'+hint+'</div>':'')        +'</div>'        +'</div>';
     }
 
-    var allOk=ggCash&&ggVeto&&ggBetes&&gg.contrats&&gg.infra&&gg.assurance&&gg.securite;
-    var score=[ggCash,ggVeto,ggBetes,gg.contrats,gg.infra,gg.assurance,gg.securite].filter(Boolean).length;
-    var vBg=allOk?'#0f2a0f':score>=5?'#2a1f00':'#2e1010';
-    var vBc=allOk?'#2d6a2d':score>=5?'#8a6a00':'#8a0000';
-    var vCol=allOk?'#4caf50':score>=5?'#ffaa40':'#f44336';
+    var allOk=ggCash&&ggVeto&&ggBetes&&ggSante&&gg.contrats&&gg.infra&&gg.assurance&&gg.securite;
+    var score=[ggCash,ggVeto,ggBetes,ggSante,gg.contrats,gg.infra,gg.assurance,gg.securite].filter(Boolean).length;
+    var vBg=allOk?'#0f2a0f':score>=6?'#2a1f00':'#2e1010';
+    var vBc=allOk?'#2d6a2d':score>=6?'#8a6a00':'#8a0000';
+    var vCol=allOk?'#4caf50':score>=6?'#ffaa40':'#f44336';
 
     view='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
       +'<div class="stitle" style="margin-bottom:0">Go/No-Go — Cycle suivant</div>'
@@ -5500,9 +5510,10 @@ function viewLiv(){
       +'</div>'
       +'<div class="card">'
       +'<div class="stitle">⚙️ Automatique</div>'
-      +ggRow('cash',   'Cash minimum ≥ 600 000 FCFA', ggCash,  true, 'Tréso. actuelle : '+fmt(MOCK.treso)+' FCFA')
-      +ggRow('veto',   'Vétérinaire référent confirmé',ggVeto,  true, CYCLE.veterinaire?'Contact : '+CYCLE.veterinaire:'Non renseigné dans l\'init')
-      +ggRow('betes',  'Bêtes actives = objectif',     ggBetes, true, MOCK.betes+' actives / '+(CYCLE.nbBetes||4)+' prévues')
+      +ggRow('cash',   'Cash minimum ≥ 600 000 FCFA',    ggCash,  true, 'Tréso. actuelle : '+fmt(MOCK.treso)+' FCFA')
+      +ggRow('veto',   'Vétérinaire référent confirmé',  ggVeto,  true, CYCLE.veterinaire?'Contact : '+CYCLE.veterinaire:'Non renseigné dans l\'init')
+      +ggRow('betes',  'Bêtes actives = objectif',        ggBetes, true, MOCK.betes+' actives / '+(CYCLE.nbBetes||4)+' prévues')
+      +ggRow('sante',  'Aucun incident URGENCE ouvert',   ggSante, true, ggSante?'✓ Aucun G3 ouvert':'⚠️ Clôturer les incidents G3 avant de lancer le cycle')
       +'</div>'
       +'<div class="card">'
       +'<div class="stitle">✋ Manuel'+(canEdit?' — <span style="font-size:10px;color:#C8A06A">tap pour modifier</span>':'')+'</div>'
@@ -5512,9 +5523,9 @@ function viewLiv(){
       +ggRow('securite','Sécurité foncière validée',    gg.securite, false,'Droits d\'usage du terrain')
       +'</div>'
       +'<div style="background:'+vBg+';border:1px solid '+vBc+';color:'+vCol+';border-radius:10px;padding:14px;text-align:center;font-size:16px;font-weight:900">'
-      +(allOk?'🟢 GO — Prêt pour le cycle suivant':score>=5?'🟡 PRESQUE — '+(7-score)+' condition(s) restante(s)':'🔴 NO-GO — '+(7-score)+' condition(s) manquante(s)')
+      +(allOk?'🟢 GO — Prêt pour le cycle suivant':score>=6?'🟡 PRESQUE — '+(8-score)+' condition(s) restante(s)':'🔴 NO-GO — '+(8-score)+' condition(s) manquante(s)')
       +'</div>'
-      +(!canEdit?'<div style="font-size:11px;color:#445544;text-align:center;margin-top:6px">Modifiable par Fondateur et RGA uniquement</div>':'');;
+      +(!canEdit?'<div style="font-size:11px;color:#445544;text-align:center;margin-top:6px">Modifiable par Fondateur et RGA uniquement</div>':'');
   }
   return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+view+'</div>';
 }
