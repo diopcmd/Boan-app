@@ -4784,6 +4784,9 @@ function viewSaisie(){
       +'<div class="fg"><label>Enclos propre ?</label>'+yn(f.enclos,'enclos','fi')+'</div>'
       +'<div class="fg"><label>Incident ?</label>'+yn(f.incident,'incident','fi')+'</div>'
       +(f.incident==='OUI'?fl('Description','<textarea rows="2" placeholder=" " oninput="S.fi.desc=this.value">'+f.desc+'</textarea>',f.desc):'')
+      +(f.nourris==='NON'?'<div class="al al-r">⚠️ Veaux non nourris — décrire la cause et enregistrer un incident !</div>':'')
+      +(f.eau==='NON'?'<div class="al al-r">⚠️ Eau non disponible — signaler immédiatement à la direction !</div>':'')
+      +(f.enclos==='NON'?'<div class="al al-o">Enclos sale — planifier le nettoyage SOP aujourd\'hui</div>':'')
       +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'fiche\')">Envoyer la fiche</button>'+msgHtml()+'</div>';
   } else if(S.sub==='sop'){
     var f=S.fs; if(!f.date)f.date=td;
@@ -4806,6 +4809,12 @@ function viewSaisie(){
       +'<div class="fg"><label>Stock verifie</label>'+yn(f.stk,'stk','fs')+'</div>'
       +'<div class="fg"><label>Sante check</label>'+yn(f.san,'san','fs')+'</div>'
       +fl('Problème (laisser vide si aucun)','<input placeholder=" " value="'+f.prob+'" oninput="S.fs.prob=this.value">',f.prob)
+      +(function(){
+        var _it=[f.net,f.des,f.rat,f.eau,f.stk,f.san];
+        var _ok=_it.filter(function(c){return c==='OUI';}).length;
+        var _cs=_ok>=5?'al-g':_ok>=3?'al-o':'al-r';
+        return '<div class="al '+_cs+'" style="margin-bottom:8px">Compliance SOP : <strong>'+_ok+'/6</strong>'+(_ok===6?' ✅ Parfait !':_ok>=4?' — Bien':'  — Vérifier les points manquants')+'</div>';
+      })()
       +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'sop\')">Valider</button>'+msgHtml()+'</div>';
   } else if(S.sub==='stock'){
     var f=S.fst; if(!f.date)f.date=td;
@@ -5043,6 +5052,7 @@ function viewSaisie(){
       +fl('Date pesée','<input type="date" value="'+f.date+'" oninput="S.fp.date=this.value">',f.date)
       +beteDropdown(f.id, 'S.fp.id', 'S.fp._autoFilled=false')
       +'</div>'
+      +(f.id && peseeDejaFaite(f.id) ? '<div class="al al-o" style="margin-bottom:6px">⚠️ '+f.id+' a déjà été pesée aujourd\'hui — continuer quand même ?</div>' : '')
       +'<div class="fg"><label>Race</label><select onchange="S.fp.race=this.value;r()"><option'+((!f.race||f.race==='Djakoré')?' selected':'')+'>Djakoré</option><option'+(f.race==='Gobra'?' selected':'')+'>Gobra</option><option'+(f.race==='Autre'||(f.race&&f.race!=='Djakoré'&&f.race!=='Gobra')?' selected':'')+'>Autre</option></select></div>'  +((f.race==='Autre'||(f.race&&f.race!=='Djakoré'&&f.race!=='Gobra'))?fl('Préciser la race','<input placeholder=" " value="'+(f.raceCustom||'')+'" oninput="S.fp.raceCustom=this.value">',f.raceCustom):'')
       +'<div class="frow">'
       +fl('Poids actuel (kg)','<input type="number" inputmode="decimal" placeholder=" " value="'+f.poids+'" oninput="S.fp.poids=this.value">',f.poids)
@@ -5067,6 +5077,7 @@ function viewSaisie(){
       +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'pesee\')">Enregistrer</button>'+msgHtml()+'</div>';
   } else if(S.sub==='sante'){
     var f=S.fsa; if(!f.date)f.date=td;
+    if(!f.res){ f.res='Guéri'; S.fsa.res='Guéri'; }
     var prog=formProgress(countFilled([f.date,f.id,f.sym,f.tra]),4);
     form='<div class="card">'+prog
       +(function(){
@@ -5086,7 +5097,7 @@ function viewSaisie(){
       +fl('Traitement','<input placeholder=" " value="'+f.tra+'" oninput="S.fsa.tra=this.value">',f.tra)
       +'<div class="frow">'
       +fl('Coût (FCFA)','<input type="number" inputmode="decimal" placeholder=" " value="'+f.cout+'" oninput="S.fsa.cout=this.value">',f.cout)
-      +'<div class="fg"><label>Résultat</label><select oninput="S.fsa.res=this.value"><option>Guéri</option><option>En cours</option><option>Non gueri</option></select></div>'
+      +'<div class="fg"><label>Résultat</label><select onchange="S.fsa.res=this.value"><option'+((!f.res||f.res==="Guéri")?" selected":"")+'>Guéri</option><option'+(f.res==="En cours"?" selected":"")+'>En cours</option><option'+(f.res==="Non gueri"?" selected":"")+'>Non gueri</option></select></div>'
       +'</div>'
       +'<div class="fg"><label>Décès ?</label>'+yn(f.dec,'dec','fsa')+'</div>'
       +(f.dec==='OUI'?'<div class="al al-r">Signaler immédiatement à la direction</div>':'')
@@ -5119,6 +5130,17 @@ function viewSaisie(){
       +'<div class="fg"><label>Incidents ?</label>'+yn(f.inc,'inc','fb')+'</div>'
       +'<div class="fg"><label>Poids vérifié ?</label>'+yn(f.poi,'poi','fb')+'</div>'
       +fl('Message à la direction','<textarea rows="3" placeholder=" " oninput="S.fb.msg=this.value">'+f.msg+'</textarea>',f.msg)
+      +(LIVE.loaded && (LIVE.pesees||[]).length ? (function(){
+        var _nd=_nowDakar(); var _d7=new Date(_nd.year,_nd.month-1,_nd.day); _d7.setDate(_d7.getDate()-7);
+        var _pw=(LIVE.pesees||[]).filter(function(p){
+          if(!p.date)return false;
+          var _pts=p.date.split('/'); if(_pts.length!==3)return false;
+          return new Date(_pts[2],_pts[1]-1,_pts[0])>=_d7;
+        });
+        return _pw.length
+          ? '<div class="al al-g" style="margin-bottom:8px">📊 '+_pw.length+' pesée(s) cette semaine'+(MOCK.gmq?' — GMQ moy. estimé : <strong>'+MOCK.gmq+' kg/j</strong>':'')+'</div>'
+          : '<div class="al al-o" style="margin-bottom:8px">⚠️ Aucune pesée cette semaine — penser à peser les bêtes</div>';
+      })() : '')
       +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'bilan\')">Envoyer le bilan</button>'+msgHtml()+'</div>';
   }
   return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+form+'</div>';
