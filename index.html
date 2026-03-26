@@ -2089,10 +2089,16 @@ function loadPesees() {
 
     LIVE.pesees = raw;
 
-    // IDs uniques
+    // IDs uniques — seed avec CYCLE.betes ou fallback B01..BNN pour ne jamais perdre les bêtes non encore pesées
     var ids = {};
-    LIVE.pesees.forEach(function(p){ if(p.id) ids[p.id]=true; });
-    LIVE.beteIds = Object.keys(ids);
+    if (CYCLE.betes && CYCLE.betes.length) {
+      CYCLE.betes.forEach(function(b){ if(b.id) ids[b.id] = true; });
+    } else {
+      var _nB = CYCLE.nbBetes || MOCK.betes || 4;
+      for (var _bi = 1; _bi <= _nB; _bi++) ids['B' + ('0'+_bi).slice(-2)] = true;
+    }
+    LIVE.pesees.forEach(function(p){ if(p.id) ids[p.id] = true; });
+    LIVE.beteIds = Object.keys(ids).sort();
     LIVE.loaded = true;
     r();
   });
