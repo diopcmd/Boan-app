@@ -5290,8 +5290,8 @@ function viewLiv(){
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
         +'<div><div style="font-size:16px;font-weight:800;color:#C8A06A">'+bete.id+'</div>'
         +'<div style="font-size:11px;color:#88aa88;margin-top:2px">'+bete.race+' · Départ '+poidsDepart+' kg</div></div>'
-        +'<div style="text-align:right"><div style="font-size:22px;font-weight:900;color:'+gmqCol+'">'+gmqMoy+' kg/j</div>'
-        +'<div style="font-size:10px;color:#88aa88">'+(peseesBete.length>=2?'GMQ réel':'GMQ troupeau')+'</div></div>'
+        +'<div style="text-align:right"><div style="font-size:22px;font-weight:900;color:'+gmqCol+'">'+bete.gmq+' kg/j</div>'
+        +'<div style="font-size:10px;color:#88aa88">'+(bete.historique&&bete.historique.length>=2?'GMQ réel':'GMQ troupeau')+'</div></div>'
         +'</div>'
         +(function(){
           if (!bete.historique || bete.historique.length < 2) return '';
