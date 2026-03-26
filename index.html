@@ -5739,10 +5739,13 @@ function viewMarche(){
     + '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;margin-bottom:10px;background:#1a2e1a;border-radius:10px;border:1px solid #2a4a2a">'
     +   '<div><div style="font-size:11px;color:#88aa88">\u23f1 Dur\u00e9e simul\u00e9e</div>'
     +   '<div style="font-size:10px;color:#445540;margin-top:2px">R\u00e9el\u00a0: ' + (CYCLE.dureeMois||8) + '\u00a0m</div></div>'
-    +   '<div style="display:flex;align-items:center">'
-    +     '<button onclick="event.stopPropagation();S.simMois=Math.max(1,(S.simMois!==undefined?S.simMois:' + cycleMois + ')-1);r()" style="width:34px;height:34px;font-size:20px;border-radius:8px 0 0 8px;background:#0a150a;border:1px solid #2a4a2a;border-right:none;color:#C8A06A;cursor:pointer">&#8722;</button>'
-    +     '<div style="min-width:50px;height:34px;display:flex;align-items:center;justify-content:center;background:#0a150a;border-top:1px solid #2a4a2a;border-bottom:1px solid #2a4a2a;font-size:17px;font-weight:800;color:#eee">' + cycleMois + '\u00a0m</div>'
-    +     '<button onclick="event.stopPropagation();S.simMois=Math.min(60,(S.simMois!==undefined?S.simMois:' + cycleMois + ')+1);r()" style="width:34px;height:34px;font-size:20px;border-radius:0 8px 8px 0;background:#0a150a;border:1px solid #2a4a2a;border-left:none;color:#C8A06A;cursor:pointer">&#43;</button>'
+    +   '<div style="display:flex;align-items:center;gap:8px">'
+    +     '<button onclick="event.stopPropagation();S.simMois=null;S.sn=null;S.sp=null;S.spx=null;S.sveau=null;S.salim=undefined;S.svet=undefined;S.ssec=undefined;S.simpPct=undefined;S.simpFix=undefined;r()" style="font-size:11px;padding:5px 10px;border-radius:7px;background:#0a150a;border:1px solid #2a4a2a;color:#88aa88;cursor:pointer">↺ Reset</button>'
+    +     '<div style="display:flex;align-items:center">'
+    +       '<button onclick="event.stopPropagation();S.simMois=Math.max(1,(S.simMois!==undefined?S.simMois:' + cycleMois + ')-1);r()" style="width:34px;height:34px;font-size:20px;border-radius:8px 0 0 8px;background:#0a150a;border:1px solid #2a4a2a;border-right:none;color:#C8A06A;cursor:pointer">&#8722;</button>'
+    +       '<div style="min-width:50px;height:34px;display:flex;align-items:center;justify-content:center;background:#0a150a;border-top:1px solid #2a4a2a;border-bottom:1px solid #2a4a2a;font-size:17px;font-weight:800;color:#eee">' + cycleMois + '\u00a0m</div>'
+    +       '<button onclick="event.stopPropagation();S.simMois=Math.min(60,(S.simMois!==undefined?S.simMois:' + cycleMois + ')+1);r()" style="width:34px;height:34px;font-size:20px;border-radius:0 8px 8px 0;background:#0a150a;border:1px solid #2a4a2a;border-left:none;color:#C8A06A;cursor:pointer">&#43;</button>'
+    +     '</div>'
     +   '</div>'
     + '</div>'
 
@@ -5936,7 +5939,7 @@ function viewMarche(){
           _sigTxt='Poids atteint mais prix marché ('+fmt(_lastPrix)+' FCFA/kg) en dessous de l\'objectif ('+fmt(_objP)+' FCFA/kg). Attendre la hausse sauf si fin de cycle imminente.';
         } else {
           _sig='🔵'; _sigCol='#4fc3f7'; _sigBg='#0a1a2a';
-          _sigTxt='Croissance en cours — '+(peseesBete?'':'aucune pesée enregistrée, ')+'continuer le suivi.';
+          _sigTxt='Croissance en cours — '+(_pb.length===0?'aucune pesée enregistrée, ':'')+'continuer le suivi.';
         }
         _recoBetes.push({id:id, poids:_poidsCur, poidsMin:_poidsMin, gmq:_gmq, gmqRecent:_gmqRecent,
           projFinal:_projFinal, rentable:_rentableNow, joursAvantRent:_joursAvantRent,
@@ -6021,6 +6024,9 @@ function viewMarche(){
     }
 
     view='<div class="stitle">Recommandations — Commerciale</div>'
+      +(_pdReco.length
+        ? '<div style="font-size:11px;color:#445544;margin-bottom:10px">Données prix : <strong style="color:#88aa88">'+(_pdReco[_pdReco.length-1].date||'—')+'</strong> · '+_pdReco[_pdReco.length-1].foi+' · '+_pdReco.length+' observation(s)</div>'
+        : '')
       +_globalSig
       +_globalAchat
       +_betesCards;
