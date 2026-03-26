@@ -2587,6 +2587,13 @@ function buildAIContext() {
   var mort = CYCLE.nbBetes > 0
     ? Math.round(((CYCLE.nbBetes||4) - MOCK.betes) / (CYCLE.nbBetes||4) * 100)
     : 0;
+  var _gmqLiveAI = LIVE.loaded && LIVE.pesees && LIVE.pesees.length
+    ? Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100
+    : MOCK.gmq;
+  var _incOuvertsAI = (LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';});
+  var _incResume = _incOuvertsAI.length
+    ? _incOuvertsAI.map(function(i){return 'G'+i.grav+' '+i.id+' ('+i.date+'): '+i.type;}).join(' | ')
+    : 'Aucun';
 
   // Synthèse stock
   var netKg = {};
@@ -2630,9 +2637,8 @@ function buildAIContext() {
     'Race: ' + (CYCLE.race||'Non définie'),
     'Mortalité cycle: ' + mort + '%',
     'Poids départ moyen: ' + (CYCLE.poidsDepart||270) + ' kg',
-    'GMQ moyen actuel: ' + MOCK.gmq + ' kg/j (cible ≥ 1.0 kg/j)',
-    '',
-    '=== ALIMENTATION ===',
+    'GMQ moyen actuel: ' + _gmqLiveAI + ' kg/j (cible ≥ 1.0 kg/j)'+(LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?' [donnée live]':' [estimation]'),
+    'Incidents ouverts: ' + _incOuvertsAI.length + (_incOuvertsAI.length ? ' — '+_incResume : ''),
     'Ration journalière: ' + (CYCLE.ration||12) + ' kg/bête/jour',
     'Stock restant: ' + (MOCK.stock > 0 ? MOCK.stock : calcStockLocal()) + ' semaines',
     'Détail stock: ' + stockDetail,
@@ -3779,7 +3785,7 @@ function exportPDF() {
     doc.line(14, 42, 196, 42);
     var kpis = [
       ['Bêtes actives', MOCK.betes+' / '+(CYCLE.nbBetes||4)+' têtes', (function(){var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;return mort+'% mortalité'+(mort===0?' ✓':' ⚠');}())],
-      ['GMQ moyen', MOCK.gmq+' kg/j', 'Cible ≥ 1.0 kg/j'],
+      ['GMQ moyen', (function(){return LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq;})()+' kg/j', 'Cible ≥ 1.0 kg/j'],
       ['Stock aliments', (MOCK.stock>0?MOCK.stock:calcStockLocal())+' semaines', (MOCK.stock>0?MOCK.stock:calcStockLocal())>=6?'Suffisant ✓':'Attention ⚠'],
       ['Trésorerie', fmt(MOCK.treso)+' FCFA', MOCK.treso>=600000?'Seuil OK':'Surveiller']
     ];
