@@ -4461,7 +4461,13 @@ function buildSidebar(){
         +'</div>'
     } else if(SB.tab==='month'){
       body='<div class="sb-card">'
-        +(function(){ var dep=Math.round(((CYCLE.capital||1450000)-MOCK.treso)/1000); return '<div class="sb-row"><span class="sb-lbl">Dépenses cumulées</span><span style="font-size:12px;color:#f44336">-'+dep+'k FCFA</span></div>'; })()
+        +(function(){
+          var _sd=_calcDepSim();
+          var _hasReal=CYCLE.capital>0&&Math.max(0,MOCK.treso)<(CYCLE.capital||0)*0.98;
+          var dep=_hasReal?Math.round(((CYCLE.capital||0)-MOCK.treso)/1000):Math.round(_sd.dep/1000);
+          var src=_hasReal?' (réel)':' (sim.)';
+          return '<div class="sb-row"><span class="sb-lbl">Dépenses cumulées<span style="font-size:10px;color:#556655">'+src+'</span></span><span style="font-size:12px;color:#f44336">-'+dep+'k FCFA</span></div>';
+        })()
         +'<div class="sb-row"><span class="sb-lbl">Solde actuel</span><span class="sb-val '+(MOCK.treso>=600000?'kval-ok':'kval-crit')+'">'+Math.round(MOCK.treso/1000)+'k FCFA</span></div>'
         +(function(){ var gmqL=LIVE.loaded&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq; var sem=calcSemaine(); var totalSem=Math.round((CYCLE.dureeMois||8)*4.33); var joursR=(totalSem-sem)*7; var poidsF=Math.round((CYCLE.poidsDepart||270)+gmqL*sem*7+gmqL*joursR); var caProj=Math.round((CYCLE.nbBetes||4)*poidsF*(CYCLE.objectifPrix||2000)/1000000*10)/10; return '<div class="sb-row"><span class="sb-lbl">Projection vente</span><span style="font-size:12px;color:#C8A06A">~'+caProj+'M FCFA</span></div>'; })()
         +(function(){
@@ -4612,6 +4618,39 @@ function animateCounters() {
   });
 }
 
+// === Simulateur — persistance des charges dans CYCLE.simCharges ===
+function _simSet(key, val) {
+  S[key] = val;
+  var sc = CYCLE.simCharges || {};
+  sc[key] = val;
+  CYCLE.simCharges = sc;
+  lsSet('cycle', CYCLE);
+  r();
+}
+// Calcule les dépenses proratisées à date depuis les charges du simulateur
+function _calcDepSim() {
+  var sc  = CYCLE.simCharges || {};
+  var nb  = CYCLE.nbBetes || 4;
+  var cm  = CYCLE.dureeMois || 8;
+  var simV = sc.sveau   !== undefined ? sc.sveau   : (CYCLE.capital && nb ? Math.round(CYCLE.capital / nb) : 450000);
+  var simA = sc.salim   !== undefined ? sc.salim   : 180000;
+  var simW = sc.svet    !== undefined ? sc.svet    : 20000;
+  var simG = sc.ssec    !== undefined ? sc.ssec    : 50000;
+  var iMode= sc.simpMode || 'pct';
+  var iPct = sc.simpPct !== undefined ? sc.simpPct : 5;
+  var iFix = sc.simpFix !== undefined ? sc.simpFix : 100000;
+  var cVeau   = nb * simV;
+  var cRec    = simA * cm + nb * simW + simG * cm;
+  var cBase   = cVeau + cRec;
+  var cImprev = iMode === 'pct' ? Math.round(cBase * iPct / 100) : iFix;
+  var cRecurr = cRec + cImprev;
+  var cTotal  = cVeau + cRecurr;
+  var tj = Math.round(cm * 30.4);
+  var je = Math.max(0, calcSemaine() * 7);
+  var dep = tj > 0 ? Math.round(cVeau + cRecurr * je / tj) : cVeau;
+  return { dep: dep, total: cTotal, veau: cVeau, recurr: cRecurr, joursTotal: tj };
+}
+
 function viewDash(){
   var semActuelle = calcSemaine();
   MOCK.sem = semActuelle;
@@ -4631,18 +4670,15 @@ function viewDash(){
   var gmqBg=_gmqDisplay>=1?'kcard-ok':_gmqDisplay>=0.8?'kcard-warn':'kcard-crit';
   var stkBg=MOCK.stock>=6?'kcard-ok':MOCK.stock>=4?'kcard-warn':'kcard-crit';
   var trBg =MOCK.treso>=600000?'kcard-ok':MOCK.treso>=400000?'kcard-warn':'kcard-crit';
-  // Trésorerie nette : capital - charges engagées à date (santé + alim estimée)
   var _joursEcoules = Math.max(0, calcSemaine() * 7);
-  var _coutAlimJour = Math.round((CYCLE.ration||12) * (CYCLE.nbBetes||4) * 0.15); // ~0.15 FCFA/kg/j estimation
-  var _chargesAlim  = _coutAlimJour * _joursEcoules;
-  var _chargesSante = CYCLE.capital && MOCK._tresoFromSante !== null && MOCK._tresoFromSante !== undefined
-    ? Math.max(0, (CYCLE.capital||0) - MOCK._tresoFromSante) : 0;
-  var _tresoNette = Math.max(0, MOCK.treso); // MOCK.treso est déjà la tréso réelle depuis KPI_Mensuels
-  // Coût/jour actuel = charges totales connues / jours écoulés
-  var _budgetJour = CYCLE.capital && _joursEcoules > 0
-    ? Math.round((CYCLE.capital - _tresoNette) / _joursEcoules) : null;
-  var _budgetJourCible = CYCLE.capital && totalSemCycle > 0
-    ? Math.round(CYCLE.capital / (totalSemCycle * 7)) : null;
+  var _tresoNette = Math.max(0, MOCK.treso);
+  // Dépenses proratisées depuis les charges du simulateur (alim + gardien + vét + imprévus)
+  var _simDep = _calcDepSim();
+  // Tréso réelle si KPI_Mensuels saisie (MOCK.treso descend sous capital)
+  var _hasRealTreso = CYCLE.capital > 0 && _tresoNette < (CYCLE.capital || 0) * 0.98;
+  var _depADate = _hasRealTreso ? Math.round((CYCLE.capital || 0) - _tresoNette) : _simDep.dep;
+  var _budgetJour = _joursEcoules > 0 ? Math.round(_depADate / _joursEcoules) : null;
+  var _budgetJourCible = _simDep.joursTotal > 0 ? Math.round(_simDep.total / _simDep.joursTotal) : null;
   // Alertes (recalculées ici pour rester dans le scope viewDash)
   var _semRest = Math.max(0, totalSemCycle - semActuelle);
   var _alertFinCycle = (S.user==='fondateur'||S.user==='rga') && _semRest <= 2 && CYCLE.dateDebut;
@@ -5693,6 +5729,15 @@ function viewMarche(){
       +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'marche\')">Enregistrer</button>'+msgHtml()
       +'</div>';
   } else if(S.sub==='sim'){
+    // Initialiser depuis CYCLE.simCharges si premier affichage (survit au reload)
+    var _sc0 = CYCLE.simCharges || {};
+    if (S.salim   === undefined && _sc0.salim   !== undefined) S.salim   = _sc0.salim;
+    if (S.svet    === undefined && _sc0.svet    !== undefined) S.svet    = _sc0.svet;
+    if (S.ssec    === undefined && _sc0.ssec    !== undefined) S.ssec    = _sc0.ssec;
+    if (S.sveau   === undefined && _sc0.sveau   !== undefined) S.sveau   = _sc0.sveau;
+    if (S.simpPct === undefined && _sc0.simpPct !== undefined) S.simpPct = _sc0.simpPct;
+    if (S.simpFix === undefined && _sc0.simpFix !== undefined) S.simpFix = _sc0.simpFix;
+    if (!S.simpMode && _sc0.simpMode) S.simpMode = _sc0.simpMode;
     var cycleMois = (S.simMois !== undefined && S.simMois !== null) ? S.simMois : (CYCLE.dureeMois || 8);
 
     // ── État — valeurs par défaut réalistes marché sénégalais ──
@@ -5743,7 +5788,7 @@ function viewMarche(){
       var id = 'sf_' + key;
       // Slider : live update du champ texte sans re-render, r() au relâchement seulement
       var onSliderInput  = 'document.getElementById(\'' + id + '\').value=this.value';
-      var onSliderChange = 'S.' + key + '=' + pf + '(this.value);r()';
+      var onSliderChange = '_simSet(\'' + key + '\',' + pf + '(this.value))';
       // Champ texte : on stocke la fonction dans window pour éviter double-appel blur+enter
       var fnName = 'simCommit_' + key;
       // La fonction est injectée dans window une fois, appelée par blur ET keydown Enter
@@ -5752,17 +5797,17 @@ function viewMarche(){
                     +   'var v=' + pf + '(this.value);'
                     +   'if(!isNaN(v)&&this.value.trim()!==\'\'){'
                     +     'v=Math.max(' + mn + ',Math.min(' + mx + ',v));'
-                    +     'S.' + key + '=v;this.value=v;'
+                    +     'this.value=v;'
                     +     'document.getElementById(\'rng_' + key + '\').value=v;'
-                    +     'this.dataset.committed=\'1\';r();'
+                    +     'this.dataset.committed=\'1\';_simSet(\'' + key + '\',v);'
                     +   '}'
                     + '}';
       var onBlur    = 'if(this.dataset.committed===\'1\'){this.dataset.committed=\'\';return;}'
                     + 'var v=' + pf + '(this.value);'
                     + 'if(!isNaN(v)&&this.value.trim()!==\'\'){'
                     +   'v=Math.max(' + mn + ',Math.min(' + mx + ',v));'
-                    +   'S.' + key + '=v;this.value=v;'
-                    +   'document.getElementById(\'rng_' + key + '\').value=v;r();'
+                    +   'this.value=v;'
+                    +   'document.getElementById(\'rng_' + key + '\').value=v;_simSet(\'' + key + '\',v);'
                     + '}';
       return '<div style="margin-bottom:14px">'
         + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">'
