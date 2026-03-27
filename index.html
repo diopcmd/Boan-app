@@ -5445,25 +5445,12 @@ function viewLiv(){
           return da-db;
         });
         var derniere = peseesBete[peseesBete.length-1] || {};
-        // GMQ : calcul global first→last (fiable), fallback troupeau si 1 pesée seulement
-        var gmqMoy = 0;
-        if (peseesBete.length >= 2) {
-          var _p0 = peseesBete[0], _pN = peseesBete[peseesBete.length-1];
-          var _sp0 = _p0.date.split('/'), _spN = _pN.date.split('/');
-          var _d0 = _sp0.length===3 ? new Date(_sp0[2],_sp0[1]-1,_sp0[0]) : null;
-          var _dN = _spN.length===3 ? new Date(_spN[2],_spN[1]-1,_spN[0]) : null;
-          var _jours = (_d0 && _dN) ? Math.round((_dN - _d0) / 86400000) : 0;
-          if (_jours > 0 && _pN.poids > _p0.poids) {
-            gmqMoy = Math.round((_pN.poids - _p0.poids) / _jours * 100) / 100;
-          } else {
-            // Fallback : moyenne des GMQ individuels (hors 1ère pesée)
-            var _gmqs = peseesBete.slice(1).map(function(p){ return p.gmq||0; }).filter(function(g){ return g>0; });
-            gmqMoy = _gmqs.length ? Math.round(_gmqs.reduce(function(s,g){return s+g;},0)/_gmqs.length*100)/100 : (MOCK.gmq||1);
-          }
-        } else {
-          // 1 seule pesée : GMQ individuel non fiable, utilise moyenne troupeau
-          gmqMoy = MOCK.gmq || 1;
-        }
+        // GMQ : moyenne des p.gmq déjà calculés par loadPesees() (intervalles réels)
+        // → même méthode que MOCK.gmq et dashboard — cohérence garantie
+        var _gmqVals = peseesBete.map(function(p){ return p.gmq||0; }).filter(function(g){ return g>0; });
+        var gmqMoy = _gmqVals.length
+          ? Math.round(_gmqVals.reduce(function(s,g){return s+g;},0)/_gmqVals.length*100)/100
+          : (MOCK.gmq || 1);
         var poidsCourant = derniere.poids || poidsDepart;
         var joursRestants = Math.max(0,(totalSemCycle-semCourante)*7);
         var coutBete = (CYCLE.capital||1450000)/(CYCLE.nbBetes||4);
@@ -6073,16 +6060,11 @@ function viewMarche(){
           return da-db;
         });
         var _dern = _pb[_pb.length-1]||{};
-        var _gmq = 0;
-        if (_pb.length>=2) {
-          var _pp0=_pb[0],_ppN=_pb[_pb.length-1];
-          var _s0=_pp0.date.split('/'),_sN=_ppN.date.split('/');
-          var _d0=_s0.length===3?new Date(_s0[2],_s0[1]-1,_s0[0]):null;
-          var _dN=_sN.length===3?new Date(_sN[2],_sN[1]-1,_sN[0]):null;
-          var _jj=(_d0&&_dN)?Math.round((_dN-_d0)/86400000):0;
-          if(_jj>0&&_ppN.poids>_pp0.poids) _gmq=Math.round((_ppN.poids-_pp0.poids)/_jj*100)/100;
-          else { var _gs=_pb.slice(1).map(function(p){return p.gmq||0;}).filter(function(g){return g>0;}); _gmq=_gs.length?Math.round(_gs.reduce(function(s,g){return s+g;},0)/_gs.length*100)/100:(MOCK.gmq||1); }
-        } else { _gmq = MOCK.gmq||1; }
+        // GMQ : même méthode que loadPesees() et MOCK.gmq — moyenne des p.gmq (intervalles réels)
+        var _gmqVals = _pb.map(function(p){ return p.gmq||0; }).filter(function(g){ return g>0; });
+        var _gmq = _gmqVals.length
+          ? Math.round(_gmqVals.reduce(function(s,g){return s+g;},0)/_gmqVals.length*100)/100
+          : (MOCK.gmq||1);
         // GMQ récent = moyen des 2 dernières pesées pour détecter stagnation
         var _gmqRecent = _pb.length>=2 ? ((_pb[_pb.length-1].gmq||0)+(_pb[_pb.length-2].gmq||0))/2 : _gmq;
         var _poidsCur = _dern.poids || _poidsDepBeteCycle;
