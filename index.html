@@ -2092,6 +2092,17 @@ function loadPesees() {
 
     LIVE.pesees = raw;
 
+    // Override MOCK.gmq avec la moyenne réelle (intervalles réels inter-pesées par bête)
+    // loadLiveData divise toujours les gains par 7 — loadPesees calcule l'intervalle exact
+    var _allGmq = raw.map(function(p){ return p.gmq||0; }).filter(function(g){ return g > 0; });
+    if (_allGmq.length) {
+      var _gmqReel = Math.round(_allGmq.reduce(function(s,g){ return s+g; }, 0) / _allGmq.length * 100) / 100;
+      if (_gmqReel > 0 && _gmqReel < 5) {
+        MOCK.gmq = _gmqReel;
+        SPARK.gmq = raw.slice(-7).map(function(p){ return p.gmq||0; });
+      }
+    }
+
     // IDs uniques — seed avec CYCLE.betes ou fallback B01..BNN pour ne jamais perdre les bêtes non encore pesées
     var ids = {};
     if (CYCLE.betes && CYCLE.betes.length) {
@@ -5181,7 +5192,7 @@ function viewSaisie(){
           return new Date(_pts[2],_pts[1]-1,_pts[0])>=_d7;
         });
         return _pw.length
-          ? '<div class="al al-g" style="margin-bottom:8px">📊 '+_pw.length+' pesée(s) cette semaine'+(MOCK.gmq?' — GMQ moy. estimé : <strong>'+MOCK.gmq+' kg/j</strong>':'')+'</div>'
+          ? '<div class="al al-g" style="margin-bottom:8px">📊 '+_pw.length+' pesée(s) cette semaine'+(MOCK.gmq?' — GMQ moy. : <strong>'+MOCK.gmq+' kg/j</strong>'+(LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?' 🟢':' ⏳'):'')+'</div>'
           : '<div class="al al-o" style="margin-bottom:8px">⚠️ Aucune pesée cette semaine — penser à peser les bêtes</div>';
       })() : '')
       +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'bilan\')">Envoyer le bilan</button>'+msgHtml()+'</div>';
