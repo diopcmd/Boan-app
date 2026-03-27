@@ -388,7 +388,7 @@ function lsSet(k,v) { try { localStorage.setItem('boanr_'+k, JSON.stringify(v));
 // Cycle config (from localStorage)
 var CYCLE = lsGet('cycle') || {
   dateDebut: '', nbBetes: 4, poidsDepart: 270, race: 'Djakoré', ration: 12,
-  capital: 1450000, objectifPrix: 2000,
+  capital: 1450000, objectifPrix: 2000, prixAlim: 0,
   budgetSante: 200000, veterinaire: '',
   foirail: 'Thiès', commission: 2,
   stockLines: [],  // [{type, kg}] stocks par aliment au démarrage
@@ -397,6 +397,7 @@ var CYCLE = lsGet('cycle') || {
   contactUrgence: 'Direction',
   betes: [],  // [{id, race, poidsEntree, dateIntro}]
   initialized: false,
+  simCharges: {},  // charges simulateur persistantes
   gonogo: {contrats:false, infra:false, assurance:false, securite:false}
 };
 
@@ -1181,7 +1182,7 @@ function loadLiveData() {
   // Lire depuis SID.fondateur pour synchroniser CYCLE sur tout appareil
   var step1 = sidFondateur
     ? Promise.all([
-        readSheet(sidFondateur, 'Config_Cycle!A1:P1'),
+        readSheet(sidFondateur, 'Config_Cycle!A1:R1'),
         readSheet(sidFondateur, 'Config_App!A:B')
       ]).then(function(res) {
         var rows    = res[0];
@@ -1207,6 +1208,8 @@ function loadLiveData() {
           try { if (row[13]) updates.betes      = JSON.parse(row[13]); } catch(e) {}
           try { if (row[14]) updates.stockLines = JSON.parse(row[14]); } catch(e) {}
           if (row[15]) updates.dureeMois      = parseInt(row[15])  || CYCLE.dureeMois; // col P
+          try { if (row[16]) updates.simCharges = JSON.parse(row[16]); } catch(e) {}  // col Q
+          if (row[17]) updates.prixAlim        = parseFloat(row[17]) || CYCLE.prixAlim; // col R
           // Détection changement de cycle — wipe immédiat sur l'appareil des autres acteurs
           var _prevDateDebut = CYCLE.dateDebut;
           Object.assign(CYCLE, updates);
@@ -1941,7 +1944,9 @@ function _syncCycle() {
       CYCLE.foirail, CYCLE.commission, CYCLE.contactUrgence, CYCLE.peseeFreq,
       JSON.stringify(CYCLE.betes||[]),
       JSON.stringify(CYCLE.stockLines||[]),
-      CYCLE.dureeMois  // col P (index 15) — synchronisé pour que tous les acteurs voient la durée cycle
+      CYCLE.dureeMois,                          // col P (index 15)
+      JSON.stringify(CYCLE.simCharges||{}),     // col Q (index 16) — charges simulateur
+      CYCLE.prixAlim || 0                       // col R (index 17) — prix aliment FCFA/kg
     ];
     var allSids = [SID.fondateur, SID.gerant, SID.rga, SID.fallou].filter(Boolean);
     allSids.forEach(function(sid) {
@@ -2348,6 +2353,7 @@ function pageModal(){
       +'<div class="fg"><label>Objectif prix (FCFA/kg)</label><input type="number" inputmode="decimal" value="'+(MODAL.data.objectifPrix||2000)+'" oninput="MODAL.data.objectifPrix=isNaN(parseInt(this.value))?MODAL.data.objectifPrix:parseInt(this.value)"></div>'
       +'<div class="fg"><label>Budget santé (FCFA)</label><input type="number" inputmode="decimal" value="'+(MODAL.data.budgetSante||200000)+'" oninput="MODAL.data.budgetSante=isNaN(parseInt(this.value))?MODAL.data.budgetSante:parseInt(this.value)"></div>'
       +'</div>'
+      +'<div class="fg"><label>Prix aliment (FCFA/kg) <span style="font-size:11px;color:#888">pour calcul tréso réelle</span></label><input type="number" inputmode="decimal" placeholder="Ex : 120" value="'+(MODAL.data.prixAlim||'')+'" oninput="MODAL.data.prixAlim=isNaN(parseInt(this.value))?0:parseInt(this.value)"></div>'
       +'<div class="fg"><label>Vétérinaire référent</label><input placeholder="Nom / contact" value="'+(MODAL.data.veterinaire||'')+'" oninput="MODAL.data.veterinaire=this.value"></div>';
   } else if(MODAL.step===3){
     body='<div class="fg"><label>Foirail principal</label><select onchange="MODAL.data.foirail=this.value"><option'+((!MODAL.data.foirail||MODAL.data.foirail==='Thiès')?' selected':'')+'>Thiès</option><option'+(MODAL.data.foirail==='Tivaouane'?' selected':'')+'>Tivaouane</option><option'+(MODAL.data.foirail==='Diourbel'?' selected':'')+'>Diourbel</option></select></div>'
@@ -4618,13 +4624,14 @@ function animateCounters() {
   });
 }
 
-// === Simulateur — persistance des charges dans CYCLE.simCharges ===
+// === Simulateur — persistance des charges dans CYCLE.simCharges (localStorage + Sheets) ===
 function _simSet(key, val) {
   S[key] = val;
   var sc = CYCLE.simCharges || {};
   sc[key] = val;
   CYCLE.simCharges = sc;
   lsSet('cycle', CYCLE);
+  _syncCycle(); // persiste dans Config_Cycle col Q → tous les appareils
   r();
 }
 // Calcule les dépenses proratisées à date depuis les charges du simulateur
@@ -4636,6 +4643,7 @@ function _calcDepSim() {
   var simA = sc.salim   !== undefined ? sc.salim   : 180000;
   var simW = sc.svet    !== undefined ? sc.svet    : 20000;
   var simG = sc.ssec    !== undefined ? sc.ssec    : 50000;
+  var simT = sc.strans  !== undefined ? sc.strans  : 0;   // transport one-shot
   var iMode= sc.simpMode || 'pct';
   var iPct = sc.simpPct !== undefined ? sc.simpPct : 5;
   var iFix = sc.simpFix !== undefined ? sc.simpFix : 100000;
@@ -4644,11 +4652,28 @@ function _calcDepSim() {
   var cBase   = cVeau + cRec;
   var cImprev = iMode === 'pct' ? Math.round(cBase * iPct / 100) : iFix;
   var cRecurr = cRec + cImprev;
-  var cTotal  = cVeau + cRecurr;
+  var cTotal  = cVeau + cRecurr + simT;
   var tj = Math.round(cm * 30.4);
   var je = Math.max(0, calcSemaine() * 7);
-  var dep = tj > 0 ? Math.round(cVeau + cRecurr * je / tj) : cVeau;
-  return { dep: dep, total: cTotal, veau: cVeau, recurr: cRecurr, joursTotal: tj };
+  // Alimentation réelle si prixAlim configuré (kg consommés × prix/kg)
+  var useRealAlim = (CYCLE.prixAlim || 0) > 0;
+  var cAlimPeriode;
+  if (useRealAlim) {
+    var kgConso = 0;
+    (STOCK_MVTS||[]).forEach(function(m){ if (m.mode !== 'ajouter') kgConso += (m.kg||0); });
+    cAlimPeriode = Math.round(kgConso * CYCLE.prixAlim);
+  } else {
+    cAlimPeriode = tj > 0 ? Math.round(simA * cm * je / tj) : 0;
+  }
+  var cGardPeriode   = tj > 0 ? Math.round(simG * cm * je / tj) : 0;
+  var cVetPeriode    = nb * simW;
+  var cImprevPeriode = tj > 0 ? Math.round(cImprev * je / tj) : 0;
+  var dep = cVeau + simT + cAlimPeriode + cGardPeriode + cVetPeriode + cImprevPeriode;
+  return {
+    dep: dep, total: cTotal, veau: cVeau, trans: simT, recurr: cRecurr, joursTotal: tj,
+    alim: cAlimPeriode, gard: cGardPeriode, vet: cVetPeriode, imprev: cImprevPeriode,
+    useRealAlim: useRealAlim
+  };
 }
 
 function viewDash(){
@@ -5253,19 +5278,65 @@ function viewLiv(){
       +'</div>'
       +(function(){
         if (!CYCLE.capital) return '<div style="color:#88aa88;font-size:12px;padding:12px 0">Initialisez le cycle pour voir les flux.</div>';
-        var solde = CYCLE.capital||0;
+        var _sd  = _calcDepSim();
+        var _sc  = CYCLE.simCharges || {};
+        var _nb  = CYCLE.nbBetes || 4;
+        var _je  = Math.max(0, calcSemaine() * 7);
+        var _pveau = _sc.sveau !== undefined ? _sc.sveau : Math.round((CYCLE.capital||1450000)/(_nb||4));
+        var _depReal = (CYCLE.capital > 0 && MOCK.treso < CYCLE.capital * 0.98) ? (CYCLE.capital - MOCK.treso) : null;
+        var _dep = _depReal !== null ? _depReal : _sd.dep;
+        var _budJ = _je > 0 ? Math.round(_dep / _je) : 0;
+        var _budCible = _sd.joursTotal > 0 ? Math.round(_sd.total / _sd.joursTotal) : 0;
+        function fRow(date, lib, sortie, srcBadge) {
+          return '<tr>'
+            +'<td style="font-size:10px;color:#88aa88;white-space:nowrap">'+date+'</td>'
+            +'<td>'+lib+'</td>'
+            +'<td style="text-align:right;color:#f44336;font-weight:600;white-space:nowrap">'+(sortie>0?'−'+fmt(sortie):'')+'</td>'
+            +'<td style="text-align:right;font-size:10px;color:#556655">'+(srcBadge||'')+'</td>'
+            +'</tr>';
+        }
         var rows = [];
-        rows.push('<tr><td>'+(CYCLE.dateDebut||'—')+'</td><td>Capital initial</td><td style="color:#4caf50">'+fmt(solde)+'</td><td>—</td><td>'+fmt(solde)+'</td></tr>');
-        if (CYCLE.nbBetes) {
-          rows.push('<tr><td>—</td><td>Achat '+CYCLE.nbBetes+' bêtes</td><td>—</td><td style="color:#88aa88;font-size:11px" colspan="2">Non ventilé — voir RGA</td></tr>');
-        }
-        var _coutSante = HISTORY.filter(function(h){return h.type==='sante';}).reduce(function(s,h){return s+(parseFloat(h.cout)||0);},0);
-        var _nbSante = HISTORY.filter(function(h){return h.type==='sante';}).length;
-        if (_coutSante > 0) {
-          rows.push('<tr><td>Cycle</td><td>Frais santé ('+_nbSante+' fiche(s))</td><td>—</td><td style="color:#f44336">-'+fmt(Math.round(_coutSante))+'</td><td style="font-size:11px;color:#88aa88">inclus ci-dessous</td></tr>');
-        }
-        rows.push('<tr><td>Auj.</td><td>Solde actuel</td><td>—</td><td>—</td><td style="font-weight:700;color:'+(MOCK.treso>=600000?'#4caf50':MOCK.treso>0?'#ff9800':'#f44336')+'">'+fmt(MOCK.treso)+'</td></tr>');
-        return '<div class="tw"><table><tr><th>Date</th><th>Libelle</th><th>Entrée</th><th>Sortie</th><th>Solde</th></tr>'+rows.join('')+'</table></div>';
+        rows.push('<tr><td style="font-size:10px;color:#88aa88">'+(CYCLE.dateDebut||'—')+'</td>'
+          +'<td><strong>Capital initial</strong></td>'
+          +'<td style="text-align:right;color:#4caf50;font-weight:700">+'+fmt(CYCLE.capital)+'</td><td></td></tr>');
+        rows.push(fRow(CYCLE.dateDebut||'—', 'Achat '+_nb+' bêtes ('+fmt(_pveau)+'/tête)', _nb*_pveau, '⚡'));
+        if (_sd.trans > 0) rows.push(fRow('one-shot', 'Transport (foirail ↔ ferme + vente)', _sd.trans, '⚡'));
+        var _santeLines = HISTORY.filter(function(h){ return h.type==='sante' && parseFloat(h.cout)>0; })
+          .slice().sort(function(a,b){
+            var pa=a.date.split('/'), pb=b.date.split('/');
+            return new Date(pa[2],pa[1]-1,pa[0]) - new Date(pb[2],pb[1]-1,pb[0]);
+          });
+        var _santeTotal = 0;
+        _santeLines.forEach(function(h){
+          var c = parseFloat(h.cout)||0; _santeTotal += c;
+          rows.push(fRow(h.date, 'Santé'+(h.idBete?' — '+h.idBete:''), c, '🟢'));
+        });
+        if (_santeTotal === 0 && _sd.vet > 0) rows.push(fRow('estimé', 'Vétérinaire & santé (estimé)', _sd.vet, '⚡'));
+        rows.push(fRow('cumul', 'Alimentation à date'+(_sd.useRealAlim?' (×'+fmt(CYCLE.prixAlim)+' FCFA/kg)':''), _sd.alim, _sd.useRealAlim?'🟢':'⚡'));
+        rows.push(fRow('cumul', 'Gardien / sécurité à date', _sd.gard, '⚡'));
+        if (_sd.imprev > 0) rows.push(fRow('cumul', 'Imprévus à date', _sd.imprev, '⚡'));
+        rows.push('<tr style="border-top:2px solid #2a5a2a">'
+          +'<td style="font-size:10px;color:#88aa88">Auj.</td>'
+          +'<td><strong>Solde actuel</strong></td>'
+          +'<td colspan="2" style="text-align:right;font-size:18px;font-weight:800;color:'+(MOCK.treso>=600000?'#4caf50':MOCK.treso>=0?'#ff9800':'#f44336')+'">'+fmt(MOCK.treso)+' FCFA'
+          +(_depReal!==null?' <span style="font-size:9px;color:#4caf50">● KPI</span>':' <span style="font-size:9px;color:#C8A06A">⚡ sim.</span>')+'</td></tr>');
+        return '<div style="padding:12px 14px;background:#142714;border-radius:10px;border:1px solid #2a4a2a;margin-bottom:12px">'
+          +'<div style="font-size:11px;color:#88aa88;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Résumé à date</div>'
+          +'<div style="display:flex;justify-content:space-between;margin-bottom:5px">'
+          +'<span style="font-size:12px;color:#88aa88">Dépenses cumulées</span>'
+          +'<span style="font-weight:700;color:#f44336">−'+fmt(_dep)+' FCFA'+(_depReal!==null?' 🟢':' ⚡')+'</span></div>'
+          +(_budJ>0?'<div style="display:flex;justify-content:space-between;margin-bottom:5px">'
+          +'<span style="font-size:12px;color:#88aa88">Burn rate / jour</span>'
+          +'<span style="font-weight:700;color:'+(_budJ<=_budCible||!_budCible?'#ff9800':'#f44336')+'">'+fmt(_budJ)+' FCFA/j</span></div>':'')
+          +(_budCible>0?'<div style="display:flex;justify-content:space-between">'
+          +'<span style="font-size:12px;color:#88aa88">Budget cible / jour</span>'
+          +'<span style="color:#4caf50">'+fmt(_budCible)+' FCFA/j</span></div>':'')
+          +'<div style="font-size:10px;color:#445544;margin-top:8px">🟢 donnée réelle &nbsp;⚡ estimée (sim.)'
+          +(CYCLE.prixAlim?'':' — <em>Renseigner le prix aliment dans le cycle pour le calcul réel</em>')+'</div>'
+          +'</div>'
+          +'<div class="tw"><table>'
+          +'<tr><th>Date</th><th>Libellé</th><th style="text-align:right;color:#f44336">Sortie</th><th>Source</th></tr>'
+          +rows.join('')+'</table></div>';
       })()
   } else if(S.sub==='kpi'){
     var objPoids   = CYCLE.objectifPrix || 2000;
@@ -5735,6 +5806,7 @@ function viewMarche(){
     if (S.svet    === undefined && _sc0.svet    !== undefined) S.svet    = _sc0.svet;
     if (S.ssec    === undefined && _sc0.ssec    !== undefined) S.ssec    = _sc0.ssec;
     if (S.sveau   === undefined && _sc0.sveau   !== undefined) S.sveau   = _sc0.sveau;
+    if (S.strans  === undefined && _sc0.strans  !== undefined) S.strans  = _sc0.strans;
     if (S.simpPct === undefined && _sc0.simpPct !== undefined) S.simpPct = _sc0.simpPct;
     if (S.simpFix === undefined && _sc0.simpFix !== undefined) S.simpFix = _sc0.simpFix;
     if (!S.simpMode && _sc0.simpMode) S.simpMode = _sc0.simpMode;
@@ -5749,6 +5821,7 @@ function viewMarche(){
     var calim   = S.salim    !== undefined ? S.salim    : 180000; // alim FCFA/mois troupeau entier
     var cvet    = S.svet     !== undefined ? S.svet     : 20000;  // vét FCFA/bête/cycle
     var csec    = S.ssec     !== undefined ? S.ssec     : 50000;  // sécurité FCFA/mois
+    var ctrans  = S.strans   !== undefined ? S.strans   : 0;      // transport FCFA (one-shot)
     var simpMode = S.simpMode || 'pct';
     var simpPct  = S.simpPct  !== undefined ? S.simpPct  : 5;
     var simpFix  = S.simpFix  !== undefined ? S.simpFix  : 100000;
@@ -5762,7 +5835,8 @@ function viewMarche(){
     var cSec    = csec * cycleMois;
     var cBase   = cVeau + cAlim + cVet + cSec;
     var cImprev = simpMode === 'pct' ? Math.round(cBase * simpPct / 100) : simpFix;
-    var cTotal  = cBase + cImprev;
+    var cTrans  = ctrans;
+    var cTotal  = cBase + cImprev + cTrans;
     var ben     = ca - cTotal;
     var commVal = Math.round(ca * comm / 100);
     var benNet  = ben - commVal;
@@ -5839,7 +5913,7 @@ function viewMarche(){
     +   '<div><div style="font-size:11px;color:#88aa88">\u23f1 Dur\u00e9e simul\u00e9e</div>'
     +   '<div style="font-size:10px;color:#445540;margin-top:2px">R\u00e9el\u00a0: ' + (CYCLE.dureeMois||8) + '\u00a0m</div></div>'
     +   '<div style="display:flex;align-items:center;gap:8px">'
-    +     '<button onclick="event.stopPropagation();S.simMois=null;S.sn=null;S.sp=null;S.spx=null;S.sveau=null;S.salim=undefined;S.svet=undefined;S.ssec=undefined;S.simpPct=undefined;S.simpFix=undefined;r()" style="font-size:11px;padding:5px 10px;border-radius:7px;background:#0a150a;border:1px solid #2a4a2a;color:#88aa88;cursor:pointer">↺ Reset</button>'
+    +     '<button onclick="event.stopPropagation();S.simMois=null;S.sn=null;S.sp=null;S.spx=null;S.sveau=null;S.salim=undefined;S.svet=undefined;S.ssec=undefined;S.strans=undefined;S.simpPct=undefined;S.simpFix=undefined;r()" style="font-size:11px;padding:5px 10px;border-radius:7px;background:#0a150a;border:1px solid #2a4a2a;color:#88aa88;cursor:pointer">↺ Reset</button>'
     +     '<div style="display:flex;align-items:center">'
     +       '<button onclick="event.stopPropagation();S.simMois=Math.max(1,(S.simMois!==undefined?S.simMois:' + cycleMois + ')-1);r()" style="width:34px;height:34px;font-size:20px;border-radius:8px 0 0 8px;background:#0a150a;border:1px solid #2a4a2a;border-right:none;color:#C8A06A;cursor:pointer">&#8722;</button>'
     +       '<div style="min-width:50px;height:34px;display:flex;align-items:center;justify-content:center;background:#0a150a;border-top:1px solid #2a4a2a;border-bottom:1px solid #2a4a2a;font-size:17px;font-weight:800;color:#eee">' + cycleMois + '\u00a0m</div>'
@@ -5885,6 +5959,13 @@ function viewMarche(){
     +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Sur ' + cycleMois + ' mois → <strong style="color:#eee">' + fmt(cSec) + ' FCFA</strong></div>'
     + '</div>'
 
+    // ── Bloc Transport ──
+    + '<div class="card">'
+    +   '<div class="stitle">🚚 Transport</div>'
+    +   simField('Coût transport total (foirail ↔ ferme + vente)', 'strans', ctrans, 0, 2000000, 10000, 'FCFA (forfait)', false)
+    +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Coût unique (achat + livraison finale)</div>'
+    + '</div>'
+
     // ── Bloc Imprévus ──
     + '<div class="card">'
     +   '<div class="stitle">⚡ Imprévus</div>'
@@ -5907,6 +5988,7 @@ function viewMarche(){
     +   simRow('− Alimentation (' + cycleMois + 'm)', fmt(cAlim) + ' FCFA', '#ff9090')
     +   simRow('− Vétérinaire',               fmt(cVet)   + ' FCFA', '#ff9090')
     +   simRow('− Sécurité (' + cycleMois + 'm)',   fmt(cSec)  + ' FCFA', '#ff9090')
+    +   (cTrans > 0 ? simRow('− Transport',              fmt(cTrans) + ' FCFA', '#ff9090') : '')
     +   simRow('− Imprévus',                  fmt(cImprev)+ ' FCFA', '#ffaa40')
     +   '<div style="height:1px;background:#2a4a2a;margin:6px 0"></div>'
     +   simRow('Total charges',               fmt(cTotal) + ' FCFA', '#ff6060')
