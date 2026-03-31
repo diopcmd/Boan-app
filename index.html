@@ -428,9 +428,10 @@ var STOCK_MVTS = (function(){
 })();
 function saveMvts(){ lsSet('stock_mvts', STOCK_MVTS); }
 function rebuildBeteList() {
-  var beteIds = CYCLE.betes&&CYCLE.betes.length
+  var beteIds = (CYCLE.betes&&CYCLE.betes.length
     ? CYCLE.betes.map(function(b){return b.id;})
-    : (LIVE.beteIds||[]);
+    : (LIVE.beteIds||[]))
+    .filter(function(id){ return (LIVE.deceased||[]).indexOf(id) === -1; });
   var dl = document.getElementById('bete-dl-global');
   if(!dl){ dl=document.createElement('datalist'); dl.id='bete-dl-global'; document.body.appendChild(dl); }
   dl.innerHTML = beteIds.map(function(id){ return '<option value="'+id+'">'; }).join('');
@@ -1217,7 +1218,7 @@ function loadLiveData() {
             // Nouveau cycle détecté par un acteur non-fondateur (ou fondateur après sync)
             HISTORY = []; lsSet('history', []);
             lsSet('last_fiche', null); // effacer le marqueur fiche du jour
-            LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = [];
+            LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = []; LIVE.deceased = [];
             CYCLE._lastFicheDate=''; CYCLE._lastSopDate=''; CYCLE._lastStockDate='';
             CYCLE._lastPeseeDate=''; CYCLE._lastIncDate=''; CYCLE._lastSanteDate='';
             CYCLE._lastBilanSem=''; MOCK.incidents=0; MOCK.stock=0;
@@ -1255,7 +1256,7 @@ function loadLiveData() {
               if (key === 'cycleDebut' && val && val.length && val !== CYCLE.dateDebut) {
                 HISTORY = []; lsSet('history', []);
                 lsSet('last_fiche', null);
-                LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = [];
+                LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = []; LIVE.deceased = [];
                 CYCLE._lastFicheDate=''; CYCLE._lastSopDate=''; CYCLE._lastStockDate='';
                 CYCLE._lastPeseeDate=''; CYCLE._lastIncDate=''; CYCLE._lastSanteDate='';
                 CYCLE._lastBilanSem=''; MOCK.incidents=0; MOCK.stock=0;
@@ -1291,6 +1292,10 @@ function loadLiveData() {
       if (rowsSante && rowsSante.length) {
         var santesCycle = rowsSante.filter(function(r){ return r[0] && apresDebut(r[0]); });
         var deces = santesCycle.filter(function(r){ return r[6] && r[6].toString().toUpperCase()==='OUI'; }).length;
+        LIVE.deceased = santesCycle
+          .filter(function(r){ return r[6] && r[6].toString().toUpperCase()==='OUI'; })
+          .map(function(r){ return (r[1]||'').toString().trim(); })
+          .filter(Boolean);
         var valBetes = Math.max(0, (CYCLE.nbBetes||4) - deces);
         if (!isNaN(valBetes)) {
           MOCK.betes = valBetes;
@@ -2027,6 +2032,7 @@ var SPARK = {
 var LIVE = {
   pesees:    [],
   beteIds:   [],
+  deceased:  [],  // IDs des bêtes décédées ce cycle
   prix:      [],  // [{date, foi, bas, moy, haut}] depuis Suivi_Marche
   incidents: [],  // { date, id, type, grav, desc, act, clos } — chargées depuis Vague 2
   loaded:    false,
@@ -2117,7 +2123,9 @@ function loadPesees() {
       for (var _bi = 1; _bi <= _nB; _bi++) ids['B' + ('0'+_bi).slice(-2)] = true;
     }
     LIVE.pesees.forEach(function(p){ if(p.id) ids[p.id] = true; });
-    LIVE.beteIds = Object.keys(ids).sort();
+    LIVE.beteIds = Object.keys(ids).sort().filter(function(id){
+      return (LIVE.deceased||[]).indexOf(id) === -1;
+    });
     LIVE.loaded = true;
     r();
   });
@@ -3612,6 +3620,7 @@ function saveCycle(){
   lsSet('cycle', CYCLE);
   LIVE.pesees    = [];
   LIVE.beteIds   = [];
+  LIVE.deceased  = [];
   LIVE.incidents = [];
   LIVE.loaded    = false;
   LIVE.source    = 'loading';
@@ -4065,7 +4074,7 @@ function pageApp(){
 function buildSidebar(){
   var u = S.user;
   var initials = USERS[u].name.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
-  var pct = Math.round((MOCK.sem/Math.round((CYCLE.dureeMois||8)*4.33))*100);
+  var pct = Math.round((calcSemaine()/Math.round((CYCLE.dureeMois||8)*4.33))*100);
 
   // Jauge circulaire SVG
   var r2=26, circ=2*Math.PI*r2, dash=circ*(pct/100), gap=circ-dash;
@@ -4330,9 +4339,15 @@ function buildSidebar(){
         if(_avgR > _avgA*1.02){ _gmqTrend='\u2191'; _gmqTrendCol='#4caf50'; }
         else if(_avgR < _avgA*0.98){ _gmqTrend='\u2193'; _gmqTrendCol='#f44336'; }
       }
-      var _gmqCl = MOCK.gmq>=1?'kval-ok':MOCK.gmq>=0.8?'kval-warn':'kval-crit';
+      var _gmqByBete = {};
+      (LIVE.pesees||[]).forEach(function(p){ if(p.id&&p.gmq>0) _gmqByBete[p.id]=p.gmq; });
+      var _gmqIds = Object.keys(_gmqByBete);
+      var _gmqSidebar = _gmqIds.length
+        ? Math.round(_gmqIds.reduce(function(s,id){return s+_gmqByBete[id];},0)/_gmqIds.length*100)/100
+        : MOCK.gmq;
+      var _gmqCl = _gmqSidebar>=1?'kval-ok':_gmqSidebar>=0.8?'kval-warn':'kval-crit';
       body='<div class="sb-card">'
-        +'<div class="sb-row"><span class="sb-lbl">GMQ moyen mensuel</span><span class="sb-val '+_gmqCl+'">'+MOCK.gmq+' kg/j <span style="color:'+_gmqTrendCol+';font-weight:700">'+_gmqTrend+'</span></span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">GMQ moyen mensuel</span><span class="sb-val '+_gmqCl+'">'+_gmqSidebar+' kg/j <span style="color:'+_gmqTrendCol+';font-weight:700">'+_gmqTrend+'</span></span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Conso. aliments</span><span style="font-size:12px;color:'+_calData+'">~'+_consoMois+' kg/mois</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Budget santé/mois</span><span style="font-size:12px;color:'+_calData+'">~'+fmt(_coutVeto)+' FCFA</span></div>'
         +(function(){
@@ -4341,14 +4356,20 @@ function buildSidebar(){
           var _sopPct = Math.min(100, Math.round(_nbSop/_semCour*100));
           var _ndM = _nowDakar();
           var _moisDeb = new Date(_ndM.year, _ndM.month-1, 1);
-          var _nbPeseesMois = HISTORY.filter(function(h){
-            if(h.type!=='pesee') return false;
-            var p=h.date.split('/'); if(p.length!==3) return false;
-            return new Date(p[2],p[1]-1,p[0]) >= _moisDeb;
-          }).length;
+          var _peseesMoisMap = {};
+          (LIVE.pesees||[]).forEach(function(p){
+            if(!p.date) return;
+            var pd=p.date.split('/'); if(pd.length!==3) return;
+            if(new Date(pd[2],pd[1]-1,pd[0]) >= _moisDeb) _peseesMoisMap[p.id]=true;
+          });
+          var _nbBetesPesees = Object.keys(_peseesMoisMap).length;
+          var _nbBetesActives = MOCK.betes || (CYCLE.nbBetes||4);
+          var _betesNonPesees = LIVE.beteIds.filter(function(id){ return !_peseesMoisMap[id]; });
+          var _peseesCl = _nbBetesPesees>=_nbBetesActives?'kval-ok':_nbBetesPesees>0?'kval-warn':'kval-crit';
           var _sopCl = _sopPct>=80?'kval-ok':_sopPct>=50?'kval-warn':'kval-crit';
           return '<div class="sb-row"><span class="sb-lbl">Conformité SOP</span><span class="sb-val '+_sopCl+'">'+_sopPct+'%</span></div>'
-            +'<div class="sb-row"><span class="sb-lbl">Pesées ce mois</span><span style="font-size:12px;color:'+_calData+'">'+_nbPeseesMois+' faite'+(_nbPeseesMois!==1?'s':'')+'</span></div>';
+            +'<div class="sb-row"><span class="sb-lbl">Pesées ce mois</span><span class="sb-val '+_peseesCl+'">'+_nbBetesPesees+' / '+_nbBetesActives+' bête'+(_nbBetesActives!==1?'s':'')+'</span></div>'
+            +(_betesNonPesees.length>0?'<div style="font-size:11px;color:#ffaa40;padding:4px 0 2px">⚠️ Non pesées : '+_betesNonPesees.join(', ')+'</div>':'');
         })()
         +'</div>';
     } else {
@@ -5729,41 +5750,72 @@ function viewMarche(){
         +'</svg></div>';
     }
 
-    // ── Hero : prix actuel + tendance + foirail ──
+    // ── Regroupement par date (plusieurs foirails le même jour) ──
+    var _prixParDate = {};
+    prixData.forEach(function(p){
+      if(!p.date) return;
+      if(!_prixParDate[p.date]) _prixParDate[p.date] = [];
+      _prixParDate[p.date].push(p);
+    });
+    var _datesSorted = Object.keys(_prixParDate).sort(function(a,b){
+      var pa=a.split('/'), pb=b.split('/');
+      return new Date(pa[2],pa[1]-1,pa[0]) - new Date(pb[2],pb[1]-1,pb[0]);
+    });
+
+    // ── Hero : prix actuel + consolidation foirails + tendance ──
     var _heroHtml = '';
     if (prixData.length) {
-      var _cur = prixData[prixData.length-1];
-      var _prev = prixData.length>1 ? prixData[prixData.length-2] : null;
-      var _delta = (_prev && _cur.moy && _prev.moy) ? Math.round(_cur.moy - _prev.moy) : null;
+      var _lastDate = _datesSorted[_datesSorted.length-1];
+      var _entriesLast = _prixParDate[_lastDate];
+      var _maxEntry = _entriesLast.reduce(function(mx,e){ return (e.moy||e.bas||0)>(mx.moy||mx.bas||0)?e:mx; }, _entriesLast[0]);
+      var _minEntry = _entriesLast.reduce(function(mn,e){ return (e.moy||e.bas||0)<(mn.moy||mn.bas||0)?e:mn; }, _entriesLast[0]);
+      var _prevDate = _datesSorted.length>1 ? _datesSorted[_datesSorted.length-2] : null;
+      var _prevEntries = _prevDate ? _prixParDate[_prevDate] : null;
+      var _curMoyMoy = Math.round(_entriesLast.reduce(function(s,e){return s+(e.moy||0);},0)/_entriesLast.length);
+      var _prevMoyMoy = _prevEntries ? Math.round(_prevEntries.reduce(function(s,e){return s+(e.moy||0);},0)/_prevEntries.length) : null;
+      var _delta = _prevMoyMoy ? Math.round(_curMoyMoy - _prevMoyMoy) : null;
       var _deltaCol = _delta===null ? '#88aa88' : _delta>0 ? '#4caf50' : _delta<0 ? '#f44336' : '#88aa88';
-      var _deltaStr = _delta===null ? '' : (_delta>0?'↑ +':_delta<0?'↓ ':'→ ')+fmt(Math.abs(_delta))+' FCFA vs préc.';
-      var _vsObj = (CYCLE.objectifPrix && _cur.moy) ? Math.round((_cur.moy/CYCLE.objectifPrix-1)*100) : null;
+      var _deltaStr = _delta===null ? '' : (_delta>0?'↑ +':_delta<0?'↓ ':'→ ')+fmt(Math.abs(_delta))+' FCFA vs j-1';
+      var _vsObj = (CYCLE.objectifPrix && _maxEntry.moy) ? Math.round((_maxEntry.moy/CYCLE.objectifPrix-1)*100) : null;
       var _vsObjStr = _vsObj!==null ? (_vsObj>=0?'✅ +'+_vsObj+'% vs objectif':'⚠️ '+_vsObj+'% vs objectif') : '';
       var _vsObjCol = _vsObj!==null ? (_vsObj>=0?'#4caf50':'#ffaa40') : '#88aa88';
+      var _nbFoi = _entriesLast.length;
       _heroHtml = '<div style="background:#111f11;border-radius:12px;padding:16px;margin-bottom:14px;border:1px solid #1e3e1e">'
-        +'<div style="font-size:11px;color:#88aa88;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Dernier prix relevé — '+(_cur.foi||'')+'</div>'
-        +'<div style="font-size:36px;font-weight:900;color:#C8A06A;line-height:1">'+fmt(Math.round(_cur.moy||_cur.bas||0))+'<span style="font-size:14px;font-weight:400;color:#88aa88;margin-left:4px">FCFA/kg</span></div>'
+        +'<div style="font-size:11px;color:#88aa88;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Relevés du '+_lastDate+' — '+_nbFoi+' foirail'+(_nbFoi>1?'s':'')+'</div>'
+        +'<div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:8px">'
+        +'<div>'
+        +'<div style="font-size:10px;color:#4caf50;font-weight:600;margin-bottom:2px">↑ Plus haut — '+(_maxEntry.foi||'')+'</div>'
+        +'<div style="font-size:34px;font-weight:900;color:#C8A06A;line-height:1">'+fmt(Math.round(_maxEntry.moy||_maxEntry.bas||0))+'<span style="font-size:13px;font-weight:400;color:#88aa88;margin-left:4px">FCFA/kg</span></div>'
+        +'</div>'
+        +(_nbFoi>1&&Math.round(_minEntry.moy||0)!==Math.round(_maxEntry.moy||0)?'<div style="text-align:right">'
+        +'<div style="font-size:10px;color:#f44336;font-weight:600;margin-bottom:2px">↓ Moins cher — '+(_minEntry.foi||'')+'</div>'
+        +'<div style="font-size:34px;font-weight:900;color:#888;line-height:1">'+fmt(Math.round(_minEntry.moy||_minEntry.bas||0))+'<span style="font-size:13px;font-weight:400;color:#556655;margin-left:4px">FCFA/kg</span></div>'
+        +'</div>':'')
+        +'</div>'
         +'<div style="display:flex;gap:14px;margin-top:8px;flex-wrap:wrap">'
         +(_deltaStr?'<span style="font-size:12px;font-weight:700;color:'+_deltaCol+'">'+_deltaStr+'</span>':'')
         +(_vsObjStr?'<span style="font-size:12px;font-weight:700;color:'+_vsObjCol+'">'+_vsObjStr+'</span>':'')
         +'</div>'
-        +'<div style="font-size:10px;color:#556655;margin-top:4px">'+(_cur.date||'')+'</div>'
         +'</div>';
     }
 
-    // ── Historique compact (3 derniers) ──
-    var lastEntries = prixData.slice(-4,-1).reverse(); // 3 précédents (pas le dernier déjà affiché en hero)
-    var histHtml = lastEntries.length ? '<div style="font-size:10px;color:#556655;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Observations précédentes</div>'
-      +lastEntries.map(function(p){
+    // ── Historique compact (3 jours précédents, consolidés) ──
+    var _prevDates = _datesSorted.slice(-4,-1).reverse();
+    var histHtml = _prevDates.length ? '<div style="font-size:10px;color:#556655;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Jours précédents</div>'
+      +_prevDates.map(function(d){
+        var entries = _prixParDate[d];
+        var mx = entries.reduce(function(x,e){ return (e.moy||0)>(x.moy||0)?e:x; }, entries[0]);
+        var mn = entries.reduce(function(x,e){ return (e.moy||0)<(x.moy||0)?e:x; }, entries[0]);
+        var samePrix = Math.round(mx.moy||0) === Math.round(mn.moy||0);
         return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #1a2e1a">'
-          +'<div><div style="font-size:13px;color:#ccc;font-weight:600">'+(p.moy?fmt(p.moy):'—')+' FCFA/kg</div>'
-          +'<div style="font-size:10px;color:#556655">'+p.foi+' · '+p.date+'</div></div>'
-          +(p.bas||p.haut?'<div style="font-size:10px;color:#445544;text-align:right">'+(p.bas?fmt(p.bas)+' bas':'')+(p.bas&&p.haut?' · ':'')+(p.haut?fmt(p.haut)+' haut':'')+'</div>':'')
+          +'<div><div style="font-size:13px;color:#ccc;font-weight:600">'+(mx.moy?fmt(Math.round(mx.moy)):'—')+' FCFA/kg'+(samePrix?'':' <span style="color:#666;font-size:11px">↓ '+fmt(Math.round(mn.moy||0))+'</span>')+'</div>'
+          +'<div style="font-size:10px;color:#556655">'+mx.foi+(entries.length>1?' +'+( entries.length-1)+'':'')+'  · '+d+'</div></div>'
+          +(mx.bas||mx.haut?'<div style="font-size:10px;color:#445544;text-align:right">'+(mx.bas?fmt(mx.bas)+' bas':'')+(mx.bas&&mx.haut?' · ':'')+(mx.haut?fmt(mx.haut)+' haut':'')+'</div>':'')
           +'</div>';
       }).join('') : '';
 
-    var _prixAlertBanner = (prixData.length && CYCLE.objectifPrix && prixData[prixData.length-1].moy && prixData[prixData.length-1].moy < CYCLE.objectifPrix)
-      ? '<div style="background:#2e1500;border:1px solid #8a4400;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#ffaa40">⚠️ Prix marché ('+fmt(Math.round(prixData[prixData.length-1].moy))+' FCFA/kg) inférieur à l\'objectif ('+fmt(CYCLE.objectifPrix)+' FCFA/kg) — prudence avant vente.</div>'
+    var _prixAlertBanner = (prixData.length && CYCLE.objectifPrix && _maxEntry && _maxEntry.moy && _maxEntry.moy < CYCLE.objectifPrix)
+      ? '<div style="background:#2e1500;border:1px solid #8a4400;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#ffaa40">⚠️ Prix marché ('+fmt(Math.round(_maxEntry.moy))+' FCFA/kg) inférieur à l\'objectif ('+fmt(CYCLE.objectifPrix)+' FCFA/kg) — prudence avant vente.</div>'
       : '';
 
     view=_prixAlertBanner
