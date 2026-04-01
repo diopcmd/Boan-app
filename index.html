@@ -1219,6 +1219,7 @@ function loadLiveData() {
             HISTORY = []; lsSet('history', []);
             lsSet('last_fiche', null); // effacer le marqueur fiche du jour
             LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = []; LIVE.deceased = [];
+            lsSet('deceased', []);
             CYCLE._lastFicheDate=''; CYCLE._lastSopDate=''; CYCLE._lastStockDate='';
             CYCLE._lastPeseeDate=''; CYCLE._lastIncDate=''; CYCLE._lastSanteDate='';
             CYCLE._lastBilanSem=''; MOCK.incidents=0; MOCK.stock=0;
@@ -1257,6 +1258,7 @@ function loadLiveData() {
                 HISTORY = []; lsSet('history', []);
                 lsSet('last_fiche', null);
                 LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = []; LIVE.deceased = [];
+                lsSet('deceased', []);
                 CYCLE._lastFicheDate=''; CYCLE._lastSopDate=''; CYCLE._lastStockDate='';
                 CYCLE._lastPeseeDate=''; CYCLE._lastIncDate=''; CYCLE._lastSanteDate='';
                 CYCLE._lastBilanSem=''; MOCK.incidents=0; MOCK.stock=0;
@@ -1296,6 +1298,7 @@ function loadLiveData() {
           .filter(function(r){ return r[6] && r[6].toString().toUpperCase()==='OUI'; })
           .map(function(r){ return (r[1]||'').toString().trim(); })
           .filter(Boolean);
+        lsSet('deceased', LIVE.deceased);
         var valBetes = Math.max(0, (CYCLE.nbBetes||4) - deces);
         if (!isNaN(valBetes)) {
           MOCK.betes = valBetes;
@@ -2032,7 +2035,7 @@ var SPARK = {
 var LIVE = {
   pesees:    [],
   beteIds:   [],
-  deceased:  [],  // IDs des bêtes décédées ce cycle
+  deceased:  lsGet('deceased') || [],  // IDs des bêtes décédées ce cycle (persisté)
   prix:      [],  // [{date, foi, bas, moy, haut}] depuis Suivi_Marche
   incidents: [],  // { date, id, type, grav, desc, act, clos } — chargées depuis Vague 2
   loaded:    false,
@@ -3621,6 +3624,7 @@ function saveCycle(){
   LIVE.pesees    = [];
   LIVE.beteIds   = [];
   LIVE.deceased  = [];
+  lsSet('deceased', []);
   LIVE.incidents = [];
   LIVE.loaded    = false;
   LIVE.source    = 'loading';
