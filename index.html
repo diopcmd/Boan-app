@@ -5745,8 +5745,22 @@ function viewLiv(){
   return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+view+'</div>';
 }
 
+function shareRapport(txt, title) {
+  if (navigator.share) {
+    navigator.share({ title: title, text: txt }).catch(function(){});
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(txt).then(function(){ alert('Rapport copié dans le presse-papiers'); });
+  } else {
+    var ta = document.createElement('textarea');
+    ta.value = txt; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); alert('Rapport copié !'); } catch(e){}
+    document.body.removeChild(ta);
+  }
+}
+
 function viewMarche(){
-  var subs=[['prix','Prix foirail'],['alim','Prié aliments'],['sim','Simulateur'],['reco','Recommandations']];
+  var subs=[['prix','Prix foirail'],['alim','Prix aliments'],['sim','Simulateur'],['reco','Recommandations']];
   var stabs=subs.map(function(s){return'<div class="stab '+(S.sub===s[0]?'on':'')+'" onclick="chSub(\''+s[0]+'\')">'+s[1]+'</div>';}).join('');
   var view='';
   if(S.sub==='prix'){
@@ -5864,10 +5878,74 @@ function viewMarche(){
       ? '<div style="background:#2e1500;border:1px solid #8a4400;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#ffaa40">⚠️ Prix marché ('+fmt(Math.round(_maxEntry.moy))+' FCFA/kg) inférieur à l\'objectif ('+fmt(CYCLE.objectifPrix)+' FCFA/kg) — prudence avant vente.</div>'
       : '';
 
+    // ── Rapport mensuel foirail ──
+    var _ndRap = _nowDakar();
+    var _moisDebRap = new Date(_ndRap.year, _ndRap.month-1, 1);
+    var _moisNom = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][_ndRap.month-1];
+    var _foirailMap = {};
+    prixData.forEach(function(p) {
+      if (!p.date) return;
+      var _pp = p.date.split('/'); if (_pp.length!==3) return;
+      if (new Date(_pp[2],_pp[1]-1,_pp[0]) < _moisDebRap) return;
+      if (!_foirailMap[p.foi]) _foirailMap[p.foi] = [];
+      _foirailMap[p.foi].push(p);
+    });
+    var _foirailKeys = Object.keys(_foirailMap);
+    var _btnFoirailHtml = '';
+    if (_foirailKeys.length > 0) {
+      _btnFoirailHtml = '<div style="text-align:center;margin-bottom:12px"><button onclick="(function(){'
+        +'var nd=_nowDakar();'
+        +'var moisNom=[\'Janvier\',\'Février\',\'Mars\',\'Avril\',\'Mai\',\'Juin\',\'Juillet\',\'Août\',\'Septembre\',\'Octobre\',\'Novembre\',\'Décembre\'][nd.month-1];'
+        +'var moisDeb=new Date(nd.year,nd.month-1,1);'
+        +'var fMap={};'
+        +'(LIVE.prix||[]).forEach(function(p){'
+          +'if(!p.date)return;'
+          +'var pp=p.date.split(\'/\');if(pp.length!==3)return;'
+          +'if(new Date(pp[2],pp[1]-1,pp[0])<moisDeb)return;'
+          +'if(!fMap[p.foi])fMap[p.foi]=[];'
+          +'fMap[p.foi].push(p);'
+        +'});'
+        +'var keys=Object.keys(fMap);'
+        +'if(!keys.length){alert(\'Aucun relevé ce mois\');return;}'
+        +'var lines=[];'
+        +'lines.push(\'📊 RAPPORT FOIRAIL — \'+moisNom+\' \'+nd.year);'
+        +'lines.push(\'━━━━━━━━━━━━━━━━━━━━━━━━\');'
+        +'keys.sort().forEach(function(foi){'
+          +'var entries=fMap[foi];'
+          +'var moys=entries.map(function(e){return e.moy||e.bas||0;}).filter(function(v){return v>0;});'
+          +'if(!moys.length)return;'
+          +'var mn=Math.round(Math.min.apply(null,moys));'
+          +'var mx=Math.round(Math.max.apply(null,moys));'
+          +'var av=Math.round(moys.reduce(function(s,v){return s+v;},0)/moys.length);'
+          +'var first=entries[0].moy||0,last=entries[entries.length-1].moy||0;'
+          +'var trend=last>first*1.02?\'↑\':last<first*0.98?\'↓\':\'→\';'
+          +'lines.push(\'\');'
+          +'lines.push(\'🏪 \'+foi+\' (\'+entries.length+\' relevé\'+(entries.length>1?\'s\':\'\')+\')\');'
+          +'lines.push(\'  Moy : \'+av+\' FCFA/kg \'+trend);'
+          +'lines.push(\'  Min : \'+mn+\' / Max : \'+mx);'
+          +'if(CYCLE.objectifPrix){'
+            +'var vs=Math.round((av/CYCLE.objectifPrix-1)*100);'
+            +'lines.push(\'  vs Objectif : \'+(vs>=0?\'+\':\'\')+vs+\'%\');'
+          +'}'
+        +'});'
+        +'lines.push(\'\');'
+        +'lines.push(\'━━━━━━━━━━━━━━━━━━━━━━━━\');'
+        +'var allMoys=(LIVE.prix||[]).filter(function(p){if(!p.date)return false;var pp=p.date.split(\'/\');if(pp.length!==3)return false;return new Date(pp[2],pp[1]-1,pp[0])>=moisDeb&&(p.moy||p.bas);}).map(function(p){return p.moy||p.bas;});'
+        +'if(allMoys.length)lines.push(\'Moy générale : \'+Math.round(allMoys.reduce(function(s,v){return s+v;},0)/allMoys.length)+\' FCFA/kg\');'
+        +'var fMax=keys.reduce(function(a,b){var ma=(fMap[a]||[]).reduce(function(s,e){return s+(e.moy||0);},0)/(fMap[a]||[1]).length;var mb=(fMap[b]||[]).reduce(function(s,e){return s+(e.moy||0);},0)/(fMap[b]||[1]).length;return ma>mb?a:b;},keys[0]);'
+        +'var fMin=keys.reduce(function(a,b){var ma=(fMap[a]||[]).reduce(function(s,e){return s+(e.moy||0);},0)/(fMap[a]||[1]).length;var mb=(fMap[b]||[]).reduce(function(s,e){return s+(e.moy||0);},0)/(fMap[b]||[1]).length;return ma<mb?a:b;},keys[0]);'
+        +'if(keys.length>1){lines.push(\'+ Cher : \'+fMax+\' / - Cher : \'+fMin);}'
+        +'lines.push(\'\');'
+        +'lines.push(\'Généré par BOANR · \'+nd.day+\'/\'+nd.month+\'/\'+nd.year);'
+        +'shareRapport(lines.join(\'\\n\'),\'Rapport Foirail \'+moisNom+\' \'+nd.year);'
+        +'})()" style="background:#1a2e3a;border:1px solid #2a4e5a;color:#88ccdd;font-size:13px;font-weight:600;padding:9px 18px;border-radius:8px;cursor:pointer;width:100%">📤 Partager le rapport mensuel foirail</button></div>';
+    }
+
     view=_prixAlertBanner
       +_heroHtml
       +(prixData.length ? courbesPrix(prixData) : '')
       +(histHtml || (!prixData.length ? '<div style="font-size:12px;color:#445544;padding:8px 0">Aucun prix enregistré — saisissez ci-dessous</div>' : ''))
+      +_btnFoirailHtml
       +'<div class="sep"></div>'
       +'<div class="card">'
       +'<div class="frow">'
@@ -6321,8 +6399,65 @@ function viewMarche(){
             +'</div>';
         }).join('')
       : '';
+    // ── Rapport mensuel aliments ──
+    var _ndAlim = _nowDakar();
+    var _moisDebAlim = new Date(_ndAlim.year, _ndAlim.month-1, 1);
+    var _moisPrecAlim = new Date(_ndAlim.year, _ndAlim.month-2, 1);
+    var _moisFinPrecAlim = new Date(_ndAlim.year, _ndAlim.month-1, 0);
+    var _alimMoisCur = {}, _alimMoisPrec = {};
+    (LIVE.alimPrix||[]).forEach(function(e){
+      if(!e.date||!e.type) return;
+      var pp=e.date.split('/'); if(pp.length!==3) return;
+      var d=new Date(pp[2],pp[1]-1,pp[0]);
+      if(d>=_moisDebAlim){ if(!_alimMoisCur[e.type]||e.date>_alimMoisCur[e.type].date) _alimMoisCur[e.type]=e; }
+      else if(d>=_moisPrecAlim&&d<=_moisFinPrecAlim){ if(!_alimMoisPrec[e.type]||e.date>_alimMoisPrec[e.type].date) _alimMoisPrec[e.type]=e; }
+    });
+    var _btnAlimHtml = '';
+    if (Object.keys(_alimMoisCur).length > 0) {
+      _btnAlimHtml = '<div style="text-align:center;margin:12px 0"><button onclick="(function(){'
+        +'var nd=_nowDakar();'
+        +'var moisNom=[\'Janvier\',\'Février\',\'Mars\',\'Avril\',\'Mai\',\'Juin\',\'Juillet\',\'Août\',\'Septembre\',\'Octobre\',\'Novembre\',\'Décembre\'][nd.month-1];'
+        +'var moisPrecNom=[\'Janvier\',\'Février\',\'Mars\',\'Avril\',\'Mai\',\'Juin\',\'Juillet\',\'Août\',\'Septembre\',\'Octobre\',\'Novembre\',\'Décembre\'][nd.month-2<0?11:nd.month-2];'
+        +'var moisDeb=new Date(nd.year,nd.month-1,1);'
+        +'var moisPrecDeb=new Date(nd.year,nd.month-2,1);'
+        +'var moisPrecFin=new Date(nd.year,nd.month-1,0);'
+        +'var cur={},prec={};'
+        +'(LIVE.alimPrix||[]).forEach(function(e){'
+          +'if(!e.date||!e.type)return;'
+          +'var pp=e.date.split(\'/\');if(pp.length!==3)return;'
+          +'var d=new Date(pp[2],pp[1]-1,pp[0]);'
+          +'if(d>=moisDeb){if(!cur[e.type]||e.date>cur[e.type].date)cur[e.type]=e;}'
+          +'else if(d>=moisPrecDeb&&d<=moisPrecFin){if(!prec[e.type]||e.date>prec[e.type].date)prec[e.type]=e;}'
+        +'});'
+        +'var keys=Object.keys(cur);'
+        +'if(!keys.length){alert(\'Aucun relevé ce mois\');return;}'
+        +'var lines=[];'
+        +'lines.push(\'🌽 RAPPORT ALIMENTS — \'+moisNom+\' \'+nd.year);'
+        +'lines.push(\'━━━━━━━━━━━━━━━━━━━━━━━━\');'
+        +'keys.sort().forEach(function(t){'
+          +'var e=cur[t];'
+          +'var delta=prec[t]?Math.round(e.prix-prec[t].prix):null;'
+          +'var trend=delta===null?\'\':delta>0?\' ▲ +\'+delta:delta<0?\' ▼ \'+delta:\' →\';'
+          +'var vsMois=delta===null?\'(pas de donnée mois préc.)\':\'vs \'+moisPrecNom+trend+\' FCFA/kg\';'
+          +'lines.push(\'\');'
+          +'lines.push(\'• \'+t);'
+          +'lines.push(\'  \'+e.prix+\' FCFA/kg  \'+ vsMois);'
+        +'});'
+        +'lines.push(\'\');'
+        +'lines.push(\'━━━━━━━━━━━━━━━━━━━━━━━━\');'
+        +'var mix=[{t:\'Son de blé\',p:0.6},{t:\'Tourteau arachide\',p:0.4}];'
+        +'var ration=0,ok=true;'
+        +'mix.forEach(function(m){var e=cur[m.t]||prec[m.t];if(e)ration+=e.prix*m.p;else ok=false;});'
+        +'if(ok&&ration>0)lines.push(\'Coût ration std (60% son + 40% tourteau) :\');'
+        +'if(ok&&ration>0)lines.push(\'  ≈ \'+Math.round(ration)+\' FCFA/kg\');'
+        +'lines.push(\'\');'
+        +'lines.push(\'Généré par BOANR · \'+nd.day+\'/\'+nd.month+\'/\'+nd.year);'
+        +'shareRapport(lines.join(\'\\n\'),\'Rapport Aliments \'+moisNom+\' \'+nd.year);'
+        +'})()" style="background:#1a3a1a;border:1px solid #2a5a2a;color:#88dd88;font-size:13px;font-weight:600;padding:9px 18px;border-radius:8px;cursor:pointer;width:100%">📤 Partager le rapport mensuel aliments</button></div>';
+    }
     view='<div class="stitle">🌽 Prix aliments</div>'
       +'<div class="card">'+_latestHtml+_recentHtml+'</div>'
+      +_btnAlimHtml
       +'<div class="sep"></div>'
       +'<div class="card">'
       +'<div class="frow">'
