@@ -4853,8 +4853,60 @@ function viewDash(){
     return g3 < g2 * 0.85 && g2 < g1 * 0.85;
   })();
   setTimeout(animateCounters, 50);
+
+  // ── BLOC RENTABILITÉ — réponse en un chiffre ──
+  var _rentaHtml = '';
+  if ((S.user==='fondateur'||S.user==='rga') && CYCLE.capital > 0 && (CYCLE.objectifPrix||0) > 0) {
+    var _simD    = _calcDepSim();
+    var _pc      = CYCLE.poidsCible || 400;
+    var _op      = CYCLE.objectifPrix || 2000;
+    var _nb      = MOCK.betes || (CYCLE.nbBetes||4);
+    var _caProj  = _nb * _pc * _op;
+    var _chargesT = _simD.total;
+    var _marge   = _caProj - _chargesT;
+    var _roi     = CYCLE.capital > 0 ? Math.round(_marge / CYCLE.capital * 100) : null;
+    var _seuilPrix = _nb > 0 && _pc > 0 ? Math.round(_chargesT / (_nb * _pc)) : null;
+    var _dernierPrix = LIVE.prix && LIVE.prix.length ? LIVE.prix[LIVE.prix.length-1].moy : null;
+    var _prixOk  = _seuilPrix && _dernierPrix ? _dernierPrix >= _seuilPrix : null;
+    // Niveau de confiance : GMQ + mortalité + tréso
+    var _gc2 = CYCLE.gmqCible || 1, _gw2 = CYCLE.gmqWarn || 0.8;
+    var _mortPct = CYCLE.nbBetes > 0 ? (_nbBetes = CYCLE.nbBetes, Math.round(((_nbBetes-_nb)/_nbBetes)*100)) : 0;
+    var _confScore = 0;
+    if (_gmqDisplay >= _gc2) _confScore += 2; else if (_gmqDisplay >= _gw2) _confScore += 1;
+    if (_mortPct === 0) _confScore += 1;
+    if (MOCK.treso >= (CYCLE.alerteSeuilTreso||100000)*2) _confScore += 1;
+    var _confLabel = _confScore >= 3 ? '🟢 Projection solide' : _confScore >= 2 ? '🟡 À surveiller' : '🔴 Cycle à risque';
+    var _margeBg   = _marge > 0 ? 'linear-gradient(135deg,#0d2a0d,#132813)' : _marge > -50000 ? 'linear-gradient(135deg,#2a1800,#1f1200)' : 'linear-gradient(135deg,#2a0808,#1f0505)';
+    var _margeBdr  = _marge > 0 ? '#2a6a2a' : _marge > -50000 ? '#6a3a00' : '#6a1010';
+    var _margeCol  = _marge > 0 ? '#4caf50' : _marge > -50000 ? '#ff9800' : '#f44336';
+    var _margeSign = _marge > 0 ? '+' : '';
+    var _semRestT  = Math.max(0, totalSemCycle - semActuelle);
+    _rentaHtml = '<div style="background:'+_margeBg+';border:1px solid '+_margeBdr+';border-radius:14px;padding:16px 18px;margin-bottom:14px;position:relative;overflow:hidden">'
+      +'<div style="position:absolute;right:-20px;top:-20px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,0.03)"></div>'
+      +'<div style="font-size:10px;color:#88aa88;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Rentabilité projetée — fin de cycle</div>'
+      +'<div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:10px">'
+      +'<div><div style="font-size:32px;font-weight:900;color:'+_margeCol+';line-height:1">'+_margeSign+fmt(Math.round(_marge/1000))+'k</div>'
+      +'<div style="font-size:11px;color:#556655;margin-top:2px">FCFA marge brute</div></div>'
+      +(_roi!==null?'<div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:6px 12px;text-align:center">'
+        +'<div style="font-size:20px;font-weight:800;color:'+_margeCol+'">'+(_roi>0?'+':'')+_roi+'%</div>'
+        +'<div style="font-size:10px;color:#556655">ROI</div></div>':'')
+      +'</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
+      +'<div style="font-size:11px;color:#88aa88;background:rgba(255,255,255,0.04);border-radius:6px;padding:4px 10px">CA projeté : '+fmt(Math.round(_caProj/1000))+'k FCFA</div>'
+      +'<div style="font-size:11px;color:#88aa88;background:rgba(255,255,255,0.04);border-radius:6px;padding:4px 10px">Charges : '+fmt(Math.round(_chargesT/1000))+'k FCFA</div>'
+      +'<div style="font-size:11px;color:#88aa88;background:rgba(255,255,255,0.04);border-radius:6px;padding:4px 10px">'+_semRestT+' sem. restantes</div>'
+      +'</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+      +(_seuilPrix?'<div style="font-size:11px;color:'+(_prixOk===false?'#ff9800':_prixOk===true?'#4caf50':'#88aa88')+';font-weight:600">Seuil rentabilité : '+fmt(_seuilPrix)+' FCFA/kg'
+        +(_dernierPrix?' (foirail : '+fmt(Math.round(_dernierPrix))+(_prixOk===false?' ⚠️':' ✅')+')':'')+'</div>':'')
+      +'<div style="font-size:11px;color:#88aa88">'+_confLabel+'</div>'
+      +'</div>'
+      +'</div>';
+  }
+
   var _heroRole = S.user==='gerant' ? 'Tableau de bord gerant' : S.user==='fondateur' ? 'Vue ensemble fondateur' : 'Tableau de bord';
   return '<div class="cnt">'
+    +_rentaHtml
     +'<div style="background:linear-gradient(135deg,#142714,#0d1f0d);border-radius:14px;padding:16px 18px;margin-bottom:18px;border:1px solid #2a5a2a;position:relative;overflow:hidden">'
     +'<div style="position:absolute;right:-24px;top:-24px;width:100px;height:100px;border-radius:50%;background:rgba(45,106,45,0.12)"></div>'
     +'<div style="font-size:11px;color:#88aa88;letter-spacing:.05em;text-transform:uppercase;margin-bottom:5px">'+_heroRole+'</div>'
@@ -4972,6 +5024,18 @@ function viewDash(){
     +(_alertFinCycle ? '<div class="al al-o">⏰ Fin de cycle dans '+_semRest+' sem. — préparer la vente dès maintenant.</div>' : '')
     +(_alertMeteo ? '<div class="al al-o">🌡️ Chaleur extrême '+METEO.temp+'°C — Augmenter les points d\'eau et l\'ombrage.</div>' : '')
     +(function(){ var _inc=(LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';}); return _inc.length ? '<div class="al al-r">⚠️ '+_inc.length+' incident(s) ouvert(s) — traiter en priorité (impact score santé).</div>' : ''; })()
+    +(function(){
+      if (S.user!=='fondateur'&&S.user!=='rga') return '';
+      if (!CYCLE.capital||!(CYCLE.objectifPrix)) return '';
+      var _sd2  = _calcDepSim();
+      var _pc2  = CYCLE.poidsCible||400;
+      var _nb2  = MOCK.betes||(CYCLE.nbBetes||4);
+      var _seuil2 = _nb2>0&&_pc2>0 ? Math.round(_sd2.total/(_nb2*_pc2)) : null;
+      var _dp2  = LIVE.prix&&LIVE.prix.length ? LIVE.prix[LIVE.prix.length-1].moy : null;
+      if (!_seuil2||!_dp2) return '';
+      if (_dp2 < _seuil2) return '<div class="al al-r">💸 Prix foirail actuel ('+fmt(Math.round(_dp2))+' FCFA/kg) SOUS le seuil de rentabilité ('+fmt(_seuil2)+' FCFA/kg) — reports de vente recommandé.</div>';
+      return '<div class="al al-g">✅ Prix foirail ('+fmt(Math.round(_dp2))+' FCFA/kg) au-dessus du seuil de rentabilité ('+fmt(_seuil2)+' FCFA/kg).</div>';
+    })()
     +'<div class="sep"></div>'
     +(function(){
       var types=Object.keys((STOCK_MVTS||[]).reduce(function(acc,m){acc[m.type]=1;return acc;},{}));
