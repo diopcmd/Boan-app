@@ -5348,23 +5348,26 @@ function viewSaisie(){
 }
 
 function saveObjectifs(){
-  var keys=[['gmqCible',CYCLE.gmqCible||1],['gmqWarn',CYCLE.gmqWarn||0.8],['poidsCible',CYCLE.poidsCible||400],['mixSon',CYCLE.mixSon||60],['mixTourteau',CYCLE.mixTourteau||40]];
-  var _sid=SID.fondateur||SID.fallou||SID.rga; if(!_sid) return;
-  // Lit Config_App pour trouver les lignes existantes puis les met à jour
-  readSheet(_sid,'Config_App!A1:B100').then(function(rows){
-    if(!rows) return;
-    var updates=[];
-    keys.forEach(function(kv){
-      var idx=-1;
-      rows.forEach(function(r,i){ if(r[0]===kv[0]) idx=i; });
-      var row=(idx>=0?idx+1:rows.length+1);
-      updates.push({row:row,key:kv[0],val:kv[1]});
-    });
-    // Écriture en batch — une ligne à la fois (pas de writeAll bulk pour Config_App)
-    updates.forEach(function(u){
-      writeSheet(_sid,'Config_App!A'+u.row+':B'+u.row,[[u.key,JSON.stringify(u.val)]]);
-    });
-    lsSet('cycle',CYCLE);
+  var _sid=SID.fondateur||SID.fallou||SID.rga; if(!_sid){ alert('SID non configuré'); return; }
+  // Config_App = clé-valeur, last-wins → on appende simplement les nouvelles valeurs
+  var keys=[
+    ['gmqCible',   CYCLE.gmqCible   || 1],
+    ['gmqWarn',    CYCLE.gmqWarn    || 0.8],
+    ['poidsCible', CYCLE.poidsCible || 400]
+  ];
+  var promises = keys.map(function(kv){
+    return appendRow(_sid, 'Config_App!A:B', [kv[0], JSON.stringify(kv[1])]);
+  });
+  Promise.all(promises).then(function(results){
+    var ok = results.every(function(r){ return r && r.ok; });
+    lsSet('cycle', CYCLE);
+    if(ok){
+      S.msg='ok:\u2705 Objectifs enregistr\u00e9s'; r();
+      setTimeout(function(){ S.msg=''; r(); }, 3000);
+    } else {
+      S.msg='err:Erreur lors de l\'enregistrement'; r();
+      setTimeout(function(){ S.msg=''; r(); }, 4000);
+    }
   });
 }
 function viewLiv(){
@@ -5799,21 +5802,15 @@ function viewLiv(){
         +'</div>';
     }
     view='<div class="card">'
-      +'<div class="stitle">📈 Objectifs zootechniques</div>'
+      +'<div class="stitle">📈 Objectifs du cycle</div>'
       +_objField('GMQ cible (seuil vert)','gmqCible',1,0.05,'kg/j')
       +_objField('GMQ alerte (seuil orange)','gmqWarn',0.8,0.05,'kg/j')
       +_objField('Poids cible fin de cycle','poidsCible',400,5,'kg/bête')
-      +'<div style="font-size:10px;color:#445544;margin-top:8px;padding-top:8px;border-top:1px solid #1a2e1a">Utilisés pour la colorisation GMQ dans le dashboard, la sidebar et les rapports.</div>'
-      +'</div>'
-      +'<div class="card">'
-      +'<div class="stitle">🌾 Mix ration standard</div>'
-      +_objField('% Son de blé','mixSon',60,5,'%')
-      +_objField('% Tourteau arachide','mixTourteau',40,5,'%')
-      +'<div style="font-size:10px;color:#445544;margin:6px 0 0">Total : <span style="color:'+((CYCLE.mixSon||60)+(CYCLE.mixTourteau||40)===100?'#4caf50':'#f44336')+'">'+((CYCLE.mixSon||60)+(CYCLE.mixTourteau||40))+'%</span> (doit faire 100%)</div>'
-      +'<div style="font-size:10px;color:#445544;margin-top:4px">Utilisé pour estimer le coût ration dans les rapports aliments.</div>'
+      +'<div style="font-size:10px;color:#445544;margin-top:8px;padding-top:8px;border-top:1px solid #1a2e1a">Utilisés pour la colorisation GMQ, alertes et rapports.</div>'
+      +(S.msg?'<div class="msg '+(S.msg.startsWith('ok')?'ok':'err')+'">'+S.msg.slice(3)+'</div>':'')
       +'</div>'
       +(!_ro?'<button class="btn" style="width:100%;margin-top:4px" onclick="saveObjectifs()">💾 Enregistrer les objectifs</button>':'')
-      +'<div style="font-size:10px;color:#445544;text-align:center;margin-top:6px">Les changements sont appliqués immédiatement et persistés dans Config_App.</div>';
+      +'<div style="font-size:10px;color:#445544;text-align:center;margin-top:6px">Persist\u00e9s dans Config_App \u2014 appliqu\u00e9s imm\u00e9diatement partout.</div>';
   }
   return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+view+'</div>';
 }
@@ -6539,7 +6536,7 @@ function viewMarche(){
       +'</div>'
       +'<div class="fg"><label>Prix (FCFA/kg)</label><input type="number" inputmode="decimal" placeholder="ex: 185" value="'+(fa.prix||'')+'" oninput="S.falim.prix=this.value"></div>'
       +(S.msg?'<div class="msg '+(S.msg.startsWith('ok')?'ok':'err')+'">'+S.msg.slice(3)+'</div>':'')
-      +'<button class="btn'+(S.sending?' disabled':'')+'" onclick="if(!S.sending)saveForm(\'alim\')"'+(S.sending?' disabled':'')+'>'
+      +'<button class="btn'+(S.sending?' disabled':'')+'" onclick="if(!S.sending)doSubmit(\'alim\')"'+(S.sending?' disabled':'')+'>'
       +(S.sending?'Enregistrement...':'💾 Enregistrer le prix')+'</button>'
       +'</div>';
   }
