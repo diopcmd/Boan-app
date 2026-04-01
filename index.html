@@ -6327,15 +6327,11 @@ function viewMarche(){
       +'<div class="card">'
       +'<div class="frow">'
       +'<div class="fg"><label>Date</label><input type="date" value="'+(fa.date||todayISO())+'" oninput="S.falim.date=this.value"></div>'
-      +'<div class="fg"><label>Type d\'aliment</label><input list="dl-alim-modal" placeholder="Son de blé, foin..." value="'+(fa.type||'')+'"
-oninput="S.falim.type=this.value" autocomplete="off"></div>'
+      +'<div class="fg"><label>Type d\'aliment</label><input list="dl-alim-modal" placeholder="Son de blé, foin..." value="'+(fa.type||'')+'" oninput="S.falim.type=this.value" autocomplete="off"></div>'
       +'</div>'
-      +'<div class="fg"><label>Prix (FCFA/kg)</label><input type="number" inputmode="decimal" placeholder="ex: 185" value="'+(fa.prix||'')+'"
-oninput="S.falim.prix=this.value"></div>'
+      +'<div class="fg"><label>Prix (FCFA/kg)</label><input type="number" inputmode="decimal" placeholder="ex: 185" value="'+(fa.prix||'')+'" oninput="S.falim.prix=this.value"></div>'
       +(S.msg?'<div class="msg '+(S.msg.startsWith('ok')?'ok':'err')+'">'+S.msg.slice(3)+'</div>':'')
-      +'<button class="btn'+(S.sending?' disabled':'')+'"
-onclick="if(!S.sending)saveForm(\'alim\')"
-'+(S.sending?' disabled':'')+'>'
+      +'<button class="btn'+(S.sending?' disabled':'')+'" onclick="if(!S.sending)saveForm(\'alim\')"'+(S.sending?' disabled':'')+'>'
       +(S.sending?'Enregistrement...':'💾 Enregistrer le prix')+'</button>'
       +'</div>';
   }
