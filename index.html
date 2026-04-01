@@ -306,6 +306,28 @@ body.light .reco-card div div:last-child{color:#778855}
 .fl input:focus,.fl select:focus,.fl textarea:focus{border-color:#C8A06A}
 body.light .fl label{color:#557755}
 body.light .fl input:focus~label,body.light .fl.has-val label{color:#2d6a2d}
+/* Light mode — override inline dark gradients (hero rentabilité, cartes objectifs, calendrier SOP) */
+body.light [style*="linear-gradient(135deg,#0d2a0d"]{background:linear-gradient(135deg,#e8f5e8,#d4ead4) !important}
+body.light [style*="linear-gradient(135deg,#2a1800"]{background:linear-gradient(135deg,#fff3e0,#ffe0b2) !important}
+body.light [style*="linear-gradient(135deg,#2a0808"]{background:linear-gradient(135deg,#fce8e8,#f8d0d0) !important}
+body.light [style*="linear-gradient(135deg,#142714"]{background:linear-gradient(135deg,#e8f5e8,#d4ead4) !important}
+body.light [style*="background:#111f11"],[style*="background:#0a1a0a"],[style*="background:#0a150a"]{background:#f0f5f0 !important}
+body.light [style*="background:#111f11"]{background:#f0f5f0 !important;color:#1a2e1a !important}
+body.light [style*="background:#0a1a0a"]{background:#e8f0e8 !important;color:#1a2e1a !important}
+body.light [style*="background:#0a150a"]{background:#e8f0e8 !important;color:#1a2e1a !important}
+body.light [style*="background:#1a2e1a"]{background:#dce8dc !important}
+body.light [style*="background:#162516"]{background:#e4ede4 !important}
+body.light [style*="background:#1e3e1e"]{background:#dce8dc !important}
+body.light [style*="background:rgba(255,255,255,0.04)"],[style*="background:rgba(255,255,255,0.05)"]{background:rgba(0,0,0,0.04) !important}
+body.light [style*="color:#88aa88"]{color:#4a7a4a !important}
+body.light [style*="color:#556655"]{color:#3a5a3a !important}
+body.light [style*="color:#ccc"]{color:#334433 !important}
+body.light [style*="border-color:#1a2e1a"]{border-color:#b0ccb0 !important}
+body.light [style*="border-color:#1e3e1e"]{border-color:#a8c8a8 !important}
+body.light [style*="border:1px solid #1a2e1a"]{border-color:#b0ccb0 !important}
+body.light [style*="border:1px solid #1e3e1e"]{border-color:#a8c8a8 !important}
+body.light [style*="border:1px solid #2a5a2a"]{border-color:#88bb88 !important}
+body.light [style*="stroke:#1a3a1a"]{stroke:#88bb88 !important}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .ai-pulse{animation:spin 1.2s linear infinite;display:inline-block}
 </style>
@@ -1254,6 +1276,7 @@ function loadLiveData() {
             lsSet('last_fiche', null); // effacer le marqueur fiche du jour
             LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = []; LIVE.deceased = [];
             lsSet('deceased', []);
+            lsSet('alimPrix', []);
             CYCLE._lastFicheDate=''; CYCLE._lastSopDate=''; CYCLE._lastStockDate='';
             CYCLE._lastPeseeDate=''; CYCLE._lastIncDate=''; CYCLE._lastSanteDate='';
             CYCLE._lastBilanSem=''; MOCK.incidents=0; MOCK.stock=0;
@@ -1305,6 +1328,7 @@ function loadLiveData() {
                 lsSet('last_fiche', null);
                 LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = []; LIVE.deceased = [];
                 lsSet('deceased', []);
+                lsSet('alimPrix', []);
                 CYCLE._lastFicheDate=''; CYCLE._lastSopDate=''; CYCLE._lastStockDate='';
                 CYCLE._lastPeseeDate=''; CYCLE._lastIncDate=''; CYCLE._lastSanteDate='';
                 CYCLE._lastBilanSem=''; MOCK.incidents=0; MOCK.stock=0;
@@ -2102,7 +2126,7 @@ var LIVE = {
   pesees:    [],
   beteIds:   [],
   deceased:  lsGet('deceased') || [],  // IDs des bêtes décédées ce cycle (persisté)
-  alimPrix:  [],  // [{date, type, prix}] depuis Suivi_Aliments
+  alimPrix:  lsGet('alimPrix') || [],  // [{date, type, prix}] depuis Suivi_Aliments (persisté)
   prix:      [],  // [{date, foi, bas, moy, haut}] depuis Suivi_Marche
   incidents: [],  // { date, id, type, grav, desc, act, clos } — chargées depuis Vague 2
   loaded:    false,
@@ -2230,6 +2254,19 @@ function loadPrix() {
   });
 }
 
+// Retourne le prix max du dernier jour disponible dans LIVE.prix (consolidation multi-foirails)
+function _livePrixMax() {
+  if (!LIVE.prix || !LIVE.prix.length) return null;
+  var _pp = {};
+  LIVE.prix.forEach(function(p){ if(p.date){ if(!_pp[p.date]) _pp[p.date]=[]; _pp[p.date].push(p); } });
+  var _lds = Object.keys(_pp).sort(function(a,b){
+    var pa=a.split('/'), pb=b.split('/');
+    return new Date(pa[2],pa[1]-1,pa[0]) - new Date(pb[2],pb[1]-1,pb[0]);
+  });
+  var _le = _pp[_lds[_lds.length-1]];
+  return _le.reduce(function(mx,e){ return (e.moy||0)>(mx.moy||0)?e:mx; }, _le[0]);
+}
+
 // Charge les derniers prix aliments depuis Suivi_Aliments
 function loadAlimPrix() {
   if (!S.user) return;
@@ -2252,6 +2289,7 @@ function loadAlimPrix() {
           prix:  parseFloat(r[2])||0
         };
       });
+    lsSet('alimPrix', LIVE.alimPrix);
     r();
   });
 }
@@ -3720,6 +3758,7 @@ function saveCycle(){
   LIVE.beteIds   = [];
   LIVE.deceased  = [];
   lsSet('deceased', []);
+  lsSet('alimPrix', []); LIVE.alimPrix = [];
   LIVE.incidents = [];
   LIVE.loaded    = false;
   LIVE.source    = 'loading';
@@ -4656,7 +4695,7 @@ function buildSidebar(){
 
   // ── FALLOU ──
   } else if(u==='fallou'){
-    var lastPrix = LIVE.prix && LIVE.prix.length ? LIVE.prix[LIVE.prix.length-1] : null;
+    var lastPrix = _livePrixMax();
     var prixAff  = lastPrix ? fmt(lastPrix.moy)+' FCFA/kg' : 'Aucune saisie';
     var foirailAff = lastPrix ? lastPrix.foi : (CYCLE.foirail||'Thiès');
     var commAff  = lastPrix ? fmt(Math.round((CYCLE.nbBetes||4)*(lastPrix.moy||0)*(CYCLE.objectifPrix||2000)/100*(CYCLE.commission||2)))+' FCFA' : '—';
@@ -4866,11 +4905,13 @@ function viewDash(){
     var _marge   = _caProj - _chargesT;
     var _roi     = CYCLE.capital > 0 ? Math.round(_marge / CYCLE.capital * 100) : null;
     var _seuilPrix = _nb > 0 && _pc > 0 ? Math.round(_chargesT / (_nb * _pc)) : null;
-    var _dernierPrix = LIVE.prix && LIVE.prix.length ? LIVE.prix[LIVE.prix.length-1].moy : null;
+    var _dernierPrixEntry = _livePrixMax();
+    var _dernierPrix = _dernierPrixEntry ? _dernierPrixEntry.moy : null;
     var _prixOk  = _seuilPrix && _dernierPrix ? _dernierPrix >= _seuilPrix : null;
     // Niveau de confiance : GMQ + mortalité + tréso
     var _gc2 = CYCLE.gmqCible || 1, _gw2 = CYCLE.gmqWarn || 0.8;
-    var _mortPct = CYCLE.nbBetes > 0 ? (_nbBetes = CYCLE.nbBetes, Math.round(((_nbBetes-_nb)/_nbBetes)*100)) : 0;
+    var _nbBetesInit = CYCLE.nbBetes || 4;
+    var _mortPct = _nbBetesInit > 0 ? Math.round(((_nbBetesInit - _nb) / _nbBetesInit) * 100) : 0;
     var _confScore = 0;
     if (_gmqDisplay >= _gc2) _confScore += 2; else if (_gmqDisplay >= _gw2) _confScore += 1;
     if (_mortPct === 0) _confScore += 1;
@@ -4899,6 +4940,21 @@ function viewDash(){
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
       +(_seuilPrix?'<div style="font-size:11px;color:'+(_prixOk===false?'#ff9800':_prixOk===true?'#4caf50':'#88aa88')+';font-weight:600">Seuil rentabilité : '+fmt(_seuilPrix)+' FCFA/kg'
         +(_dernierPrix?' (foirail : '+fmt(Math.round(_dernierPrix))+(_prixOk===false?' ⚠️':' ✅')+')':'')+'</div>':'')
+      +(function(){
+        var _mpb = CYCLE.margeParBeteMin || 80000;
+        var _crm = CYCLE.coutRevientMax || 1100;
+        var _margeParBete = _nb > 0 ? Math.round(_marge / _nb) : null;
+        var _gainKgTotal = _nb * Math.max(0, (_pc) - (CYCLE.poidsDepart||270));
+        var _coutKg = _gainKgTotal > 0 ? Math.round(_chargesT / _gainKgTotal) : null;
+        var _mpbStr = _margeParBete !== null ? (_margeParBete >= _mpb
+          ? '<span style="font-size:11px;color:#4caf50">✅ Marge/bête : '+fmt(Math.round(_margeParBete/1000))+'k ≥ obj. '+fmt(Math.round(_mpb/1000))+'k</span>'
+          : '<span style="font-size:11px;color:#ff9800">⚠️ Marge/bête : '+fmt(Math.round(_margeParBete/1000))+'k &lt; obj. '+fmt(Math.round(_mpb/1000))+'k</span>') : '';
+        var _crStr = _coutKg !== null ? (_coutKg <= _crm
+          ? '<span style="font-size:11px;color:#4caf50">✅ Coût/kg gain : '+fmt(_coutKg)+' FCFA</span>'
+          : '<span style="font-size:11px;color:#f44336">⚠️ Coût/kg gain : '+fmt(_coutKg)+' &gt; max '+fmt(_crm)+'</span>') : '';
+        if (!_mpbStr && !_crStr) return '';
+        return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">'+_mpbStr+_crStr+'</div>';
+      })()
       +'<div style="font-size:11px;color:#88aa88">'+_confLabel+'</div>'
       +'</div>'
       +'</div>';
@@ -5031,7 +5087,7 @@ function viewDash(){
       var _pc2  = CYCLE.poidsCible||400;
       var _nb2  = MOCK.betes||(CYCLE.nbBetes||4);
       var _seuil2 = _nb2>0&&_pc2>0 ? Math.round(_sd2.total/(_nb2*_pc2)) : null;
-      var _dp2  = LIVE.prix&&LIVE.prix.length ? LIVE.prix[LIVE.prix.length-1].moy : null;
+      var _dp2  = (function(){ var _e=_livePrixMax(); return _e?_e.moy:null; })();
       if (!_seuil2||!_dp2) return '';
       if (_dp2 < _seuil2) return '<div class="al al-r">💸 Prix foirail actuel ('+fmt(Math.round(_dp2))+' FCFA/kg) SOUS le seuil de rentabilité ('+fmt(_seuil2)+' FCFA/kg) — reports de vente recommandé.</div>';
       return '<div class="al al-g">✅ Prix foirail ('+fmt(Math.round(_dp2))+' FCFA/kg) au-dessus du seuil de rentabilité ('+fmt(_seuil2)+' FCFA/kg).</div>';
@@ -5657,7 +5713,7 @@ function viewLiv(){
       +'<span style="font-size:14px;font-weight:700;color:'+(caProj>=caObj?'#4caf50':'#ff9800')+'">'+fmt(caProj)+' FCFA</span>'
       +'</div>'
       +(LIVE.prix && LIVE.prix.length ? (function(){
-        var _lp = LIVE.prix[LIVE.prix.length-1];
+        var _lp = _livePrixMax() || LIVE.prix[LIVE.prix.length-1];
         var _caLive = objBetes * poidsFinalProj * _lp.moy;
         return '<div style="display:flex;justify-content:space-between;margin-bottom:8px">'
           +'<span style="font-size:12px;color:#88aa88">CA au prix marché ('+_lp.foi+')</span>'
@@ -6349,7 +6405,7 @@ function viewMarche(){
     // ── État — valeurs par défaut réalistes marché sénégalais ──
     var nb      = S.sn  !== null && S.sn  !== undefined ? S.sn  : (CYCLE.nbBetes||4);
     var sp      = S.sp  !== null && S.sp  !== undefined ? S.sp  : (CYCLE.poidsDepart ? Math.round(CYCLE.poidsDepart*1.5) : 420); // poids vente ≈ 1.5× départ
-    var _lastLiveMoy = LIVE.prix && LIVE.prix.length ? LIVE.prix[LIVE.prix.length-1].moy : 0;
+    var _lastLiveMoy = (function(){ var _e=_livePrixMax(); return _e?_e.moy:0; })();
     var px      = S.spx !== null && S.spx !== undefined ? S.spx : (_lastLiveMoy || CYCLE.objectifPrix || 2000);
     var pveau   = S.sveau !== null && S.sveau !== undefined ? S.sveau : (CYCLE.capital && CYCLE.nbBetes ? Math.round(CYCLE.capital/CYCLE.nbBetes) : 450000);
     var calim   = S.salim    !== undefined ? S.salim    : 180000; // alim FCFA/mois troupeau entier
