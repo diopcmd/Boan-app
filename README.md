@@ -7,44 +7,59 @@ Interface de pilotage à distance multi-rôles : direction, gérant terrain, RGA
 
 ---
 
+## Rôles et accès
+
+| Rôle | Identifiant | Onglets | Accès |
+|---|---|---|---|
+| Fondateur / Direction | `fondateur` | Dashboard · Saisie · Livrables · Marché | Lecture/écriture total |
+| Gérant terrain | `gerant` | Dashboard · Saisie | Saisie quotidienne uniquement |
+| RGA | `rga` | Dashboard · Livrables · Marché | Analyse + prix (pas de saisie) |
+| Commerciale | `fallou` | Dashboard · Marché | Suivi prix uniquement |
+
+---
+
 ## Fonctionnalités
 
 ### Saisies quotidiennes (gérant terrain)
-- **Fiche journalière** — nb bêtes, alimentation, eau, état enclos, incidents + alertes rouges si nourris=NON ou eau=NON
+- **Fiche journalière** — nb bêtes, alimentation, eau, état enclos + alertes si nourris=NON ou eau=NON
 - **Checklist SOP** — vérification des procédures (nettoyage, désinfection, quarantaine…) + score compliance X/6
 - **Mouvements de stock** — ajout, consommation, inventaire aliments
 - **Incidents** — signalement avec gravité, action corrective, clôture
-- **Pesées** — poids individuel par bête avec calcul gain moyen quotidien (GMQ) + alerte si bête déjà pesée aujourd'hui
-- **Santé / Mortalité** — symptômes, traitement, coût, issue (résultat préservé dans le select)
-- **Bilan hebdo** — affiche nb pesées de la semaine + GMQ moyen avant envoi
+- **Pesées** — poids individuel par bête, calcul GMQ sur intervalles réels inter-pesées
+- **Santé / Mortalité** — symptômes, traitement, coût, issue (décès → filtre automatique des bêtes décédées)
+- **Bilan hebdo** — pré-rempli avec nb pesées + GMQ moyen avant envoi
 
-### Tableau de bord
-- **Score santé troupeau** — GMQ (50pts) + Stock (30pts) + Bêtes actives (20pts) − malus incidents ouverts (−8/G3, −4/G2, −2/G1)
-- **4 KPI cards** — nb bêtes, GMQ live (intervalles réels par bête, badge 🟢), semaines de stock, trésorerie + coût/jour brûlés vs cible
-- **Alertes intelligentes** — fiche manquante, stock critique, pesée en retard, incidents ouverts, GMQ chute 2 sem., bilan retard >8j, fin cycle ≤2 sem., météo chaleur ≥38°C
-- **Bannieres dismissables** — bouton × pour fermer, reset quotidien
-- **Sparklines** — tendance sur 7 points pour chaque indicateur
-- **Météo Thiès** — température, pluie, vent en temps réel (Open-Meteo) + prévisions 7 jours
+### Tableau de bord (tous rôles)
+- **4 KPI cards** — bêtes actives, GMQ live (intervalles réels, badge 🟢), semaines de stock, trésorerie
+- **Alertes intelligentes** — fiche manquante, stock critique, pesée en retard, GMQ chute 2 sem., incidents ouverts, bilan retard, fin cycle ≤2 sem., météo ≥38°C
+- **Sparklines** — tendance 7 points par indicateur
+- **Météo Thiès** — température, pluie, vent temps réel (Open-Meteo) + prévisions 7 jours
+- **Guide gérant** "Quoi faire et quand" (gérant uniquement)
+- **Rapport WhatsApp** synthèse journalière (gérant uniquement)
+- **Analyse IA** (Claude) aide à la décision (fondateur uniquement)
 
 ### Livrables (fondateur / RGA)
-- **Projection vente** — poids final estimé × prix marché × nb bêtes + budget restant/jour
-- **ROI projeté** — basé sur capital investi et durée cycle
-- **Bilan hebdomadaire** — synthèse automatique en PDF
-- **Trésorerie** — suivi capital, dépenses cumulées + flux frais santé depuis HISTORY
-- **Go/No-Go** — 8 critères (dont aucun incident G3 ouvert) pour lancer le cycle suivant
-- **Gestion des accès** — modification identifiants et mots de passe par le fondateur
+- **Trésorerie** — flux réels (frais santé datés, achat veaux, burn rate vs cible, projection fin cycle)
+- **KPI** — barres GMQ / stock / bêtes / poids / projection CA vs objectifs configurables
+- **Bêtes** — courbes de croissance par animal, IC (indice consommation), GMQ prédictif (régression linéaire), seuil de rentabilité par bête
+- **Incidents** — liste avec gravité, statut, clôture
+- **Go/No-Go** — checklist 8 critères pour démarrage cycle suivant
+- **Objectifs configurables** (fondateur + RGA) — GMQ cible/alerte, poids cible, poids vente min, taux mortalité max, coût revient max, marge min, plancher tréso → persiste dans `Config_App` Sheets, propagé immédiatement dans tous les KPI
 
-### Marché (fondateur / commerciale)
-- **Suivi prix** — bas / moyen / haut par foirail + hero card + indicateur de fraîcheur
-- **Simulateur** — calcul bénéfice selon prix et commission + bouton Reset aux valeurs réelles
-- **Recommandations** — signal global achat/vente + cartes par bête triées par urgence
+### Marché (fondateur / RGA / Commerciale)
+- **Prix foirail** — hero card prix max/min du jour par foirail + tendance + vs objectif + courbe historique
+  - **Rapport mensuel partageable** (📤 Web Share / clipboard)
+- **Prix aliments** (fondateur / RGA / Fallou) — suivi prix par type (son de blé, tourteau, fane…) + historique
+  - **Rapport mensuel partageable** (📤 Web Share / clipboard)
+- **Simulateur** (fondateur / RGA) — seuil de rentabilité, projection bénéfice par bête, badge vs seuil marché
+- **Recommandations** (fondateur / RGA) — signal achat/vente basé sur saisonnalité, cartes par bête triées par urgence, projection date atteinte poids cible
+- **Calendrier SOP vétérinaire** (fondateur / RGA) — protocoles calculés depuis `CYCLE.dateDebut`, statut ✅/🕐/⚠️, **personnalisable** (ajout/suppression/modification étapes, persiste dans `Config_App`)
 
-### UX mobile
-- Navigation par **swipe tactile** entre onglets
-- **Sidebar contextualisée** par rôle (météo, checklist, raccourcis)
-- Calendrier des saisies hebdomadaire avec indicateurs visuels
-- **Mode clair / sombre** avec détection automatique possible
-- **Assistant IA** (Claude) pour aide à la décision
+### Pilotage avancé
+- **Objectifs temps réel** — seuils GMQ, mortalité, tréso, poids vente récupérés depuis `Config_App` Sheets — fondateur peut réajuster à tout moment selon réalité terrain
+- **Bêtes décédées** — filtrées automatiquement de toutes les listes/calculs, persistées en localStorage (`boanr_deceased`)
+- **IC par bête** — `IC = kg aliment / kg gain`, code couleur ≤8 vert / ≤12 orange / >12 rouge
+- **Saisonnalité prix** — détection périodes hautes/basses sur historique cycle → recommandation "vendre maintenant ou attendre"
 
 ---
 
@@ -66,7 +81,7 @@ Interface de pilotage à distance multi-rôles : direction, gérant terrain, RGA
 
 ```
 Boan-app/
-├── index.html              SPA complète (HTML + CSS + JS inline, ~6282 lignes)
+├── index.html              SPA complète (HTML + CSS + JS inline, ~7500+ lignes)
 ├── vercel.json             Rewrites SPA (exclut /api/ et /manifest.json)
 ├── manifest.json           Web App Manifest (PWA — icône, nom, display:standalone)
 ├── api/
@@ -82,16 +97,37 @@ Boan-app/
 
 ---
 
-## Rôles et accès
+## Google Sheets requis
 
-| Rôle | Identifiant | Accès |
+| Feuille | Spreadsheet | Usage |
 |---|---|---|
-| **Fondateur** | `fondateur` | Dashboard + Saisie + Livrables + Marché |
-| **Gérant terrain** | `gerant` | Dashboard + Saisie |
-| **RGA** | `rga` | Dashboard + Livrables |
-| **Commerciale** | `fallou` | Dashboard + Marché |
+| `Config_Cycle` A1:R1 | Fondateur | Configuration cycle (capital, dates, objectifs, simCharges, prixAlim) |
+| `Config_App` A:B | Fondateur | Clé-valeur extensible (gmqCible, gmqWarn, poidsCible, sopProtocol…) |
+| `Fiche_Quotidienne` | Gérant + Fondateur | Saisies journalières |
+| `SOP_Check` | Gérant + Fondateur | Checklist SOP quotidienne |
+| `Pesees` | Gérant + Fondateur | Pesées individuelles par bête |
+| `Stock_Nourriture` | Gérant + Fondateur | Mouvements de stock aliments |
+| `Incidents` | Gérant + Fondateur | Signalements incidents |
+| `Sante_Mortalite` | Gérant + Fondateur | Soins + décès (col G = OUI → bête décédée) |
+| `Hebdomadaire` | Gérant + Fondateur | Bilans hebdomadaires |
+| `KPI_Mensuels` | Fondateur | Trésorerie réelle mensuelle (col H) |
+| `Suivi_Marche` | Fallou + Fondateur | Prix foirail (Date, Foirail, Bas, Moy, Haut) |
+| `Suivi_Aliments` | Fondateur + RGA + Fallou | Prix aliments (Date, Type, Prix/kg) — **à créer manuellement** |
 
-Les identifiants et mots de passe peuvent être modifiés par le fondateur depuis l'interface (Livrables → Gestion des accès).
+
+### Saisies quotidiennes (gérant terrain)
+- **Fiche journalière** — nb bêtes, alimentation, eau, état enclos, incidents + alertes rouges si nourris=NON ou eau=NON
+- **Checklist SOP** — vérification des procédures (nettoyage, désinfection, quarantaine…) + score compliance X/6
+- **Mouvements de stock** — ajout, consommation, inventaire aliments
+- **Incidents** — signalement avec gravité, action corrective, clôture
+- **Pesées** — poids individuel par bête avec calcul gain moyen quotidien (GMQ) + alerte si bête déjà pesée aujourd'hui
+- **Santé / Mortalité** — symptômes, traitement, coût, issue (résultat préservé dans le select)
+- **Bilan hebdo** — affiche nb pesées de la semaine + GMQ moyen avant envoi
+
+### Tableau de bord
+- **Score santé troupeau** — GMQ (50pts) + Stock (30pts) + Bêtes actives (20pts) − malus incidents ouverts (−8/G3, −4/G2, −2/G1)
+- **4 KPI cards** — nb bêtes, GMQ live (intervalles réels par bête, badge 🟢), semaines de stock, trésorerie + coût/jour brûlés vs cible
+
 
 ---
 

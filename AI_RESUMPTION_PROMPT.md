@@ -12,7 +12,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 - **GitHub** : https://github.com/diopcmd/Boan-app (branche `main`)
 - **Dossier local** : `C:\Temp\Boan-app\`
 - **Langue** : Tout en français (code, UI, communications)
-- **Dernier commit** : `0e956ed` — fix GMQ moyen KPI (intervalles réels) + premier pesée / jours cycle
+- **Dernier commit** : `c94fa36` — feat: SOP protocol configurable
 - **Webhook Vercel** : cassé → redeploy manuel sur vercel.com (Deployments → Redeploy)
 
 ---
@@ -70,7 +70,7 @@ ANTHROPIC_API_KEY     (optionnel — fonctionnalité IA)
 |---|---|---|---|
 | Fondateur / Direction | `fondateur` | Dashboard, Saisie, Livrables, Marché | `{fondateur, gerant, fallou}` |
 | Gérant terrain | `gerant` | Dashboard, Saisie | `{gerant, fondateur}` |
-| RGA | `rga` | Dashboard, Livrables | `{rga, gerant, fondateur}` |
+| RGA | `rga` | Dashboard, Livrables, Marché | `{rga, gerant, fondateur}` |
 | Commerciale | `fallou` | Dashboard, Marché | `{fallou, fondateur}` |
 
 > **Règle critique** : Le gérant reçoit `SID_FONDATEUR` pour que `writeAll` écrive
@@ -84,13 +84,27 @@ ANTHROPIC_API_KEY     (optionnel — fonctionnalité IA)
 
 ```js
 var MOCK  = {betes:4, gmq:1.1, stock:6, treso:680000, incidents:0, sem:1, _tresoFromSante:null};
-var CYCLE = lsGet('cycle') || { nbBetes:4, dateDebut:'', dureeMois:8, peseeFreq:30, ... };
+var CYCLE = lsGet('cycle') || {
+  nbBetes:4, dateDebut:'', dureeMois:8, peseeFreq:30,
+  gmqCible:1.0, gmqWarn:0.8, poidsCible:400, poidsVenteMin:340, tauxMortMax:3,
+  coutRevientMax:1100, margeParBeteMin:80000, alerteSeuilTreso:100000,
+  simCharges:{}, prixAlim:0, sopProtocol:null, ...
+};
 var SID   = {};  // {fondateur, gerant, rga, fallou} — peuplé au login
 var HISTORY    = [];  // saisies fusionnées local + Sheets
-var LIVE = { pesees:[], beteIds:[], prix:[], loaded:false };
+var LIVE = {
+  pesees:    [],   // [{date, id, poids, gain, gmq, intervalDays}]
+  beteIds:   [],   // IDs actifs (décédés filtrés) — peuplé dans loadPesees()
+  deceased:  [],   // IDs décédés — depuis Sante_Mortalite col G='OUI', persisté localStorage 'boanr_deceased'
+  prix:      [],   // [{date, foi, bas, moy, haut}] depuis Suivi_Marche
+  alimPrix:  [],   // [{date, type, prix}] depuis Suivi_Aliments
+  incidents: [],   // [{date, id, type, grav, desc, act, clos}] depuis Vague 2
+  loaded:    false,
+  source:    'cache'
+};
 var SPARK = { gmq:[], stk:[], treso:[], betes:[] };
-var _lastSyncTS      = 0;                                   // timestamp dernière synchro Sheets réussie
-var _lastFondVisitTS = lsGet('fondateur_last_visit') || 0;  // badge "nouveaux" fondateur
+var _lastSyncTS      = 0;
+var _lastFondVisitTS = lsGet('fondateur_last_visit') || 0;
 ```
 
 ### Durée de cycle — règle impérative
@@ -139,12 +153,14 @@ Fusionne 7 onglets Sheets avec HISTORY local. Déduplication par clé `type|date
 | `Stock_Nourriture` | Gérant + Fondateur | Date, TypeAliment, kg(±), Ration, Semaines, Alerte |
 | `Incidents` | Gérant + Fondateur | Date, IdBete, Type, Gravite(1-3), Description, Action, Cloture |
 | `Pesees` | Gérant + Fondateur | Date, IdBete, Race, Poids, PoidsPrec, Gain, Statut |
-| `Sante_Mortalite` | Gérant + Fondateur | Date, IdBete, Symptome, Traitement, Cout(col5=r[4]), Resultat, Deces |
+| `Sante_Mortalite` | Gérant + Fondateur | Date, IdBete, Symptome, Traitement, Cout(r[4]), Resultat, Deces(r[6]='OUI') |
 | `Hebdomadaire` | Gérant + Fondateur | Semaine, NbBetes, Nourriture, Stock, Incidents, Poids, Alerte, Msg |
 | `KPI_Mensuels` | Fondateur | col H = trésorerie réelle |
 | `Config_Passwords` | Fondateur | role, pwd_base64, updated_at, login_override |
-| `Config_Cycle` | Fondateur | A1:O1 infos cycle (nbBetes, dureeMois, capital…) |
+| `Config_Cycle` | Fondateur | **A1:R1** — A=nbBetes, B=dateDebut, C=poidsDepart, D=dureeMois, E=race, F=capital, G=objectifPrix, H=budgetSante, I=ration, J=veterinaire, K=foirail, L=commission, M=contactUrgence, N=peseeFreq, O=betes(JSON), P=stockLines(JSON), **Q=simCharges(JSON)**, **R=prixAlim** |
+| `Config_App` | Fondateur | A=clé, B=valeur — extensible (gmqCible, gmqWarn, poidsCible, poidsVenteMin, tauxMortMax, coutRevientMax, margeParBeteMin, alerteSeuilTreso, sopProtocol, dureeMois, lastFicheDate…) |
 | `Suivi_Marche` | Fallou + Fondateur | Date, Foirail, Bas, Moy, Haut, Vol, Note |
+| `Suivi_Aliments` | Fondateur + RGA + Fallou | Date, Type, Prix/kg — **à créer manuellement** (données ligne 4+) |
 
 ---
 
@@ -271,35 +287,63 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 - Partage WhatsApp synthèse + KPI
 - Export PDF rapport mensuel
 
+### Prix aliments (fondateur / rga / fallou)
+- Onglet "Prix aliments" dans Marché — feuille `Suivi_Aliments` (Date, Type, Prix/kg)
+- `loadAlimPrix()` : lit depuis `SID.fondateur || SID.fallou || SID.rga`, filtré par `CYCLE.dateDebut`
+- Dernier prix par type affiché + historique + rapport mensuel partageable (📤)
+- Formulaire saisie : Date + Type (datalist) + Prix/kg → `doSubmit('alim')`
+
+### Calendrier SOP vétérinaire (fondateur / rga)
+- Protocoles calculés depuis `CYCLE.dateDebut` — J15 vaccin, J30 déparasitage, J60 balnéation…
+- Statut ✅ fait / 🕐 à venir / ⚠️ en retard calculé automatiquement
+- **Entièrement personnalisable** : fondateur peut ajouter/supprimer/modifier étapes
+- Protocole personnalisé persisté dans `Config_App` JSON clé `sopProtocol`
+- `SOP_PROTOCOL_DEFAULT` = tableau de référence standard si pas de personnalisation
+
+### Objectifs configurables (fondateur / rga)
+- Carte dans Livrables → Objectifs
+- **Zootechniques** : `gmqCible` (vert), `gmqWarn` (orange), `poidsCible`, `poidsVenteMin`, `tauxMortMax`
+- **Financiers** : `coutRevientMax`, `margeParBeteMin`, `alerteSeuilTreso`
+- Tous lus depuis `CYCLE.*` avec fallback (défauts codés dans objet CYCLE initial)
+- `saveObjectifs()` → `appendRow()` dans `Config_App` pour chaque valeur (last-wins)
+- Propagation immédiate dans tous les KPI, alertes, sidebar, PDF, IA
+
+### Bêtes décédées (tous rôles)
+- `LIVE.deceased[]` : IDs des bêtes décédées ce cycle
+- **Persisté** en localStorage `boanr_deceased` — survit aux reconnexions
+- Peuplé dans `loadLiveData()` depuis `Sante_Mortalite` col G = 'OUI', col B = IdBete
+- `LIVE.beteIds` filtré automatiquement après `loadPesees()`
+- `rebuildBeteList()` filtre également `LIVE.deceased`
+- Remis à zéro (localStorage + mémoire) aux 3 endroits de reset de cycle
+
+### IC et GMQ prédictif (section Bêtes)
+- IC (Indice de Consommation) = kg aliment total / kg gain — code couleur ≤8/≤12/>12
+- GMQ prédictif = régression linéaire sur 4 dernières pesées → projection poids fin cycle
+
+### Rapports mensuels partageables
+- `_rapportFoirail()` : regroupé par foirail, mois courant, min/moy/max + trend
+- `_rapportAlim()` : par type, delta vs mois précédent, coût ration estimé
+- `shareRapport(txt, title)` : `navigator.share` → `clipboard.writeText` → `execCommand`
+
 ---
 
-## Historique commits récents
+## Historique commits récents (ordre chronologique)
 
 | Commit | Description |
 |---|---|
 | `0e956ed` | fix: GMQ moyen KPI = LIVE.pesees (intervalles réels) + 1ère pesée / jours cycle vs /30 |
-| `6d4762c` | fix: _alertGmqChute not defined — recalculer dans scope viewDash |
-| `1791066` | feat: ia+export — GMQ live contexte AI + incidents ouverts, GMQ live PDF |
-| `5f66808` | feat: sidebar — gonogo score 8 + ggSante, GMQ semaine live, raccourci pesée gérant |
-| `125e79c` | feat: marche — bugfix peseesBete, fraîcheur données reco, bouton reset simulateur |
-| `be169ae` | feat: livrables — bugfix treso, KPI GMQ live, flux santé, gonogo santé G3, budget restant/jour |
-| `d6ca102` | feat: saisie — alertes fiche NON, bugfix sante res, alerte pesée doublon, score SOP, GMQ bilan |
-| `3cecd3f` | feat: dashboard — score santé incidents, alertes meteo/gmq/bilan/fin-cycle, treso cout-jour, bannières dismissables |
-| `004a8d2` | feat: recommandations par bête + signal global achat/vente |
-| `facdf90` | fix: gmqMoy not defined — utilise bete.gmq (scope correct) |
-| `3eb6f53` | fix: loadPrix SID fondateur prioritaire + chTab marche refresh + gmqMoy global |
-| `ebb4982` | fix: courbe croissance — date slice 0-5, tri chronologique DD/MM/YYYY |
-| `b4dbd5a` | fix: pesée dropdown — LIVE.beteIds conserve toutes les bêtes après soumission |
-| `915ee49` | trigger deploy (push vide webhook cassé) |
-| `39b0e25` | marche: simplify chart — remove filter & band, hero price + trend badge + clean line |
-| `daadc18` | fix: dateTimeRenderOption=FORMATTED_STRING — p.date.slice not a function |
-| `eb181ef` | feat: onglet marché — band chart, filtre foirail, seuil rentabilité simulateur |
-| `e4ab9a8` | fix: readSheet UNFORMATTED_VALUE — prix 2000 affiché 2 FCFA/kg |
-| `319007e` | fix: 3 bugs init cycle fondateur (race stock, calcStockLocal, bilan sidebar) |
-| `ca8e541` | fix: bilan hebdo gérant incorrect |
-| `c40a723` | fix: bilan hebdo gérant — fallback sidFondateur + no wipe _lastBilanSem |
-| `6f2078f` | fix: PWA clavier mobile — viewport interactive-widget + manifest + touch-action |
-| `82cff3e` | ux: stepper durée cycle contraste élevé fond vert + valeur lisible |
-| `ca27beb` | ux: sidebar durée cycle stepper pur -/+ sans input (évite reset au re-render) |
-| `e34c505` | docs: mise à jour docs + chemin local + ligne count |
-| `3ea8929` | fix: bugs marché prix + durée cycle réel sidebar synchro sheets |
+| `94d6444` | fix: MOCK.gmq override dans loadPesees() — intervalles réels par bête |
+| `f3ce52b` | feat: trésorerie — dépenses depuis charges simulateur |
+| `64628df` | feat: trésorerie complète — prixAlim, transport, simCharges Sheets (col Q), tableau flux réel |
+| `c3b5102` | fix: GMQ bêtes/reco = moyenne p.gmq — cohérent avec MOCK.gmq et dashboard |
+| `d6c567a` | fix: 4 corrections — deceased filter, sidebar GMQ/pesées per-bête, semaine gauge, marché consolidation foirails |
+| `6eb8814` | fix: persist LIVE.deceased to localStorage — survit aux reconnexions |
+| `586077a` | feat: Suivi_Aliments — suivi prix aliments (fondateur/fallou/rga), onglet marché, Sheets |
+| `12d8e60` | fix: syntaxe — newlines dans strings JS (page blanche pré-login) |
+| `af5d4df` | feat: boutons rapport mensuel partageables — foirail et aliments (Web Share + clipboard) |
+| `09692dd` | feat: objectifs configurables — carte Livrables>Objectifs, saveObjectifs() vers Config_App |
+| `6205093` | fix: saveObjectifs (writeSheet→appendRow), alim (saveForm→doSubmit), remove mix ration card |
+| `647b19a` | feat: objectifs pilotage — 8 variables configurables fondateur (taux mort, poids vente, coût revient, marge, plancher tréso) |
+| `918296c` | feat: 4 experts — IC indice consommation, saisonnalité prix foirail, calendrier SOP vétérinaire, GMQ prédictif |
+| `c94fa36` | feat: SOP protocol configurable — fondateur ajuste dates/étapes, persiste Config_App, calendrier SOP suit |
+

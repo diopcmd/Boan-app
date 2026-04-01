@@ -2758,7 +2758,7 @@ function buildAIContext() {
     'Race: ' + (CYCLE.race||'Non définie'),
     'Mortalité cycle: ' + mort + '%',
     'Poids départ moyen: ' + (CYCLE.poidsDepart||270) + ' kg',
-    'GMQ moyen actuel: ' + _gmqLiveAI + ' kg/j (cible ≥ 1.0 kg/j)'+(LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?' [donnée live]':' [estimation]'),
+    'GMQ moyen actuel: ' + _gmqLiveAI + ' kg/j (cible >= '+(CYCLE.gmqCible||1)+' kg/j)'+(LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?' [donnée live]':' [estimation]'),
     'Incidents ouverts: ' + _incOuvertsAI.length + (_incOuvertsAI.length ? ' — '+_incResume : ''),
     'Ration journalière: ' + (CYCLE.ration||12) + ' kg/bête/jour',
     'Stock restant: ' + (MOCK.stock > 0 ? MOCK.stock : calcStockLocal()) + ' semaines',
@@ -3908,7 +3908,7 @@ function exportPDF() {
     doc.line(14, 42, 196, 42);
     var kpis = [
       ['Bêtes actives', MOCK.betes+' / '+(CYCLE.nbBetes||4)+' têtes', (function(){var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;return mort+'% mortalité'+(mort===0?' ✓':' ⚠');}())],
-      ['GMQ moyen', (function(){return LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq;})()+' kg/j', 'Cible ≥ 1.0 kg/j'],
+      ['GMQ moyen', (function(){return LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq;})()+' kg/j', 'Cible \u2265 '+(CYCLE.gmqCible||1)+' kg/j'],
       ['Stock aliments', (MOCK.stock>0?MOCK.stock:calcStockLocal())+' semaines', (MOCK.stock>0?MOCK.stock:calcStockLocal())>=6?'Suffisant ✓':'Attention ⚠'],
       ['Trésorerie', fmt(MOCK.treso)+' FCFA', MOCK.treso>=600000?'Seuil OK':'Surveiller']
     ];
@@ -4863,7 +4863,7 @@ function viewDash(){
     +'<div class="stitle">Indicateurs Cycle</div>'
     +'<div class="kgrid">'
     +'<div class="kcard kcard-ok"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">Bêtes actives</div><div class="kval-ok" style="font-size:26px;font-weight:700" data-count="'+MOCK.betes+'">'+MOCK.betes+'</div>'+(function(){var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;var col=mort===0?'#4caf50':mort<=5?'#ff9800':'#f44336';var ico=mort===0?' ✓':mort<=5?' ⚠':' 🔴';return '<div style="font-size:11px;margin-top:4px;color:'+col+'">'+mort+'% mortalité'+ico+'</div><div class="sparkline-wrap">'+sparkline(SPARK.betes,col)+'</div></div>';})()
-    +'<div class="kcard '+gmqBg+'"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">GMQ moyen</div><div class="'+gmqC+'" style="font-size:26px;font-weight:700" data-count="'+_gmqDisplay+'">'+_gmqDisplay+'</div><div style="font-size:11px;margin-top:4px;color:'+gc('gmq',_gmqDisplay)+'">kg/j — Cible ≥ 1.0'+(LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?' <span style="font-size:9px;color:#4caf50">🟢 live</span>':'')+'</div><div class="sparkline-wrap">'+sparkline(SPARK.gmq,gc('gmq',_gmqDisplay))+'</div></div>'
+    +'<div class="kcard '+gmqBg+'"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">GMQ moyen</div><div class="'+gmqC+'" style="font-size:26px;font-weight:700" data-count="'+_gmqDisplay+'">'+_gmqDisplay+'</div><div style="font-size:11px;margin-top:4px;color:'+gc('gmq',_gmqDisplay)+'">kg/j — Cible \u2265 '+(CYCLE.gmqCible||1)+(LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?' <span style="font-size:9px;color:#4caf50">🟢 live</span>':'')+'</div><div class="sparkline-wrap">'+sparkline(SPARK.gmq,gc('gmq',_gmqDisplay))+'</div></div>'
     +(function(){
     var stkDisplay = MOCK.stock > 0 ? MOCK.stock : calcStockLocal();
     var stkCl = stkDisplay>=6?'kval-ok':stkDisplay>=4?'kval-warn':'kval-crit';
