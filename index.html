@@ -400,11 +400,16 @@ var CYCLE = lsGet('cycle') || {
   simCharges: {},  // charges simulateur persistantes
   gonogo: {contrats:false, infra:false, assurance:false, securite:false},
   // Objectifs configurables par le fondateur (lu/écrit dans Config_App)
-  gmqCible:   1.0,  // seuil vert GMQ (kg/j)
-  gmqWarn:    0.8,  // seuil orange GMQ (kg/j)
-  poidsCible: 400,  // poids visé fin de cycle (kg/bête)
-  mixSon:     60,   // % son de blé dans la ration standard
-  mixTourteau: 40   // % tourteau arachide dans la ration standard
+  gmqCible:        1.0,   // seuil vert GMQ (kg/j)
+  gmqWarn:         0.8,   // seuil orange GMQ (kg/j)
+  poidsCible:      400,   // poids visé fin de cycle (kg/bête)
+  poidsVenteMin:   340,   // poids minimum avant vente (en dessous = perte)
+  tauxMortMax:     3,     // % mortalité max acceptable sur le cycle
+  coutRevientMax:  1100,  // coût de production max /kg de gain (FCFA)
+  margeParBeteMin: 80000, // marge brute minimale /bête (FCFA)
+  alerteSeuilTreso:100000,// plancher trésorerie — alerte si solde < X (FCFA)
+  mixSon:          60,    // % son de blé dans la ration standard
+  mixTourteau:     40     // % tourteau arachide dans la ration standard
 };
 
 // Calcul semaine depuis date début
@@ -1264,11 +1269,16 @@ function loadLiveData() {
               // dureeMois : Config_App est la source prioritaire (pas de race condition)
               if (key === 'dureeMois' && val && parseInt(val) > 0) CYCLE.dureeMois = parseInt(val);
               // Objectifs configurables
-              if (key === 'gmqCible'   && val && parseFloat(val) > 0) CYCLE.gmqCible   = parseFloat(val);
-              if (key === 'gmqWarn'    && val && parseFloat(val) > 0) CYCLE.gmqWarn    = parseFloat(val);
-              if (key === 'poidsCible' && val && parseInt(val)   > 0) CYCLE.poidsCible = parseInt(val);
-              if (key === 'mixSon'     && val !== null) CYCLE.mixSon     = parseFloat(val) || 60;
-              if (key === 'mixTourteau'&& val !== null) CYCLE.mixTourteau= parseFloat(val) || 40;
+              if (key === 'gmqCible'         && val && parseFloat(val) > 0) CYCLE.gmqCible         = parseFloat(val);
+              if (key === 'gmqWarn'          && val && parseFloat(val) > 0) CYCLE.gmqWarn          = parseFloat(val);
+              if (key === 'poidsCible'       && val && parseInt(val)   > 0) CYCLE.poidsCible       = parseInt(val);
+              if (key === 'poidsVenteMin'    && val && parseInt(val)   > 0) CYCLE.poidsVenteMin    = parseInt(val);
+              if (key === 'tauxMortMax'      && val && parseFloat(val) > 0) CYCLE.tauxMortMax      = parseFloat(val);
+              if (key === 'coutRevientMax'   && val && parseInt(val)   > 0) CYCLE.coutRevientMax   = parseInt(val);
+              if (key === 'margeParBeteMin'  && val && parseInt(val)   > 0) CYCLE.margeParBeteMin  = parseInt(val);
+              if (key === 'alerteSeuilTreso' && val && parseInt(val)   >= 0) CYCLE.alerteSeuilTreso = parseInt(val);
+              if (key === 'mixSon'           && val !== null) CYCLE.mixSon      = parseFloat(val) || 60;
+              if (key === 'mixTourteau'      && val !== null) CYCLE.mixTourteau = parseFloat(val) || 40;
               // cycleDebut dans Config_App = détection changement de cycle indépendante de Config_Cycle
               if (key === 'cycleDebut' && val && val.length && val !== CYCLE.dateDebut) {
                 HISTORY = []; lsSet('history', []);
@@ -1952,8 +1962,13 @@ function _syncConfigApp() {
       ['gmqCible',      JSON.stringify(CYCLE.gmqCible        || 1.0)],
       ['gmqWarn',       JSON.stringify(CYCLE.gmqWarn         || 0.8)],
       ['poidsCible',    JSON.stringify(CYCLE.poidsCible      || 400)],
-      ['mixSon',        JSON.stringify(CYCLE.mixSon          || 60)],
-      ['mixTourteau',   JSON.stringify(CYCLE.mixTourteau     || 40)]
+      ['mixSon',           JSON.stringify(CYCLE.mixSon             || 60)],
+      ['mixTourteau',      JSON.stringify(CYCLE.mixTourteau        || 40)],
+      ['poidsVenteMin',    JSON.stringify(CYCLE.poidsVenteMin      || 340)],
+      ['tauxMortMax',      JSON.stringify(CYCLE.tauxMortMax        || 3)],
+      ['coutRevientMax',   JSON.stringify(CYCLE.coutRevientMax     || 1100)],
+      ['margeParBeteMin',  JSON.stringify(CYCLE.margeParBeteMin    || 80000)],
+      ['alerteSeuilTreso', JSON.stringify(CYCLE.alerteSeuilTreso   || 100000)]
     ];
     // Tenter création de l'onglet (ignorer l'erreur s'il existe déjà)
     var addUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + ':batchUpdate';
@@ -4165,7 +4180,8 @@ function buildSidebar(){
   if(u==='gerant'){
     // Score santé : GMQ (50pts) + Stock (30pts) + Bêtes actives (20pts) − malus incidents urgents
     var _mort = CYCLE.nbBetes>0 ? Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100) : 0;
-    var _scoreBetes = _mort===0 ? 20 : _mort<=5 ? 12 : _mort<=10 ? 5 : 0;
+    var _tmMax = CYCLE.tauxMortMax||3;
+    var _scoreBetes = _mort===0 ? 20 : _mort<=_tmMax ? 12 : _mort<=_tmMax*2 ? 5 : 0;
     // Malus incidents ouverts : -8 pts par incident gravité 3, -4 pts par gravité 2
     var _incOuverts = (LIVE.incidents||[]).filter(function(i){ return i.clos !== 'OUI'; });
     var _malusInc = _incOuverts.reduce(function(s,i){ return s + (i.grav==='3'?8:i.grav==='2'?4:2); }, 0);
@@ -4449,7 +4465,7 @@ function buildSidebar(){
         +'<div class="sb-row"><span class="sb-lbl">Score santé troupeau</span><span class="sb-val" style="color:'+santeCol+'">'+sante+'/100</span></div>'
         +(function(){
           var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;
-          var cl=mort===0?'kval-ok':mort<=5?'kval-warn':'kval-crit';
+          var cl=mort===0?'kval-ok':mort<=(CYCLE.tauxMortMax||3)?'kval-warn':'kval-crit';
           return '<div class="sb-row"><span class="sb-lbl">Mortalité cycle</span><span class="sb-val '+cl+'">'+mort+'%</span></div>';
         })()
         +'<div class="sb-row"><span class="sb-lbl">Semaine en cours</span><span class="sb-val gold">'+calcSemaine()+'/'+Math.round((CYCLE.dureeMois||8)*4.33)+'</span></div>'
@@ -4777,10 +4793,11 @@ function viewDash(){
   var _gc=CYCLE.gmqCible||1, _gw=CYCLE.gmqWarn||0.8;
   var gmqC=_gmqDisplay>=_gc?'kval-ok':_gmqDisplay>=_gw?'kval-warn':'kval-crit';
   var stkC=MOCK.stock>=6?'kval-ok':MOCK.stock>=4?'kval-warn':'kval-crit';
-  var trC =MOCK.treso>=600000?'kval-ok':MOCK.treso>=400000?'kval-warn':'kval-crit';
+  var _trSeuil=CYCLE.alerteSeuilTreso||100000;
+  var trC =MOCK.treso>=600000?'kval-ok':MOCK.treso>_trSeuil?'kval-warn':'kval-crit';
   var gmqBg=_gmqDisplay>=_gc?'kcard-ok':_gmqDisplay>=_gw?'kcard-warn':'kcard-crit';
   var stkBg=MOCK.stock>=6?'kcard-ok':MOCK.stock>=4?'kcard-warn':'kcard-crit';
-  var trBg =MOCK.treso>=600000?'kcard-ok':MOCK.treso>=400000?'kcard-warn':'kcard-crit';
+  var trBg =MOCK.treso>=600000?'kcard-ok':MOCK.treso>_trSeuil?'kcard-warn':'kcard-crit';
   var _joursEcoules = Math.max(0, calcSemaine() * 7);
   var _tresoNette = Math.max(0, MOCK.treso);
   // Dépenses proratisées depuis les charges du simulateur (alim + gardien + vét + imprévus)
@@ -4885,9 +4902,10 @@ function viewDash(){
     +'<div class="stitle">Alertes</div>'
     +(function(){
       var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;
+      var _tmSeuil=CYCLE.tauxMortMax||3;
       if(mort===0) return '<div class="al al-g">✅ Mortalité 0% — aucune perte ce cycle</div>';
-      if(mort<=5)  return '<div class="al al-o">⚠️ Mortalité '+mort+'% — surveiller le troupeau</div>';
-      return '<div class="al al-r">🔴 Mortalité '+mort+'% — intervention requise</div>';
+      if(mort<=_tmSeuil) return '<div class="al al-o">⚠️ Mortalité '+mort+'% — surveiller le troupeau (seuil : '+_tmSeuil+'%)</div>';
+      return '<div class="al al-r">🔴 Mortalité '+mort+'% — AU-DESSUS DU SEUIL ('+_tmSeuil+'%) — intervention requise</div>';
     })()
     +(function(){
       // Alerte GMQ prédictive depuis données réelles
@@ -4927,7 +4945,9 @@ function viewDash(){
     })()
     +(MOCK.treso>=600000
       ?'<div class="al al-g">Trésorerie '+Math.round(MOCK.treso/1000)+'k FCFA — OK'+(_budgetJour!==null&&_budgetJourCible?'  · '+fmt(_budgetJour)+' FCFA/j brûlés (cible : '+fmt(_budgetJourCible)+' FCFA/j)':'')+'</div>'
-      :'<div class="al al-r">🔴 Trésorerie '+Math.round(MOCK.treso/1000)+'k — en dessous du minimum'+(_budgetJour!==null&&_budgetJourCible?' · '+fmt(_budgetJour)+' FCFA/j brûlés':'')+'</div>')
+      :MOCK.treso>(CYCLE.alerteSeuilTreso||100000)
+      ?'<div class="al al-o">⚠️ Trésorerie '+Math.round(MOCK.treso/1000)+'k — en baisse'+(_budgetJour!==null&&_budgetJourCible?' · '+fmt(_budgetJour)+' FCFA/j brûlés':'')+'</div>'
+      :'<div class="al al-r">🔴 Trésorerie '+Math.round(MOCK.treso/1000)+'k — SOUS LE PLANCHER ('+Math.round((CYCLE.alerteSeuilTreso||100000)/1000)+'k)'+(_budgetJour!==null&&_budgetJourCible?' · '+fmt(_budgetJour)+' FCFA/j brûlés':'')+'</div>')
     +(_alertGmqChute ? '<div class="al al-r">📉 Alerte : GMQ en chute 2 semaines consécutives — vérifier alimentation et état de santé.</div>' : '')
     +(_alertFinCycle ? '<div class="al al-o">⏰ Fin de cycle dans '+_semRest+' sem. — préparer la vente dès maintenant.</div>' : '')
     +(_alertMeteo ? '<div class="al al-o">🌡️ Chaleur extrême '+METEO.temp+'°C — Augmenter les points d\'eau et l\'ombrage.</div>' : '')
@@ -5349,11 +5369,15 @@ function viewSaisie(){
 
 function saveObjectifs(){
   var _sid=SID.fondateur||SID.fallou||SID.rga; if(!_sid){ alert('SID non configuré'); return; }
-  // Config_App = clé-valeur, last-wins → on appende simplement les nouvelles valeurs
   var keys=[
-    ['gmqCible',   CYCLE.gmqCible   || 1],
-    ['gmqWarn',    CYCLE.gmqWarn    || 0.8],
-    ['poidsCible', CYCLE.poidsCible || 400]
+    ['gmqCible',         CYCLE.gmqCible         || 1.0],
+    ['gmqWarn',          CYCLE.gmqWarn          || 0.8],
+    ['poidsCible',       CYCLE.poidsCible       || 400],
+    ['poidsVenteMin',    CYCLE.poidsVenteMin    || 340],
+    ['tauxMortMax',      CYCLE.tauxMortMax      || 3],
+    ['coutRevientMax',   CYCLE.coutRevientMax   || 1100],
+    ['margeParBeteMin',  CYCLE.margeParBeteMin  || 80000],
+    ['alerteSeuilTreso', CYCLE.alerteSeuilTreso || 100000]
   ];
   var promises = keys.map(function(kv){
     return appendRow(_sid, 'Config_App!A:B', [kv[0], JSON.stringify(kv[1])]);
@@ -5535,6 +5559,26 @@ function viewLiv(){
         +'<span style="font-size:12px;color:#88aa88">Budget restant / jour</span>'
         +'<span style="font-size:13px;font-weight:700;color:#C8A06A">'+fmt(Math.round(MOCK.treso/joursRestants))+' FCFA/j</span>'
         +'</div>' : '')
+      +(function(){
+        // Coût de revient estimé : (capital - treso restante) / (nbBetes * gain total estimé)
+        var _depTotale = Math.max(0,(CYCLE.capital||1450000)-Math.max(0,MOCK.treso));
+        var _gainTotal = (poidsFinalProj - (CYCLE.poidsDepart||270)) * objBetes;
+        var _coutRevEst = _gainTotal>0 ? Math.round(_depTotale/_gainTotal) : null;
+        var _crMax = CYCLE.coutRevientMax||1100;
+        var _margeEst = caProj - (CYCLE.capital||1450000);
+        var _margeParBete = objBetes>0 ? Math.round(_margeEst/objBetes) : null;
+        var _mMin = CYCLE.margeParBeteMin||80000;
+        var rows='';
+        if(_coutRevEst!==null) rows+='<div style="display:flex;justify-content:space-between;margin-bottom:6px">'
+          +'<span style="font-size:12px;color:#88aa88">Coût de revient estimé</span>'
+          +'<span style="font-size:13px;font-weight:700;color:'+(_coutRevEst<=_crMax?'#4caf50':'#f44336')+'">'+fmt(_coutRevEst)+' F/kg '+((_coutRevEst<=_crMax)?'✅':'⚠️ > '+fmt(_crMax))+'</span>'
+          +'</div>';
+        if(_margeParBete!==null) rows+='<div style="display:flex;justify-content:space-between;margin-bottom:6px">'
+          +'<span style="font-size:12px;color:#88aa88">Marge brute / bête projetée</span>'
+          +'<span style="font-size:13px;font-weight:700;color:'+(_margeParBete>=_mMin?'#4caf50':_margeParBete>=0?'#ff9800':'#f44336')+'">'+fmt(_margeParBete)+' FCFA '+((_margeParBete>=_mMin)?'✅':'⚠️ < '+fmt(_mMin))+'</span>'
+          +'</div>';
+        return rows;
+      })()
       +'<div style="padding:8px 12px;border-radius:8px;background:'+(caProj>=caObj?'#0f2a0f':'#1a1800')+';font-size:12px;font-weight:600;color:'+(caProj>=caObj?'#4caf50':'#ffaa40')+'">'
       +(caProj>=caObj?'✅ Trajectoire conforme aux objectifs':'⚠️ Trajectoire en dessous — améliorer le GMQ')
       +'</div>'
@@ -5566,7 +5610,7 @@ function viewLiv(){
         var joursRestants = Math.max(0,(totalSemCycle-semCourante)*7);
         var coutBete = (CYCLE.capital||1450000)/(CYCLE.nbBetes||4);
         var prixRef = CYCLE.objectifPrix || 2000;
-        var poidsMin = Math.ceil(coutBete/prixRef);
+        var poidsMin = Math.max(Math.ceil(coutBete/prixRef), CYCLE.poidsVenteMin||340);
         var poidsFinal = Math.round(poidsCourant + (gmqMoy || MOCK.gmq || 1) * joursRestants);
         betesData.push({id:id, race:derniere.race||'Djakoré', poids:poidsCourant,
           poidsFinal:poidsFinal, gmq:gmqMoy, poidsMin:poidsMin,
@@ -5788,27 +5832,44 @@ function viewLiv(){
   }
   if(S.sub==='objectifs'){
     var _ro=S.user!=='fondateur'&&S.user!=='rga';
-    function _objField(label,key,defVal,step,unit){
+    function _objField(label,key,defVal,step,unit,hint){
       var v=CYCLE[key]!==undefined?CYCLE[key]:defVal;
-      return '<div class="sb-row" style="align-items:center;gap:8px;">'
-        +'<span class="sb-lbl" style="flex:1.4">'+label+'</span>'
-        +(_ro?('<span style="font-size:13px;font-weight:700;color:#C8A06A">'+v+(unit?' '+unit:'')+'</span>')
-            :('<span style="display:flex;align-items:center;gap:6px">'
-              +'<input type="number" inputmode="decimal" step="'+step+'" value="'+v+'"'
-              +' style="width:72px;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#C8A06A;font-size:13px;font-weight:700;padding:4px 6px;text-align:right"'
-              +' oninput="CYCLE.'+key+'=parseFloat(this.value)||'+defVal+';r()">'
-              +(unit?'<span style="font-size:11px;color:#88aa88">'+unit+'</span>':'')
-              +'</span>'))
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #0f1f0f">'
+        +'<div style="flex:1;padding-right:8px">'
+        +'<div style="font-size:13px;color:#ccc">'+label+'</div>'
+        +(hint?'<div style="font-size:10px;color:#556655;margin-top:2px">'+hint+'</div>':'')
+        +'</div>'
+        +(_ro
+          ?'<span style="font-size:14px;font-weight:700;color:#C8A06A;min-width:70px;text-align:right">'+v+(unit?' '+unit:'')+'</span>'
+          :'<span style="display:flex;align-items:center;gap:5px">'
+            +'<input type="number" inputmode="decimal" step="'+step+'" value="'+v+'"'
+            +' style="width:80px;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#C8A06A;font-size:13px;font-weight:700;padding:5px 7px;text-align:right"'
+            +' oninput="CYCLE.'+key+'=parseFloat(this.value)||'+defVal+';r()">'
+            +(unit?'<span style="font-size:11px;color:#66aa66;min-width:26px">'+unit+'</span>':'')
+            +'</span>')
         +'</div>';
     }
+    var _gc=CYCLE.gmqCible||1, _gw=CYCLE.gmqWarn||0.8;
+    var _gmqBadge=MOCK.gmq>=_gc?'✅ Actuel '+MOCK.gmq+' ≥ cible':MOCK.gmq>=_gw?'⚠️ Actuel '+MOCK.gmq+' < cible':'🔴 Actuel '+MOCK.gmq+' — sous seuil';
+    var _betesMort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;
+    var _mortBadge=_betesMort<=(CYCLE.tauxMortMax||3)?'✅ '+_betesMort+'% ≤ seuil alerte':'🔴 '+_betesMort+'% > seuil';
+    var _tresoSeuil=CYCLE.alerteSeuilTreso||100000;
+    var _tresoBadge=MOCK.treso>=_tresoSeuil?'✅ '+Math.round(MOCK.treso/1000)+'k FCFA > plancher':'🔴 '+Math.round(MOCK.treso/1000)+'k FCFA — sous plancher';
     view='<div class="card">'
-      +'<div class="stitle">📈 Objectifs du cycle</div>'
-      +_objField('GMQ cible (seuil vert)','gmqCible',1,0.05,'kg/j')
-      +_objField('GMQ alerte (seuil orange)','gmqWarn',0.8,0.05,'kg/j')
-      +_objField('Poids cible fin de cycle','poidsCible',400,5,'kg/bête')
-      +'<div style="font-size:10px;color:#445544;margin-top:8px;padding-top:8px;border-top:1px solid #1a2e1a">Utilisés pour la colorisation GMQ, alertes et rapports.</div>'
-      +(S.msg?'<div class="msg '+(S.msg.startsWith('ok')?'ok':'err')+'">'+S.msg.slice(3)+'</div>':'')
+      +'<div class="stitle">📈 Objectifs zootechniques</div>'
+      +_objField('GMQ cible (seuil vert)',    'gmqCible',    1,    0.05, 'kg/j', _gmqBadge)
+      +_objField('GMQ alerte (seuil orange)', 'gmqWarn',     0.8,  0.05, 'kg/j', 'En dessous → alerte automatique')
+      +_objField('Poids cible fin de cycle',  'poidsCible',  400,  5,    'kg',   'Poids visé à la vente')
+      +_objField('Poids minimum avant vente', 'poidsVenteMin',340, 5,    'kg',   'En-dessous = risque de perte nette')
+      +_objField('Taux de mortalité max',     'tauxMortMax', 3,    0.5,  '%',    _mortBadge)
       +'</div>'
+      +'<div class="card">'
+      +'<div class="stitle">💰 Objectifs financiers</div>'
+      +_objField('Coût de revient max / kg gain', 'coutRevientMax',  1100,  50,    'F/kg',  'Coût production max par kg de prise de poids')
+      +_objField('Marge brute min / bête',        'margeParBeteMin', 80000, 5000,  'FCFA',  'Marge brute minimale acceptable par tête')
+      +_objField('Plancher trésorerie',           'alerteSeuilTreso',100000,10000, 'FCFA',  _tresoBadge)
+      +'</div>'
+      +(S.msg?'<div class="msg '+(S.msg.startsWith('ok')?'ok':'err')+'">'+S.msg.slice(3)+'</div>':'')
       +(!_ro?'<button class="btn" style="width:100%;margin-top:4px" onclick="saveObjectifs()">💾 Enregistrer les objectifs</button>':'')
       +'<div style="font-size:10px;color:#445544;text-align:center;margin-top:6px">Persist\u00e9s dans Config_App \u2014 appliqu\u00e9s imm\u00e9diatement partout.</div>';
   }
@@ -6276,7 +6337,7 @@ function viewMarche(){
     var _joursRest = _semRest * 7;
     var _poidsDepBete = CYCLE.poidsDepart || 270;
     var _coutBete = (CYCLE.capital||1450000) / (CYCLE.nbBetes||4);
-    var _poidsMin = Math.ceil(_coutBete / _prixRef); // poids minimum pour rentabilité à objectifPrix
+    var _poidsMin = Math.max(Math.ceil(_coutBete / _prixRef), CYCLE.poidsVenteMin||340); // poids minimum : seuil rentabilité ou minimum configuré
     var _treso = MOCK.treso || 0;
     var _tresoOkAchat = _treso >= (_coutBete * 1.2); // tréso couvre coût bête + 20% marge
     var _foiRef = CYCLE.foirail || 'Thiès';
