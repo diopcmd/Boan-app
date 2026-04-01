@@ -409,8 +409,22 @@ var CYCLE = lsGet('cycle') || {
   margeParBeteMin: 80000, // marge brute minimale /bête (FCFA)
   alerteSeuilTreso:100000,// plancher trésorerie — alerte si solde < X (FCFA)
   mixSon:          60,    // % son de blé dans la ration standard
-  mixTourteau:     40     // % tourteau arachide dans la ration standard
+  mixTourteau:     40,    // % tourteau arachide dans la ration standard
+  sopProtocol:     null   // protocole SOP personnalisé (null = utilise SOP_PROTOCOL_DEFAULT)
 };
+
+// Protocole SOP vétérinaire standard — utilisé si CYCLE.sopProtocol === null
+var SOP_PROTOCOL_DEFAULT = [
+  {j:7,   ico:'\ud83d\udc8a', label:'Déparasitage interne',             type:'sante', note:'Ivermectine ou Albendazole PO'},
+  {j:14,  ico:'\ud83e\ude7a', label:'Contrôle stress de transit',       type:'sante', note:'Observation générale — appétit, selles, comportement'},
+  {j:30,  ico:'\u2696\ufe0f', label:'1ère pesée + bilan santé',         type:'pesee', note:'Peser chaque bête + noter état corporel'},
+  {j:60,  ico:'\ud83e\udeb2', label:'Déparasitage externe',             type:'sante', note:'Bain ou pour-on contre tiques et mouches'},
+  {j:90,  ico:'\u2696\ufe0f', label:'2ème pesée — point mi-cycle',      type:'pesee', note:'Calcul GMQ intermédiaire + ajustement ration si besoin'},
+  {j:120, ico:'\ud83d\udc89', label:'Rappel vaccin + traitement préventif', type:'sante', note:'FMD zones à risque + vitamines ADE'},
+  {j:150, ico:'\u2696\ufe0f', label:'3ème pesée',                       type:'pesee', note:'Vérifier les bêtes à risque stagnation'},
+  {j:180, ico:'\ud83d\udc8a', label:'Déparasitage interne (rappel)',     type:'sante', note:'2ème pass antiparasitaire interne'},
+  {j:210, ico:'\ud83d\udccb', label:'Bilan pré-vente + pesée finale',   type:'pesee', note:'Évaluation état d\'engraissement + décision commerciale'}
+];
 
 // Calcul semaine depuis date début
 function calcSemaine() {
@@ -1279,6 +1293,7 @@ function loadLiveData() {
               if (key === 'alerteSeuilTreso' && val && parseInt(val)   >= 0) CYCLE.alerteSeuilTreso = parseInt(val);
               if (key === 'mixSon'           && val !== null) CYCLE.mixSon      = parseFloat(val) || 60;
               if (key === 'mixTourteau'      && val !== null) CYCLE.mixTourteau = parseFloat(val) || 40;
+              if (key === 'sopProtocol' && val && Array.isArray(val) && val.length) CYCLE.sopProtocol = val;
               // cycleDebut dans Config_App = détection changement de cycle indépendante de Config_Cycle
               if (key === 'cycleDebut' && val && val.length && val !== CYCLE.dateDebut) {
                 HISTORY = []; lsSet('history', []);
@@ -5367,6 +5382,30 @@ function viewSaisie(){
   return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+form+'</div>';
 }
 
+function _sopEdit(i){
+  var _p = (CYCLE.sopProtocol||SOP_PROTOCOL_DEFAULT)[i];
+  S._sopEd = {idx:i, j:_p.j, ico:_p.ico, label:_p.label, type:_p.type, note:_p.note};
+  r();
+}
+function _sopDel(i){
+  if(!CYCLE.sopProtocol) CYCLE.sopProtocol = SOP_PROTOCOL_DEFAULT.map(function(e){return {j:e.j,ico:e.ico,label:e.label,type:e.type,note:e.note};});
+  CYCLE.sopProtocol.splice(i,1);
+  S._sopEd = null; r();
+}
+function _sopSave(isNew){
+  if(!S._sopEd) return;
+  if(!CYCLE.sopProtocol) CYCLE.sopProtocol = SOP_PROTOCOL_DEFAULT.map(function(e){return {j:e.j,ico:e.ico,label:e.label,type:e.type,note:e.note};});
+  var ico = S._sopEd.type==='pesee' ? '\u2696\ufe0f' : '\ud83d\udc8a';
+  var entry = {j:parseInt(S._sopEd.j)||1, ico:ico, label:S._sopEd.label||'Étape', type:S._sopEd.type||'sante', note:S._sopEd.note||''};
+  if(isNew) CYCLE.sopProtocol.push(entry);
+  else CYCLE.sopProtocol[S._sopEd.idx] = entry;
+  CYCLE.sopProtocol.sort(function(a,b){return a.j-b.j;});
+  S._sopEd = null; r();
+}
+function _sopReset(){
+  if(!confirm('Réinitialiser le protocole SOP au standard ?')) return;
+  CYCLE.sopProtocol = null; S._sopEd = null; r();
+}
 function saveObjectifs(){
   var _sid=SID.fondateur||SID.fallou||SID.rga; if(!_sid){ alert('SID non configuré'); return; }
   var keys=[
@@ -5379,6 +5418,7 @@ function saveObjectifs(){
     ['margeParBeteMin',  CYCLE.margeParBeteMin  || 80000],
     ['alerteSeuilTreso', CYCLE.alerteSeuilTreso || 100000]
   ];
+  if(CYCLE.sopProtocol) keys.push(['sopProtocol', JSON.stringify(CYCLE.sopProtocol)]);
   var promises = keys.map(function(kv){
     return appendRow(_sid, 'Config_App!A:B', [kv[0], JSON.stringify(kv[1])]);
   });
@@ -5917,6 +5957,79 @@ function viewLiv(){
       +_objField('Marge brute min / bête',        'margeParBeteMin', 80000, 5000,  'FCFA',  'Marge brute minimale acceptable par tête')
       +_objField('Plancher trésorerie',           'alerteSeuilTreso',100000,10000, 'FCFA',  _tresoBadge)
       +'</div>'
+      +(function(){
+        var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+        var _sed = S._sopEd || null;
+        var _isCustom = !!CYCLE.sopProtocol;
+        var rows = '';
+        _proto.forEach(function(step, i){
+          if(_sed && _sed.idx === i){
+            rows += '<div style="background:#0a1e0a;border:1px solid #2d6a2d;border-radius:8px;padding:10px;margin-bottom:6px">'
+              +'<div style="display:flex;gap:6px;margin-bottom:6px">'
+              +'<div style="flex:0 0 80px"><label style="font-size:10px;color:#88aa88">J+ (jour)</label>'
+              +'<input type="number" min="1" max="365" value="'+_sed.j+'" style="width:72px;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#C8A06A;font-size:13px;font-weight:700;padding:4px 6px" oninput="S._sopEd.j=parseInt(this.value)||1"></div>'
+              +'<div style="flex:1"><label style="font-size:10px;color:#88aa88">Type</label>'
+              +'<select style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:5px 6px" onchange="S._sopEd.type=this.value">'
+              +'<option value="sante"'+(_sed.type==='sante'?' selected':'')+'>🩺 Saisie Santé</option>'
+              +'<option value="pesee"'+(_sed.type==='pesee'?' selected':'')+'>⚖️ Pesée</option>'
+              +'</select></div>'
+              +'</div>'
+              +'<div style="margin-bottom:6px"><label style="font-size:10px;color:#88aa88">Libellé</label>'
+              +'<input type="text" value="'+(_sed.label||'').replace(/"/g,'&quot;')+'" placeholder="Ex: Déparasitage interne" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:4px 6px" oninput="S._sopEd.label=this.value"></div>'
+              +'<div style="margin-bottom:8px"><label style="font-size:10px;color:#88aa88">Note protocole (optional)</label>'
+              +'<input type="text" value="'+(_sed.note||'').replace(/"/g,'&quot;')+'" placeholder="Ex: Ivermectine PO" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#556655;font-size:11px;padding:4px 6px" oninput="S._sopEd.note=this.value"></div>'
+              +'<div style="display:flex;gap:6px">'
+              +'<button onclick="_sopSave(false)" style="flex:1;background:#2d6a2d;color:#fff;border:none;border-radius:6px;padding:7px;font-size:12px;font-weight:700;cursor:pointer">✓ Valider</button>'
+              +'<button onclick="S._sopEd=null;r()" style="flex:1;background:#2a2a2a;color:#aaa;border:none;border-radius:6px;padding:7px;font-size:12px;cursor:pointer">✗ Annuler</button>'
+              +'</div>'
+              +'</div>';
+          } else {
+            rows += '<div style="display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid #0f1f0f">'
+              +'<div style="font-size:11px;font-weight:800;color:#C8A06A;min-width:36px;flex-shrink:0">J+'+step.j+'</div>'
+              +'<div style="font-size:16px;width:22px;text-align:center;flex-shrink:0">'+step.ico+'</div>'
+              +'<div style="flex:1;min-width:0">'
+              +'<div style="font-size:12px;color:#ccc;font-weight:600">'+step.label+'</div>'
+              +(step.note?'<div style="font-size:10px;color:#445544">'+step.note+'</div>':'')
+              +'</div>'
+              +(!_ro?'<button onclick="_sopEdit('+i+')" style="background:none;border:1px solid #2a4a2a;border-radius:5px;color:#88aa88;font-size:12px;padding:3px 7px;cursor:pointer;flex-shrink:0">✏️</button>'
+                    +'<button onclick="_sopDel('+i+')" style="background:none;border:1px solid #3a1010;border-radius:5px;color:#aa4444;font-size:12px;padding:3px 7px;cursor:pointer;flex-shrink:0">🗑️</button>':'')
+              +'</div>';
+          }
+        });
+        // Ligne ajout
+        if(!_ro){
+          if(_sed && _sed.idx === -1){
+            rows += '<div style="background:#0a1e0a;border:1px solid #2d6a2d;border-radius:8px;padding:10px;margin-top:6px">'
+              +'<div style="font-size:11px;color:#88aa88;margin-bottom:8px;font-weight:700">➕ Nouvelle étape</div>'
+              +'<div style="display:flex;gap:6px;margin-bottom:6px">'
+              +'<div style="flex:0 0 80px"><label style="font-size:10px;color:#88aa88">J+ (jour)</label>'
+              +'<input type="number" min="1" max="365" value="'+(_sed.j||1)+'" style="width:72px;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#C8A06A;font-size:13px;font-weight:700;padding:4px 6px" oninput="S._sopEd.j=parseInt(this.value)||1"></div>'
+              +'<div style="flex:1"><label style="font-size:10px;color:#88aa88">Type</label>'
+              +'<select style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:5px 6px" onchange="S._sopEd.type=this.value">'
+              +'<option value="sante">🩺 Saisie Santé</option>'
+              +'<option value="pesee">⚖️ Pesée</option>'
+              +'</select></div>'
+              +'</div>'
+              +'<div style="margin-bottom:6px"><label style="font-size:10px;color:#88aa88">Libellé</label>'
+              +'<input type="text" placeholder="Ex: Déparasitage interne" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:4px 6px" oninput="S._sopEd.label=this.value"></div>'
+              +'<div style="margin-bottom:8px"><label style="font-size:10px;color:#88aa88">Note protocole (optionnel)</label>'
+              +'<input type="text" placeholder="Ex: Ivermectine PO" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#556655;font-size:11px;padding:4px 6px" oninput="S._sopEd.note=this.value"></div>'
+              +'<div style="display:flex;gap:6px">'
+              +'<button onclick="_sopSave(true)" style="flex:1;background:#2d6a2d;color:#fff;border:none;border-radius:6px;padding:7px;font-size:12px;font-weight:700;cursor:pointer">✓ Ajouter</button>'
+              +'<button onclick="S._sopEd=null;r()" style="flex:1;background:#2a2a2a;color:#aaa;border:none;border-radius:6px;padding:7px;font-size:12px;cursor:pointer">✗ Annuler</button>'
+              +'</div>'
+              +'</div>';
+          } else {
+            rows += '<button onclick="S._sopEd={idx:-1,j:30,type:\'sante\',label:\'\',note:\'\'};r()" style="width:100%;background:none;border:1px dashed #2a4a2a;border-radius:6px;color:#557755;font-size:12px;padding:7px;cursor:pointer;margin-top:6px">+ Ajouter une étape</button>';
+          }
+          rows += (_isCustom?'<button onclick="_sopReset()" style="width:100%;background:none;border:none;color:#554444;font-size:10px;margin-top:6px;cursor:pointer">↺ Réinitialiser au protocole standard</button>':'');
+        }
+        return '<div class="card">'
+          +'<div class="stitle">📅 Protocole SOP vétérinaire'+(_isCustom?' <span style="font-size:9px;background:#1a2e1a;color:#88aa88;padding:2px 6px;border-radius:8px;margin-left:4px">Personnalisé</span>':' <span style="font-size:9px;background:#1a1a2a;color:#6688aa;padding:2px 6px;border-radius:8px;margin-left:4px">Standard</span>')+'</div>'
+          +'<div style="font-size:10px;color:#445544;margin-bottom:10px">Les jours J+ sont calculés depuis la date de début de cycle. Modifiez selon votre contexte terrain (race, saison, disponibilité vétérinaire).</div>'
+          +rows
+          +'</div>';
+      })()
       +(S.msg?'<div class="msg '+(S.msg.startsWith('ok')?'ok':'err')+'">'+S.msg.slice(3)+'</div>':'')
       +(!_ro?'<button class="btn" style="width:100%;margin-top:4px" onclick="saveObjectifs()">💾 Enregistrer les objectifs</button>':'')
       +'<div style="font-size:10px;color:#445544;text-align:center;margin-top:6px">Persist\u00e9s dans Config_App \u2014 appliqu\u00e9s imm\u00e9diatement partout.</div>';
@@ -6709,17 +6822,7 @@ function viewMarche(){
     var _calDeb = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : null;
     var _ndCal = _nowDakar();
     var _calToday = new Date(_ndCal.year, _ndCal.month-1, _ndCal.day);
-    var _calProtocol = [
-      {j:7,   ico:'💊', label:'Déparasitage interne',            type:'sante', note:'Ivermectine ou Albendazole PO'},
-      {j:14,  ico:'🩺', label:'Contrôle stress de transit',      type:'sante', note:'Observation générale — appétit, selles, comportement'},
-      {j:30,  ico:'⚖️', label:'1ère pesée + bilan santé',        type:'pesee', note:'Peser chaque bête + noter état corporel'},
-      {j:60,  ico:'🪲', label:'Déparasitage externe',            type:'sante', note:'Bain ou pour-on contre tiques et mouches'},
-      {j:90,  ico:'⚖️', label:'2ème pesée — point mi-cycle',     type:'pesee', note:'Calcul GMQ intermédiaire + ajustement ration si besoin'},
-      {j:120, ico:'💉', label:'Rappel vaccin + traitement préventif', type:'sante', note:'FMD zones à risque + vitamines ADE'},
-      {j:150, ico:'⚖️', label:'3ème pesée',                      type:'pesee', note:'Vérifier les bêtes à risque stagnation'},
-      {j:180, ico:'💊', label:'Déparasitage interne (rappel)',    type:'sante', note:'2ème pass antiparasitaire interne'},
-      {j:210, ico:'📋', label:'Bilan pré-vente + pesée finale',  type:'pesee', note:'Évaluation état d\'engraissement + décision commerciale'}
-    ];
+    var _calProtocol = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
     var _calCards = _calProtocol.map(function(evt){
       if(!_calDeb){
         return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #1a2e1a">'
