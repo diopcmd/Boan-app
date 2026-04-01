@@ -398,7 +398,13 @@ var CYCLE = lsGet('cycle') || {
   betes: [],  // [{id, race, poidsEntree, dateIntro}]
   initialized: false,
   simCharges: {},  // charges simulateur persistantes
-  gonogo: {contrats:false, infra:false, assurance:false, securite:false}
+  gonogo: {contrats:false, infra:false, assurance:false, securite:false},
+  // Objectifs configurables par le fondateur (lu/écrit dans Config_App)
+  gmqCible:   1.0,  // seuil vert GMQ (kg/j)
+  gmqWarn:    0.8,  // seuil orange GMQ (kg/j)
+  poidsCible: 400,  // poids visé fin de cycle (kg/bête)
+  mixSon:     60,   // % son de blé dans la ration standard
+  mixTourteau: 40   // % tourteau arachide dans la ration standard
 };
 
 // Calcul semaine depuis date début
@@ -909,7 +915,8 @@ var S = {
 
 function fmt(n) { return new Intl.NumberFormat('fr-FR').format(Math.round(n)); }
 function gc(t,v) {
-  if(t==='gmq') return v>=1?'#4caf50':v>=0.8?'#ff9800':'#f44336';
+  var _gc = CYCLE.gmqCible||1, _gw = CYCLE.gmqWarn||0.8;
+  if(t==='gmq') return v>=_gc?'#4caf50':v>=_gw?'#ff9800':'#f44336';
   if(t==='stk') return v>=6?'#4caf50':v>=4?'#ff9800':'#f44336';
   if(t==='tr')  return v>=600000?'#4caf50':v>=400000?'#ff9800':'#f44336';
   return '#4caf50';
@@ -1256,6 +1263,12 @@ function loadLiveData() {
               if (key === 'lastBilanSem'  && val === '') CYCLE._lastBilanSem  = '';
               // dureeMois : Config_App est la source prioritaire (pas de race condition)
               if (key === 'dureeMois' && val && parseInt(val) > 0) CYCLE.dureeMois = parseInt(val);
+              // Objectifs configurables
+              if (key === 'gmqCible'   && val && parseFloat(val) > 0) CYCLE.gmqCible   = parseFloat(val);
+              if (key === 'gmqWarn'    && val && parseFloat(val) > 0) CYCLE.gmqWarn    = parseFloat(val);
+              if (key === 'poidsCible' && val && parseInt(val)   > 0) CYCLE.poidsCible = parseInt(val);
+              if (key === 'mixSon'     && val !== null) CYCLE.mixSon     = parseFloat(val) || 60;
+              if (key === 'mixTourteau'&& val !== null) CYCLE.mixTourteau= parseFloat(val) || 40;
               // cycleDebut dans Config_App = détection changement de cycle indépendante de Config_Cycle
               if (key === 'cycleDebut' && val && val.length && val !== CYCLE.dateDebut) {
                 HISTORY = []; lsSet('history', []);
@@ -1935,7 +1948,12 @@ function _syncConfigApp() {
       ['lastSanteDate', JSON.stringify(CYCLE._lastSanteDate  || '')],
       ['lastBilanSem',  JSON.stringify(CYCLE._lastBilanSem   || '')],
       ['dureeMois',     JSON.stringify(CYCLE.dureeMois       || 8)],
-      ['cycleDebut',    JSON.stringify(CYCLE.dateDebut       || '')] // clé comparée par les autres acteurs
+      ['cycleDebut',    JSON.stringify(CYCLE.dateDebut       || '')], // clé comparée par les autres acteurs
+      ['gmqCible',      JSON.stringify(CYCLE.gmqCible        || 1.0)],
+      ['gmqWarn',       JSON.stringify(CYCLE.gmqWarn         || 0.8)],
+      ['poidsCible',    JSON.stringify(CYCLE.poidsCible      || 400)],
+      ['mixSon',        JSON.stringify(CYCLE.mixSon          || 60)],
+      ['mixTourteau',   JSON.stringify(CYCLE.mixTourteau     || 40)]
     ];
     // Tenter création de l'onglet (ignorer l'erreur s'il existe déjà)
     var addUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + ':batchUpdate';
@@ -3236,7 +3254,7 @@ function exportKpiPDF(){
 
   var kpis = [
     ['Bêtes actives', MOCK.betes+' / '+(CYCLE.nbBetes||4), MOCK.betes>=(CYCLE.nbBetes||4)],
-    ['GMQ moyen', gmqL+' kg/j', gmqL>=1.0],
+    ['GMQ moyen', gmqL+' kg/j', gmqL>=(CYCLE.gmqCible||1)],
     ['Stock aliments', MOCK.stock+' semaines', MOCK.stock>=6],
     ['Trésorerie', Math.round(MOCK.treso/1000)+'k FCFA', MOCK.treso>=600000],
     ['Avancement cycle', pct+'% (Sem. '+sem+'/'+totalSemCycle+')', pct>=0],
@@ -3415,7 +3433,7 @@ function partagerKpiWhatsApp(){
     '📍 Cycle depuis le : '+debut,
     '─────────────────────',
     '🐮 Bêtes actives : *'+MOCK.betes+' / '+(CYCLE.nbBetes||4)+'*',
-    '📈 GMQ moyen : *'+gmqL+' kg/j*'+(gmqL>=1.0?' ✅':' ⚠️'),
+    '📈 GMQ moyen : *'+gmqL+' kg/j*'+(gmqL>=(CYCLE.gmqCible||1)?' ✅':' ⚠️'),
     '🌾 Stock aliments : *'+MOCK.stock+' sem.*'+(MOCK.stock>=6?' ✅':MOCK.stock>=4?' ⚠️':' 🔴'),
     '💰 Trésorerie : *'+Math.round(MOCK.treso/1000)+'k FCFA*'+(MOCK.treso>=600000?' ✅':' 🔴'),
     '─────────────────────',
@@ -4347,8 +4365,8 @@ function buildSidebar(){
         +'<div class="sb-section-title">Fiches cette semaine</div>'
         +daysHtml+'</div>'
         +'<div class="sb-card">'
-        +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val '+(((LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq))>=1?'kval-ok':'kval-warn')+'">'+((LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq))+' kg/j'+(LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?' <span style="font-size:10px;color:#4caf50">🟢 live</span>':'')+'</span></div>'
-        +'<div class="sb-row"><span class="sb-lbl">Objectif</span><span style="font-size:12px;color:'+_calSub+'">&ge; 1.0 kg/j</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val '+(((LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq))>=(CYCLE.gmqCible||1)?'kval-ok':'kval-warn')+'">'+((LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq))+' kg/j'+(LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?' <span style="font-size:10px;color:#4caf50">🟢 live</span>':'')+'</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">Objectif</span><span style="font-size:12px;color:'+_calSub+'">&ge; '+(CYCLE.gmqCible||1)+' kg/j</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Incidents</span><span class="sb-val '+(HISTORY.filter(function(h){var d=new Date(_monday.getTime());var end=new Date(_monday.getTime()+6*86400000);var p=h.date.split('/');if(p.length!==3)return false;var hd=new Date(p[2],p[1]-1,p[0]);return h.type==='inc'&&hd>=d&&hd<=end;}).length>0?'kval-warn':'kval-ok')+'">'+(HISTORY.filter(function(h){var d=new Date(_monday.getTime());var end=new Date(_monday.getTime()+6*86400000);var p=h.date.split('/');if(p.length!==3)return false;var hd=new Date(p[2],p[1]-1,p[0]);return h.type==='inc'&&hd>=d&&hd<=end;}).length)+' cette sem.</span></div>'
         +(function(){
           var _wkSat = new Date(_monday.getTime()+5*86400000);
@@ -4391,7 +4409,7 @@ function buildSidebar(){
       var _gmqSidebar = _gmqIds.length
         ? Math.round(_gmqIds.reduce(function(s,id){return s+_gmqByBete[id];},0)/_gmqIds.length*100)/100
         : MOCK.gmq;
-      var _gmqCl = _gmqSidebar>=1?'kval-ok':_gmqSidebar>=0.8?'kval-warn':'kval-crit';
+      var _gmqCl = _gmqSidebar>=(CYCLE.gmqCible||1)?'kval-ok':_gmqSidebar>=(CYCLE.gmqWarn||0.8)?'kval-warn':'kval-crit';
       body='<div class="sb-card">'
         +'<div class="sb-row"><span class="sb-lbl">GMQ moyen mensuel</span><span class="sb-val '+_gmqCl+'">'+_gmqSidebar+' kg/j <span style="color:'+_gmqTrendCol+';font-weight:700">'+_gmqTrend+'</span></span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Conso. aliments</span><span style="font-size:12px;color:'+_calData+'">~'+_consoMois+' kg/mois</span></div>'
@@ -4447,7 +4465,7 @@ function buildSidebar(){
       body='<div class="sb-card">'
         +'<div class="sb-row"><span class="sb-lbl">Trésorerie</span><span class="sb-val '+(MOCK.treso>=600000?'kval-ok':'kval-crit')+'">'+Math.round(MOCK.treso/1000)+'k FCFA</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Bêtes actives</span><span class="sb-val '+(MOCK.betes>=(CYCLE.nbBetes||4)?'kval-ok':MOCK.betes>0?'kval-warn':'kval-crit')+'">'+MOCK.betes+' / '+(CYCLE.nbBetes||4)+'</span></div>'
-        +'<div class="sb-row"><span class="sb-lbl">GMQ</span><span class="sb-val '+(MOCK.gmq>=1?'kval-ok':MOCK.gmq>=0.8?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">GMQ</span><span class="sb-val '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'kval-ok':MOCK.gmq>=(CYCLE.gmqWarn||0.8)?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
         +(function(){
           var td2=today();
           // fOk : vérifie HISTORY (Vague 2) OU Config_App.lastFicheDate (step1, instantané)
@@ -4507,7 +4525,7 @@ function buildSidebar(){
           }).length;
           return '<div class="sb-row"><span class="sb-lbl">Incidents cette semaine</span><span class="sb-val '+(nbInc>0?'kval-crit':'kval-ok')+'">'+nbInc+'</span></div>';
         })()
-        +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val '+(MOCK.gmq>=1?'kval-ok':MOCK.gmq>=0.8?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'kval-ok':MOCK.gmq>=(CYCLE.gmqWarn||0.8)?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Pesée à jour</span><span class="sb-val '+(joursSince('pesee')<=(CYCLE.peseeFreq||30)?'kval-ok':'kval-warn')+'">'+((function(){var j=joursSince('pesee');return j<999?('Il y a '+j+'j'):'Aucune';})())+'</span></div>'
         +(function(){
           var _n3=_nowDakar();
@@ -4587,7 +4605,7 @@ function buildSidebar(){
     if(SB.tab==='today'){
       body='<div class="sb-card">'
         +(function(){ var td2=today(); var ok=HISTORY.some(function(h){return (h.type==='fiche'||h.type==='pesee'||h.type==='sante'||h.type==='inc')&&h.date===td2;}); return '<div class="sb-row"><span class="sb-lbl">Données reçues</span><span class="'+(ok?'sb-ok':'sb-ko')+'">'+(ok?'✓ Reçues':'✗ En attente')+'</span></div>'; })()
-        +(function(){ var gmqOk=MOCK.gmq>=1.0; var stkOk=(MOCK.stock>0?MOCK.stock:calcStockLocal())>=6; var ok=gmqOk&&stkOk; return '<div class="sb-row"><span class="sb-lbl">KPI cycle</span><span class="sb-val '+(ok?'kval-ok':'kval-crit')+'">'+(ok?'✓ Conforme':'⚠ À revoir')+'</span></div>'; })()
+        +(function(){ var gmqOk=MOCK.gmq>=(CYCLE.gmqCible||1); var stkOk=(MOCK.stock>0?MOCK.stock:calcStockLocal())>=6; var ok=gmqOk&&stkOk; return '<div class="sb-row"><span class="sb-lbl">KPI cycle</span><span class="sb-val '+(ok?'kval-ok':'kval-crit')+'">'+(ok?'✓ Conforme':'⚠ À revoir')+'</span></div>'; })()
         +'</div>'
         +'<div class="sb-shortcut" onclick="chTab(\'livrables\');chSub(\'kpi\');closeSB()">'
         +'<div class="sb-shortcut-ico" style="background:#1a3a1a">📊</div>'
@@ -4595,7 +4613,7 @@ function buildSidebar(){
         +'</div>';
     } else {
       body='<div class="sb-card">'
-        +'<div class="sb-row"><span class="sb-lbl">GMQ moyen</span><span class="sb-val '+(MOCK.gmq>=1?'kval-ok':MOCK.gmq>=0.8?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">GMQ moyen</span><span class="sb-val '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'kval-ok':MOCK.gmq>=(CYCLE.gmqWarn||0.8)?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
         +(function(){ var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0; return '<div class="sb-row"><span class="sb-lbl">Mortalité</span><span class="sb-val '+(mort>8?'kval-crit':mort>0?'kval-warn':'kval-ok')+'">'+mort+'%</span></div>'; })()
         +(function(){ var nbSop=HISTORY.filter(function(h){return h.type==='sop';}).length; var sem=calcSemaine(); var joursTotal=Math.max(sem*7,1); var pct=Math.min(100,Math.round(nbSop/joursTotal*100*7)); return '<div class="sb-row"><span class="sb-lbl">Conformité SOP</span><span class="sb-val '+(pct>=80?'kval-ok':pct>=50?'kval-warn':'kval-crit')+'">'+pct+'%</span></div>'; })()+(function(){ var freq=CYCLE.peseeFreq||30; var _dernP=0; var hp=HISTORY.filter(function(h){return h.type==='pesee';}); if(hp.length){var p=hp[0].date.split('/');if(p.length===3)_dernP=(function(){var _nd=_nowDakar();return Math.round((new Date(_nd.year,_nd.month-1,_nd.day)-new Date(p[2],p[1]-1,p[0]))/86400000);})();} var pesOk=_dernP<=freq; return '<div class="sb-row"><span class="sb-lbl">Dernière pesée</span><span class="sb-val '+(pesOk?'kval-ok':'kval-crit')+'">'+(_dernP===0?'Aucune':_dernP+' jours')+'</span></div>'; })()
     }
@@ -4756,10 +4774,11 @@ function viewDash(){
   var _gmqDisplay = LIVE.loaded && LIVE.pesees && LIVE.pesees.length
     ? Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100
     : MOCK.gmq;
-  var gmqC=_gmqDisplay>=1?'kval-ok':_gmqDisplay>=0.8?'kval-warn':'kval-crit';
+  var _gc=CYCLE.gmqCible||1, _gw=CYCLE.gmqWarn||0.8;
+  var gmqC=_gmqDisplay>=_gc?'kval-ok':_gmqDisplay>=_gw?'kval-warn':'kval-crit';
   var stkC=MOCK.stock>=6?'kval-ok':MOCK.stock>=4?'kval-warn':'kval-crit';
   var trC =MOCK.treso>=600000?'kval-ok':MOCK.treso>=400000?'kval-warn':'kval-crit';
-  var gmqBg=_gmqDisplay>=1?'kcard-ok':_gmqDisplay>=0.8?'kcard-warn':'kcard-crit';
+  var gmqBg=_gmqDisplay>=_gc?'kcard-ok':_gmqDisplay>=_gw?'kcard-warn':'kcard-crit';
   var stkBg=MOCK.stock>=6?'kcard-ok':MOCK.stock>=4?'kcard-warn':'kcard-crit';
   var trBg =MOCK.treso>=600000?'kcard-ok':MOCK.treso>=400000?'kcard-warn':'kcard-crit';
   var _joursEcoules = Math.max(0, calcSemaine() * 7);
@@ -4889,14 +4908,14 @@ function viewDash(){
           if (lastWk < prevWk * 0.85) {
             return '<div class="al al-r">⚠️ GMQ en baisse — '+Math.round(lastWk*100)/100+' kg/j cette sem. vs '+Math.round(prevWk*100)/100+' kg/j sem. précédente — Vérifier alimentation</div>';
           }
-          if (lastWk >= 1.0) {
+          if (lastWk >= (CYCLE.gmqCible||1)) {
             return '<div class="al al-g">GMQ '+Math.round(lastWk*100)/100+' kg/j — au-dessus de la cible ✓</div>';
           }
-          return '<div class="al al-o">GMQ '+Math.round(lastWk*100)/100+' kg/j — en dessous de la cible (≥ 1.0)</div>';
+          return '<div class="al al-o">GMQ '+Math.round(lastWk*100)/100+' kg/j — en dessous de la cible (≥ '+(CYCLE.gmqCible||1)+')</div>';
         }
       }
       // Fallback MOCK
-      return '<div class="al '+(MOCK.gmq>=1?'al-g':MOCK.gmq>=0.8?'al-o':'al-r')+'">GMQ '+MOCK.gmq+' kg/j — '+(MOCK.gmq>=1?'au-dessus de la cible':'en dessous de la cible')+'</div>';
+      return '<div class="al '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'al-g':MOCK.gmq>=(CYCLE.gmqWarn||0.8)?'al-o':'al-r')+'">GMQ '+MOCK.gmq+' kg/j — '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'au-dessus de la cible':'en dessous de la cible')+'</div>';
     })()
 
     +(function(){
@@ -5249,10 +5268,10 @@ function viewSaisie(){
         +(gmqRT !== null
           ? '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.15)">'
             +'<span>GMQ calculé ('+gmqJours+' j)</span>'
-            +'<strong style="font-size:18px;color:'+(parseFloat(gmqRT)>=1?'#4caf50':parseFloat(gmqRT)>=0.7?'#ff9800':'#f44336')+'">'+gmqRT+' kg/j</strong>'
+            +'<strong style="font-size:18px;color:'+(parseFloat(gmqRT)>=(CYCLE.gmqCible||1)?'#4caf50':parseFloat(gmqRT)>=(CYCLE.gmqWarn||0.8)?'#ff9800':'#f44336')+'">'+gmqRT+' kg/j</strong>'
             +'</div>'
             +'<div style="font-size:11px;margin-top:4px;opacity:.8">'
-            +(parseFloat(gmqRT)>=1?'✅ Au-dessus de la cible (≥ 1.0 kg/j)':parseFloat(gmqRT)>=0.7?'⚠️ En dessous de la cible':'🔴 GMQ insuffisant — vérifier alimentation')
+            +(parseFloat(gmqRT)>=(CYCLE.gmqCible||1)?'✅ Au-dessus de la cible (≥ '+(CYCLE.gmqCible||1)+' kg/j)':parseFloat(gmqRT)>=(CYCLE.gmqWarn||0.8)?'⚠️ En dessous de la cible':'🔴 GMQ insuffisant — vérifier alimentation')
             +'</div>'
           : '')
         +'</div>' : '')
@@ -5328,8 +5347,30 @@ function viewSaisie(){
   return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+form+'</div>';
 }
 
+function saveObjectifs(){
+  var keys=[['gmqCible',CYCLE.gmqCible||1],['gmqWarn',CYCLE.gmqWarn||0.8],['poidsCible',CYCLE.poidsCible||400],['mixSon',CYCLE.mixSon||60],['mixTourteau',CYCLE.mixTourteau||40]];
+  var _sid=SID.fondateur||SID.fallou||SID.rga; if(!_sid) return;
+  // Lit Config_App pour trouver les lignes existantes puis les met à jour
+  readSheet(_sid,'Config_App!A1:B100').then(function(rows){
+    if(!rows) return;
+    var updates=[];
+    keys.forEach(function(kv){
+      var idx=-1;
+      rows.forEach(function(r,i){ if(r[0]===kv[0]) idx=i; });
+      var row=(idx>=0?idx+1:rows.length+1);
+      updates.push({row:row,key:kv[0],val:kv[1]});
+    });
+    // Écriture en batch — une ligne à la fois (pas de writeAll bulk pour Config_App)
+    updates.forEach(function(u){
+      writeSheet(_sid,'Config_App!A'+u.row+':B'+u.row,[[u.key,JSON.stringify(u.val)]]);
+    });
+    lsSet('cycle',CYCLE);
+  });
+}
 function viewLiv(){
+  var _canObj=(S.user==='fondateur'||S.user==='rga');
   var subs=[['treso','Trésorerie'],['kpi','KPI'],['betes','Bêtes'],['incidents','Incidents'],['gonogo','Go/No-Go']];
+  if(_canObj) subs.push(['objectifs','Objectifs']);
   var stabs=subs.map(function(s){return'<div class="stab '+(S.sub===s[0]?'on':'')+'" onclick="chSub(\''+s[0]+'\')">'+s[1]+'</div>';}).join('');
   var view='';
   if(S.sub==='treso'){
@@ -5583,7 +5624,7 @@ function viewLiv(){
       +'</div>';
 
     if (bete) {
-      var gmqCol = bete.gmq>=1?'#4caf50':bete.gmq>=0.7?'#ff9800':'#f44336';
+      var gmqCol = bete.gmq>=(CYCLE.gmqCible||1)?'#4caf50':bete.gmq>=(CYCLE.gmqWarn||0.8)?'#ff9800':'#f44336';
       view += '<div class="card">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
         +'<div><div style="font-size:16px;font-weight:800;color:#C8A06A">'+bete.id+'</div>'
@@ -5741,6 +5782,38 @@ function viewLiv(){
       +(allOk?'🟢 GO — Prêt pour le cycle suivant':score>=6?'🟡 PRESQUE — '+(8-score)+' condition(s) restante(s)':'🔴 NO-GO — '+(8-score)+' condition(s) manquante(s)')
       +'</div>'
       +(!canEdit?'<div style="font-size:11px;color:#445544;text-align:center;margin-top:6px">Modifiable par Fondateur et RGA uniquement</div>':'');
+  }
+  if(S.sub==='objectifs'){
+    var _ro=S.user!=='fondateur'&&S.user!=='rga';
+    function _objField(label,key,defVal,step,unit){
+      var v=CYCLE[key]!==undefined?CYCLE[key]:defVal;
+      return '<div class="sb-row" style="align-items:center;gap:8px;">'
+        +'<span class="sb-lbl" style="flex:1.4">'+label+'</span>'
+        +(_ro?('<span style="font-size:13px;font-weight:700;color:#C8A06A">'+v+(unit?' '+unit:'')+'</span>')
+            :('<span style="display:flex;align-items:center;gap:6px">'
+              +'<input type="number" inputmode="decimal" step="'+step+'" value="'+v+'"'
+              +' style="width:72px;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#C8A06A;font-size:13px;font-weight:700;padding:4px 6px;text-align:right"'
+              +' oninput="CYCLE.'+key+'=parseFloat(this.value)||'+defVal+';r()">'
+              +(unit?'<span style="font-size:11px;color:#88aa88">'+unit+'</span>':'')
+              +'</span>'))
+        +'</div>';
+    }
+    view='<div class="card">'
+      +'<div class="stitle">📈 Objectifs zootechniques</div>'
+      +_objField('GMQ cible (seuil vert)','gmqCible',1,0.05,'kg/j')
+      +_objField('GMQ alerte (seuil orange)','gmqWarn',0.8,0.05,'kg/j')
+      +_objField('Poids cible fin de cycle','poidsCible',400,5,'kg/bête')
+      +'<div style="font-size:10px;color:#445544;margin-top:8px;padding-top:8px;border-top:1px solid #1a2e1a">Utilisés pour la colorisation GMQ dans le dashboard, la sidebar et les rapports.</div>'
+      +'</div>'
+      +'<div class="card">'
+      +'<div class="stitle">🌾 Mix ration standard</div>'
+      +_objField('% Son de blé','mixSon',60,5,'%')
+      +_objField('% Tourteau arachide','mixTourteau',40,5,'%')
+      +'<div style="font-size:10px;color:#445544;margin:6px 0 0">Total : <span style="color:'+((CYCLE.mixSon||60)+(CYCLE.mixTourteau||40)===100?'#4caf50':'#f44336')+'">'+((CYCLE.mixSon||60)+(CYCLE.mixTourteau||40))+'%</span> (doit faire 100%)</div>'
+      +'<div style="font-size:10px;color:#445544;margin-top:4px">Utilisé pour estimer le coût ration dans les rapports aliments.</div>'
+      +'</div>'
+      +(!_ro?'<button class="btn" style="width:100%;margin-top:4px" onclick="saveObjectifs()">💾 Enregistrer les objectifs</button>':'')
+      +'<div style="font-size:10px;color:#445544;text-align:center;margin-top:6px">Les changements sont appliqués immédiatement et persistés dans Config_App.</div>';
   }
   return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+view+'</div>';
 }
