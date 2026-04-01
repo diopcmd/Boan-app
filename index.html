@@ -199,7 +199,10 @@ body.light .tab.on{color:#fff;border-bottom-color:#fff;background:rgba(45,106,45
 body.light .kcard,body.light .card,body.light .reco-card,body.light .mkt{background:#fff;border-color:#c8dcc8}
 body.light .kcard-warn{background:#fff8ee;border-color:#e8a840}
 body.light .kcard-crit{background:#fff0f0;border-color:#e84040}
-body.light input,body.light select,body.light textarea{background:#f8faf8;border-color:#b8ccb8;color:#1a2e1a}
+body.light input,body.light select,body.light textarea{background:#f8faf8 !important;border-color:#b8ccb8 !important;color:#1a2e1a !important}
+body.light div[style*="background:#0a150a"],body.light div[style*="background:#0a1a0a"],body.light div[style*="background:#111f11"],body.light div[style*="background:#0d1f0d"],body.light div[style*="background:#0f2010"],body.light tr[style*="background:#0a150a"]{background:#f0f5f0 !important}
+body.light div[style*="background:#1a2e1a"],body.light div[style*="background:#162516"]{background:#f0f5f0 !important}
+body.light div[style*="background:#0a150a"] *,body.light div[style*="background:#0a1a0a"] *,body.light div[style*="background:#111f11"] *,body.light div[style*="background:#1a2e1a"] *{color:#1a2e1a !important}
 body.light .stitle{color:#2d6a2d}body.light label{color:#557755}
 body.light .lbg{background:#f0f5f0}
 body.light .lcard{background:#fff;border-color:#c8dcc8}
@@ -5392,6 +5395,7 @@ function _sopEdit(i){
 function _sopDel(i){
   if(!CYCLE.sopProtocol) CYCLE.sopProtocol = SOP_PROTOCOL_DEFAULT.map(function(e){return {j:e.j,ico:e.ico,label:e.label,type:e.type,note:e.note};});
   CYCLE.sopProtocol.splice(i,1);
+  lsSet('cycle', CYCLE);
   S._sopEd = null; r();
 }
 function _sopSave(isNew){
@@ -5402,11 +5406,14 @@ function _sopSave(isNew){
   if(isNew) CYCLE.sopProtocol.push(entry);
   else CYCLE.sopProtocol[S._sopEd.idx] = entry;
   CYCLE.sopProtocol.sort(function(a,b){return a.j-b.j;});
+  lsSet('cycle', CYCLE);
   S._sopEd = null; r();
 }
 function _sopReset(){
   if(!confirm('Réinitialiser le protocole SOP au standard ?')) return;
-  CYCLE.sopProtocol = null; S._sopEd = null; r();
+  CYCLE.sopProtocol = null;
+  lsSet('cycle', CYCLE);
+  S._sopEd = null; r();
 }
 function saveObjectifs(){
   var _sid=SID.fondateur||SID.fallou||SID.rga; if(!_sid){ alert('SID non configuré'); return; }
