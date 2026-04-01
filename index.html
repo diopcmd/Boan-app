@@ -1243,6 +1243,8 @@ function loadLiveData() {
           // Détection changement de cycle — wipe immédiat sur l'appareil des autres acteurs
           var _prevDateDebut = CYCLE.dateDebut;
           Object.assign(CYCLE, updates);
+          // Toujours persister après sync Sheets — fix: sans ça le cache vide ne se repeuple jamais
+          lsSet('cycle', CYCLE);
           if (updates.dateDebut && _prevDateDebut && updates.dateDebut !== _prevDateDebut) {
             // Nouveau cycle détecté par un acteur non-fondateur (ou fondateur après sync)
             HISTORY = []; lsSet('history', []);
@@ -1253,7 +1255,7 @@ function loadLiveData() {
             CYCLE._lastPeseeDate=''; CYCLE._lastIncDate=''; CYCLE._lastSanteDate='';
             CYCLE._lastBilanSem=''; MOCK.incidents=0; MOCK.stock=0;
             STOCK_MVTS=[]; saveMvts();
-            lsSet('cycle', CYCLE);
+            lsSet('cycle', CYCLE); // re-save avec les champs vidés
           }
         }
 
