@@ -11,7 +11,18 @@ export default async function handler(req, res) {
     fallou:    { name:'Commerciale',    pwd: process.env.PWD_FALLOU,    tabs:['dashboard','marche'],                      sid: process.env.SID_FALLOU    },
   };
 
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // R-03 : restreindre CORS au domaine Vercel de production + localhost dev
+  const allowedOrigins = [
+    'https://boan-app-ur3x.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:5000'
+  ];
+  const reqOrigin = req.headers.origin || '';
+  if (reqOrigin && !allowedOrigins.includes(reqOrigin)) {
+    return res.status(403).json({ ok: false, error: 'Origin non autorisé' });
+  }
+  res.setHeader('Access-Control-Allow-Origin', reqOrigin || 'https://boan-app-ur3x.vercel.app');
+  res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -67,7 +78,15 @@ export default async function handler(req, res) {
       return res.status(500).json({ ok:false, error: 'Config serveur manquante — variables manquantes : PWD_' + (missing.join(', PWD_') || '?') });
     }
 
-    if (password !== (expectedPwd || user.pwd)) {
+    // R-02 : comparaison en temps constant (protection timing attack)
+    const expected = expectedPwd || user.pwd;
+    const b1 = Buffer.from(String(password));
+    const b2 = Buffer.from(String(expected));
+    const maxLen = Math.max(b1.length, b2.length);
+    const padded1 = Buffer.concat([b1, Buffer.alloc(maxLen - b1.length)]);
+    const padded2 = Buffer.concat([b2, Buffer.alloc(maxLen - b2.length)]);
+    const pwdMatch = timingSafeEqual(padded1, padded2) && b1.length === b2.length;
+    if (!pwdMatch) {
       return res.status(401).json({ ok:false, error: 'Mot de passe incorrect' });
     }
 

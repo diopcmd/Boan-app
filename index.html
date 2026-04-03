@@ -440,18 +440,24 @@ var CYCLE = lsGet('cycle') || {
 
 // Protocole SOP vétérinaire standard — utilisé si CYCLE.sopProtocol === null
 var SOP_PROTOCOL_DEFAULT = [
+  {j:1,   ico:'\ud83d\udc89', label:'Vitamine AD3E — intégration',      type:'sante', note:'Injection IM le jour d\'arrivée — renforce immunité + réduit stress de transit'},
   {j:7,   ico:'\ud83d\udc8a', label:'Déparasitage interne',             type:'sante', note:'Ivermectine ou Albendazole PO'},
   {j:14,  ico:'\ud83e\ude7a', label:'Contrôle stress de transit',       type:'sante', note:'Observation générale — appétit, selles, comportement'},
-  {j:30,  ico:'\u2696\ufe0f', label:'1ère pesée + bilan santé',         type:'pesee', note:'Peser chaque bête + noter état corporel'},
+  {j:30,  ico:'\u2696\ufe0f', label:'1ère pesée + bilan santé',         type:'pesee', note:'Peser chaque bête + noter état corporel + BCS'},
+  {j:45,  ico:'\ud83d\udc89', label:'Vaccination PPCB (1ère dose)',     type:'sante', note:'Péripneumonie Contagieuse Bovine — obligatoire Sénégal. Contacter vétérinaire agréé'},
   {j:60,  ico:'\ud83e\udeb2', label:'Déparasitage externe',             type:'sante', note:'Bain ou pour-on contre tiques et mouches'},
   {j:90,  ico:'\u2696\ufe0f', label:'2ème pesée — point mi-cycle',      type:'pesee', note:'Calcul GMQ intermédiaire + ajustement ration si besoin'},
-  {j:120, ico:'\ud83d\udc89', label:'Rappel vaccin + traitement préventif', type:'sante', note:'FMD zones à risque + vitamines ADE'},
+  {j:120, ico:'\ud83d\udc89', label:'Rappel vaccin PPCB + vitamines',   type:'sante', note:'PPCB 2ème dose + vitamines AD3E rappel + FMD zones à risque'},
   {j:150, ico:'\u2696\ufe0f', label:'3ème pesée',                       type:'pesee', note:'Vérifier les bêtes à risque stagnation'},
   {j:180, ico:'\ud83d\udc8a', label:'Déparasitage interne (rappel)',     type:'sante', note:'2ème pass antiparasitaire interne'},
   {j:210, ico:'\ud83d\udccb', label:'Bilan pré-vente + pesée finale',   type:'pesee', note:'Évaluation état d\'engraissement + décision commerciale'}
 ];
 
 // Calcul semaine depuis date début
+// Libellé adaptatif GMQ : "Gain inter-pesée moyen" si peseeFreq > 7 jours, sinon "GMQ moyen"
+function _gmqLabel() {
+  return (CYCLE.peseeFreq || 7) > 7 ? 'Gain inter-pesée moy.' : 'GMQ moyen';
+}
 function calcSemaine() {
   if (!CYCLE.dateDebut) return MOCK.sem;
   var debut = new Date(CYCLE.dateDebut);
@@ -486,11 +492,25 @@ function rebuildBeteList() {
   if(!dl){ dl=document.createElement('datalist'); dl.id='bete-dl-global'; document.body.appendChild(dl); }
   dl.innerHTML = beteIds.map(function(id){ return '<option value="'+id+'">'; }).join('');
 }
+// Affecte en toute sécurité une valeur à un chemin d'état de la forme "S.fsa.id"
+// sans passer inp.value dans eval (protection XSS client)
+function _setPath(path, val) {
+  try {
+    var parts = path.split('.');
+    var obj = window;
+    for (var i = 0; i < parts.length - 1; i++) {
+      if (obj == null || typeof obj !== 'object') return;
+      obj = obj[parts[i]];
+    }
+    if (obj != null) obj[parts[parts.length - 1]] = val;
+  } catch(e) {}
+}
 function beteInputHandler(inp) {
   var key    = inp.getAttribute('data-statekey');
   var dropId = inp.getAttribute('data-dropid');
   var extra  = inp.getAttribute('data-extra')||'';
-  try{ eval(extra+key+'=inp.value'); } catch(e){}
+  if (extra) { try { eval(extra); } catch(e) {} }  // extra = code template développeur
+  _setPath(key, inp.value);                         // safe — inp.value jamais dans eval
   rebuildBeteList();
   var drop = document.getElementById(dropId);
   if(!drop) return;
@@ -523,7 +543,8 @@ function selectBeteId(el) {
   var extra = el.getAttribute('data-extra') || '';
   var inp   = document.getElementById(inpId);
   if(inp) inp.value = id;
-  try { eval(extra + key + "='" + id.replace(/'/g,"\\'") + "'"); } catch(e){}
+  if (extra) { try { eval(extra); } catch(e) {} }  // extra = code template développeur
+  _setPath(key, id);                                // safe — id jamais dans eval
   var drop  = document.getElementById(dropId);
   if(drop) drop.style.display = 'none';
   r();
@@ -616,14 +637,14 @@ function stockSyntheseHtml(compact) {
     +'<td style="padding:6px 8px;text-align:right;color:#f44336;font-weight:700">-'+totalC+' kg</td>'
     +'<td style="padding:6px 8px;text-align:right;color:'+(totalNet>=0?'#C8A06A':'#f44336')+';font-weight:700">'+(totalNet>=0?'+':'')+totalNet+' kg</td>'
     +'</tr>';
-  return '<table style="width:100%;border-collapse:collapse">'
+  return '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
     +'<thead><tr style="background:#0f200f">'
     +'<th style="padding:6px 8px;text-align:left;font-size:11px;color:#88aa88;font-weight:600">Aliment</th>'
     +'<th style="padding:6px 8px;text-align:right;font-size:11px;color:#4caf50;font-weight:600">Ajouté</th>'
     +'<th style="padding:6px 8px;text-align:right;font-size:11px;color:#f44336;font-weight:600">Consommé</th>'
     +'<th style="padding:6px 8px;text-align:right;font-size:11px;color:#C8A06A;font-weight:600">Net</th>'
     +'</tr></thead>'
-    +'<tbody>'+rows+totalRow+'</tbody></table>';
+    +'<tbody>'+rows+totalRow+'</tbody></table></div>';
 }
 
 function addHistory(type, label, meta) {
@@ -775,7 +796,7 @@ function resetInc() {
 }
 function resetSante() {
   var td = todayISO();
-  S.fsa = {date:td,id:'',sym:'',tra:'',cout:'',res:'',dec:''};
+  S.fsa = {date:td,id:'',sym:'',tra:'',cout:'',res:'',dec:'',bcs:'',muq:''};
   r();
 }
 function resetStock() {
@@ -944,11 +965,11 @@ var S = {
   fst:{date:'',mvts:[],stockInput:'',stockKg:'',rat:''},
   fin:{date:'',id:'',type:'',grav:'1',desc:'',act:'',clos:''},
   fp:{date:'',id:'',race:'',raceCustom:'',poids:'',prev:'',datePrev:'',_autoFilled:false,_autoFilledId:''},
-  fsa:{date:'',id:'',sym:'',tra:'',cout:'',res:'',dec:''},
+  fsa:{date:'',id:'',sym:'',tra:'',cout:'',res:'',dec:'',bcs:'',muq:''},
   fb:{sem:'',nb:'',nou:'',stk:'',inc:'',poi:'',msg:''},
   fm:{date:'',foi:'Thiès',foiCustom:'',bas:'',moy:'',haut:''},
   falim:{date:'',type:'',prix:''},
-  sn:null, sp:null, spx:null, sveau:null, salim:180000, svet:20000, ssec:50000, simpMode:'pct', simpPct:5, simpFix:100000,
+  sn:null, sp:null, spx:null, sveau:null, salim:180000, svet:20000, ssec:50000, seau:5000, smdo:0, simpMode:'pct', simpPct:5, simpFix:100000,
   _resetPwdOpen:false, _resetPwd:'', _resetPwdError:'', _resetGoCheck:false,
   _pwdMgrOpen:false, _pwdMgrStep:'auth', _pwdMgrError:'', _pwdMgrSuccess:'',
   _pwdMgrCurrent:'', _pwdMgrRole:'', _pwdMgrNew:'', _pwdMgrConfirm:'', _pwdMgrNewLogin:'',
@@ -1897,7 +1918,7 @@ function _submitActual(type) {
     .then(function(res){if(res.ok)return kpiAppend([td,'','','','','',f.poids,'','','','']);return res;});
   } else if(type==='sante'){
     var f=S.fsa; var td=isoToFr(f.date);
-    p=writeAll([SID.gerant,SID.fondateur,SID.rga],'Sante_Mortalite!A:G',[td,f.id,f.sym,f.tra,f.cout,f.res,f.dec])
+    p=writeAll([SID.gerant,SID.fondateur,SID.rga],'Sante_Mortalite!A:I',[td,f.id,f.sym,f.tra,f.cout,f.res,f.dec,f.bcs||'',f.muq||''])
     .then(function(res){if(res.ok&&f.dec==='OUI')return kpiAppend([td,'DECES','','','','','','',1,'','APPELER FONDATEUR']);return res;});
   } else if(type==='bilan'){
     var f=S.fb;
@@ -2468,7 +2489,7 @@ function pageModal(){
       +'<div class="frow">'+'<div class="fg"><label>Durée du cycle (mois)</label><input type="number" inputmode="decimal" min="1" max="24" value="'+(MODAL.data.dureeMois||8)+'" oninput="MODAL.data.dureeMois=isNaN(parseInt(this.value))?MODAL.data.dureeMois:parseInt(this.value)"></div>'+'<div class="fg"><label>Fréquence pesée (jours)</label><select onchange="MODAL.data.peseeFreq=parseInt(this.value)">'+[7,14,21,30].map(function(v){return '<option value="'+v+'"'+((MODAL.data.peseeFreq||30)===v?' selected':'')+'>'+v+' j</option>';}).join('')+'</select></div>'+'</div>'+'<div class="fg"><label>Nom du responsable à alerter</label><input placeholder="Ex: Cheikh, Moussa..." value="'+(MODAL.data.contactUrgence||'Direction')+'" oninput="MODAL.data.contactUrgence=this.value"></div>'
       +'<div class="frow">'
       +'<div class="fg"><label>Race</label><select onchange="MODAL.data.race=this.value"><option'+((!MODAL.data.race||MODAL.data.race==='Djakoré')?' selected':'')+'>Djakoré</option><option'+(MODAL.data.race==='Gobra'?' selected':'')+'>Gobra</option></select></div>'
-      +'<div class="fg"><label>Ration/j (kg/bête)</label><input type="number" inputmode="decimal" value="'+(MODAL.data.ration||12)+'" oninput="MODAL.data.ration=isNaN(parseFloat(this.value))?MODAL.data.ration:parseFloat(this.value)"></div>'+(function(){
+      +'<div class="fg"><label>Ration/j (kg/bête, aliment brut)</label><input type="number" inputmode="decimal" value="'+(MODAL.data.ration||12)+'" oninput="MODAL.data.ration=isNaN(parseFloat(this.value))?MODAL.data.ration:parseFloat(this.value)"></div>'+(function(){
   if (!MODAL.data.stockLines) MODAL.data.stockLines = [];
   var alims=['Fane arachide','Son de blé','Mélasse','Tourteau coton','Natite','Mélange'];
   // Injecter datalist dans body
@@ -3298,7 +3319,7 @@ function exportKpiPDF(){
     ['Nombre de bêtes', (CYCLE.nbBetes||4)+' têtes'],
     ['Race', CYCLE.race||'Djakoré'],
     ['Foirail', CYCLE.foirail||'Thiès'],
-    ['Ration / j', (CYCLE.ration||12)+' kg/bête'],
+    ['Ration / j (brut)', (CYCLE.ration||12)+' kg/bête'],
     ['Capital investi', fmt(CYCLE.capital||1450000)+' FCFA'],
     ['Objectif prix', fmt(CYCLE.objectifPrix||2000)+' FCFA/kg'],
     ['Vétérinaire', CYCLE.veterinaire||'—'],
@@ -3327,7 +3348,7 @@ function exportKpiPDF(){
 
   var kpis = [
     ['Bêtes actives', MOCK.betes+' / '+(CYCLE.nbBetes||4), MOCK.betes>=(CYCLE.nbBetes||4)],
-    ['GMQ moyen', gmqL+' kg/j', gmqL>=(CYCLE.gmqCible||1)],
+    [_gmqLabel(), gmqL+' kg/j', gmqL>=(CYCLE.gmqCible||1)],
     ['Stock aliments', MOCK.stock+' semaines', MOCK.stock>=6],
     ['Trésorerie', Math.round(MOCK.treso/1000)+'k FCFA', MOCK.treso>=600000],
     ['Avancement cycle', pct+'% (Sem. '+sem+'/'+totalSemCycle+')', pct>=0],
@@ -4486,7 +4507,7 @@ function buildSidebar(){
         : MOCK.gmq;
       var _gmqCl = _gmqSidebar>=(CYCLE.gmqCible||1)?'kval-ok':_gmqSidebar>=(CYCLE.gmqWarn||0.8)?'kval-warn':'kval-crit';
       body='<div class="sb-card">'
-        +'<div class="sb-row"><span class="sb-lbl">GMQ moyen mensuel</span><span class="sb-val '+_gmqCl+'">'+_gmqSidebar+' kg/j <span style="color:'+_gmqTrendCol+';font-weight:700">'+_gmqTrend+'</span></span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">'+_gmqLabel()+' mensuel</span><span class="sb-val '+_gmqCl+'">'+_gmqSidebar+' kg/j <span style="color:'+_gmqTrendCol+';font-weight:700">'+_gmqTrend+'</span></span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Conso. aliments</span><span style="font-size:12px;color:'+_calData+'">~'+_consoMois+' kg/mois</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Budget santé/mois</span><span style="font-size:12px;color:'+_calData+'">~'+fmt(_coutVeto)+' FCFA</span></div>'
         +(function(){
@@ -4688,7 +4709,7 @@ function buildSidebar(){
         +'</div>';
     } else {
       body='<div class="sb-card">'
-        +'<div class="sb-row"><span class="sb-lbl">GMQ moyen</span><span class="sb-val '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'kval-ok':MOCK.gmq>=(CYCLE.gmqWarn||0.8)?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">'+_gmqLabel()+'</span><span class="sb-val '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'kval-ok':MOCK.gmq>=(CYCLE.gmqWarn||0.8)?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
         +(function(){ var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0; return '<div class="sb-row"><span class="sb-lbl">Mortalité</span><span class="sb-val '+(mort>8?'kval-crit':mort>0?'kval-warn':'kval-ok')+'">'+mort+'%</span></div>'; })()
         +(function(){ var nbSop=HISTORY.filter(function(h){return h.type==='sop';}).length; var sem=calcSemaine(); var joursTotal=Math.max(sem*7,1); var pct=Math.min(100,Math.round(nbSop/joursTotal*100*7)); return '<div class="sb-row"><span class="sb-lbl">Conformité SOP</span><span class="sb-val '+(pct>=80?'kval-ok':pct>=50?'kval-warn':'kval-crit')+'">'+pct+'%</span></div>'; })()+(function(){ var freq=CYCLE.peseeFreq||30; var _dernP=0; var hp=HISTORY.filter(function(h){return h.type==='pesee';}); if(hp.length){var p=hp[0].date.split('/');if(p.length===3)_dernP=(function(){var _nd=_nowDakar();return Math.round((new Date(_nd.year,_nd.month-1,_nd.day)-new Date(p[2],p[1]-1,p[0]))/86400000);})();} var pesOk=_dernP<=freq; return '<div class="sb-row"><span class="sb-lbl">Dernière pesée</span><span class="sb-val '+(pesOk?'kval-ok':'kval-crit')+'">'+(_dernP===0?'Aucune':_dernP+' jours')+'</span></div>'; })()
     }
@@ -4785,6 +4806,30 @@ function animateCounters() {
 }
 
 // === Simulateur — persistance des charges dans CYCLE.simCharges (localStorage + Sheets) ===
+// Calcule le prix seuil de rentabilité depuis CYCLE.simCharges (utilisable hors simulateur)
+function _calcPxSeuil() {
+  var sc = CYCLE.simCharges || {};
+  var nb  = sc.sn  !== undefined ? sc.sn  : (CYCLE.nbBetes || 4);
+  var sp  = sc.sp  !== undefined ? sc.sp  : (CYCLE.poidsDepart ? Math.round(CYCLE.poidsDepart * 1.5) : 420);
+  if (nb <= 0 || sp <= 0) return 0;
+  var pv  = sc.sveau  !== undefined ? sc.sveau  : (CYCLE.capital && nb ? Math.round(CYCLE.capital / nb) : 450000);
+  var al  = sc.salim  !== undefined ? sc.salim  : 180000;
+  var vt  = sc.svet   !== undefined ? sc.svet   : 20000;
+  var sec = sc.ssec   !== undefined ? sc.ssec   : 50000;
+  var tr  = sc.strans !== undefined ? sc.strans : 0;
+  var eau = sc.seau   !== undefined ? sc.seau   : 5000;
+  var mdo = sc.smdo   !== undefined ? sc.smdo   : 0;
+  var cm  = CYCLE.dureeMois || 8;
+  var comm = CYCLE.commission || 2;
+  var cBase = nb * pv + al * cm + nb * vt + sec * cm + eau * cm + mdo * cm;
+  var iMode = sc.simpMode || 'pct';
+  var iPct  = sc.simpPct !== undefined ? sc.simpPct : 5;
+  var iFix  = sc.simpFix !== undefined ? sc.simpFix : 100000;
+  var cImprev = iMode === 'pct' ? Math.round(cBase * iPct / 100) : iFix;
+  var cTotal  = cBase + cImprev + tr;
+  if (comm >= 100) return 0;
+  return Math.ceil(cTotal / (nb * sp * (1 - comm / 100)));
+}
 function _simSet(key, val) {
   S[key] = val;
   var sc = CYCLE.simCharges || {};
@@ -4803,12 +4848,14 @@ function _calcDepSim() {
   var simA = sc.salim   !== undefined ? sc.salim   : 180000;
   var simW = sc.svet    !== undefined ? sc.svet    : 20000;
   var simG = sc.ssec    !== undefined ? sc.ssec    : 50000;
-  var simT = sc.strans  !== undefined ? sc.strans  : 0;   // transport one-shot
+  var simE = sc.seau    !== undefined ? sc.seau    : 5000;   // eau mensuelle
+  var simM = sc.smdo    !== undefined ? sc.smdo    : 0;      // main d'œuvre mensuelle
+  var simT = sc.strans  !== undefined ? sc.strans  : 0;      // transport one-shot
   var iMode= sc.simpMode || 'pct';
   var iPct = sc.simpPct !== undefined ? sc.simpPct : 5;
   var iFix = sc.simpFix !== undefined ? sc.simpFix : 100000;
   var cVeau   = nb * simV;
-  var cRec    = simA * cm + nb * simW + simG * cm;
+  var cRec    = simA * cm + nb * simW + simG * cm + simE * cm + simM * cm;
   var cBase   = cVeau + cRec;
   var cImprev = iMode === 'pct' ? Math.round(cBase * iPct / 100) : iFix;
   var cRecurr = cRec + cImprev;
@@ -5457,6 +5504,23 @@ function viewSaisie(){
       +fl('Symptôme','<input placeholder=" " value="'+f.sym+'" oninput="S.fsa.sym=this.value">',f.sym)
       +fl('Traitement','<input placeholder=" " value="'+f.tra+'" oninput="S.fsa.tra=this.value">',f.tra)
       +'<div class="frow">'
+      +'<div class="fg"><label>BCS (état corporel 1–5)</label><select onchange="S.fsa.bcs=this.value">'
+      +'<option value="">—</option>'
+      +'<option'+(f.bcs==='1'?' selected':'')+' value="1">1 — Émacié</option>'
+      +'<option'+(f.bcs==='2'?' selected':'')+' value="2">2 — Maigre</option>'
+      +'<option'+(f.bcs==='3'?' selected':'')+' value="3">3 — Correct</option>'
+      +'<option'+(f.bcs==='4'?' selected':'')+' value="4">4 — Bon</option>'
+      +'<option'+(f.bcs==='5'?' selected':'')+' value="5">5 — Obèse</option>'
+      +'</select></div>'
+      +'<div class="fg"><label>Muqueuse</label><select onchange="S.fsa.muq=this.value">'
+      +'<option value="">—</option>'
+      +'<option'+(f.muq==='rose'?' selected':'')+' value="rose">Rose (normal)</option>'
+      +'<option'+(f.muq==='pale'?' selected':'')+' value="pale">Pâle (anémie ?)</option>'
+      +'<option'+(f.muq==='jaune'?' selected':'')+' value="jaune">Jaune (ictère ?)</option>'
+      +'<option'+(f.muq==='rouge'?' selected':'')+' value="rouge">Rouge (inflammation ?)</option>'
+      +'</select></div>'
+      +'</div>'
+      +'<div class="frow">'
       +fl('Coût (FCFA)','<input type="number" inputmode="decimal" placeholder=" " value="'+f.cout+'" oninput="S.fsa.cout=this.value">',f.cout)
       +'<div class="fg"><label>Résultat</label><select onchange="S.fsa.res=this.value"><option'+((!f.res||f.res==="Guéri")?" selected":"")+'>Guéri</option><option'+(f.res==="En cours"?" selected":"")+'>En cours</option><option'+(f.res==="Non gueri"?" selected":"")+'>Non gueri</option></select></div>'
       +'</div>'
@@ -5502,7 +5566,22 @@ function viewSaisie(){
           ? '<div class="al al-g" style="margin-bottom:8px">📊 '+_pw.length+' pesée(s) cette semaine'+(MOCK.gmq?' — GMQ moy. : <strong>'+MOCK.gmq+' kg/j</strong>'+(LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?' 🟢':' ⏳'):'')+'</div>'
           : '<div class="al al-o" style="margin-bottom:8px">⚠️ Aucune pesée cette semaine — penser à peser les bêtes</div>';
       })() : '')
-      +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'bilan\')">Envoyer le bilan</button>'+msgHtml()+'</div>';
+      +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'bilan\')">Envoyer le bilan</button>'
+      +'<button type="button" onclick="(function(){'
+      +  'var t=\'📊 Bilan Semaine \'+S.fb.sem+'
+      +  '\' — \'+today()+'
+      +  '\'\\nBêtes actives : \'+S.fb.nb+'
+      +  '\'\\nTous nourris : \'+(S.fb.nou||\'-\')+'
+      +  '\'\\nStock aliments : \'+(S.fb.stk||\'-\')+\' semaines\'+'
+      +  '\'\\nIncidents : \'+(S.fb.inc||\'-\')+'
+      +  '\'\\nPoids vérifié : \'+(S.fb.poi||\'-\')+'
+      +  '\'\\nGMQ : \'+MOCK.gmq+\' kg/j\'+'
+      +  '\'\\nMessage : \'+(S.fb.msg||\'-\')+\'\\n— BOANR\';'
+      +  'if(navigator.share){navigator.share({title:\'Bilan semaine \'+S.fb.sem,text:t}).catch(function(){});}'
+      +  'else{var ta=document.createElement(\'textarea\');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand(\'copy\');document.body.removeChild(ta);'
+      +  'S.msg=\'ok:Bilan copié dans le presse-papiers\';r();}'
+      +'})()" style="background:#1a2e3a;border:1px solid #2a4e5a;color:#88ccdd;width:100%;margin-top:8px">📤 Partager le bilan (WhatsApp / SMS)</button>'
+      +msgHtml()+'</div>';
   } else if(S.sub==='protocole'){
     var _pdProto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
     var _pdDeb   = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : null;
@@ -6503,9 +6582,27 @@ function viewMarche(){
           +'</div>';
       }).join('') : '';
 
-    var _prixAlertBanner = (prixData.length && CYCLE.objectifPrix && _maxEntry && _maxEntry.moy && _maxEntry.moy < CYCLE.objectifPrix)
-      ? '<div style="background:#2e1500;border:1px solid #8a4400;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#ff9800">⚠️ Prix marché ('+fmt(Math.round(_maxEntry.moy))+' FCFA/kg) inférieur à l\'objectif ('+fmt(CYCLE.objectifPrix)+' FCFA/kg) — prudence avant vente.</div>'
-      : '';
+    var _prixAlertBanner = (function() {
+      var _banners = '';
+      // R-12 : saisonnalité foirail — alertes contextuelles selon le mois
+      var _ndMois = _nowDakar().month; // 1-12
+      if (_ndMois >= 10 || _ndMois <= 2) {
+        _banners += '<div style="background:#1a2e0a;border:1px solid #4a6a0a;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#8fbc3a">📅 <strong>Saison haute foirail</strong> (Octobre–Février) — les prix sont généralement au pic. Moment favorable pour conclure une vente.</div>';
+      } else if (_ndMois >= 6 && _ndMois <= 8) {
+        _banners += '<div style="background:#2e1500;border:1px solid #6a3300;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#ff9800">📉 <strong>Creux saisonnier</strong> (Juin–Août) — prix généralement bas. Éviter la vente si le cycle le permet.</div>';
+      }
+      // R-07 : alerte si dernier prix marché < objectif OU < seuil de rentabilité calculé
+      if (prixData.length && _maxEntry && _maxEntry.moy) {
+        var _mktPrix = Math.round(_maxEntry.moy);
+        var _pxSeuil = _calcPxSeuil();
+        if (_pxSeuil > 0 && _mktPrix < _pxSeuil) {
+          _banners += '<div style="background:#2e1010;border:1px solid #8a0000;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#f44336">🔴 Prix marché ('+fmt(_mktPrix)+' FCFA/kg) SOUS le seuil de rentabilité calculé ('+fmt(_pxSeuil)+' FCFA/kg) — vente en perte. Attendre ou renégocier.</div>';
+        } else if (CYCLE.objectifPrix && _mktPrix < CYCLE.objectifPrix) {
+          _banners += '<div style="background:#2e1500;border:1px solid #8a4400;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#ff9800">⚠️ Prix marché ('+fmt(_mktPrix)+' FCFA/kg) inférieur à l\'objectif ('+fmt(CYCLE.objectifPrix)+' FCFA/kg) — prudence avant vente.</div>';
+        }
+      }
+      return _banners;
+    })();
 
     // ── Rapport mensuel foirail ──
     var _ndRap = _nowDakar();
@@ -6599,9 +6696,16 @@ function viewMarche(){
     if (S.ssec    === undefined && _sc0.ssec    !== undefined) S.ssec    = _sc0.ssec;
     if (S.sveau   === undefined && _sc0.sveau   !== undefined) S.sveau   = _sc0.sveau;
     if (S.strans  === undefined && _sc0.strans  !== undefined) S.strans  = _sc0.strans;
+    if (S.seau    === undefined && _sc0.seau    !== undefined) S.seau    = _sc0.seau;
+    if (S.smdo    === undefined && _sc0.smdo    !== undefined) S.smdo    = _sc0.smdo;
     if (S.simpPct === undefined && _sc0.simpPct !== undefined) S.simpPct = _sc0.simpPct;
     if (S.simpFix === undefined && _sc0.simpFix !== undefined) S.simpFix = _sc0.simpFix;
     if (!S.simpMode && _sc0.simpMode) S.simpMode = _sc0.simpMode;
+    // Persistance des variables nullables (sn/sp/spx/simMois) — restaurées depuis simCharges
+    if (S.sn  === null && _sc0.sn  !== undefined) S.sn  = _sc0.sn;
+    if (S.sp  === null && _sc0.sp  !== undefined) S.sp  = _sc0.sp;
+    if (S.spx === null && _sc0.spx !== undefined) S.spx = _sc0.spx;
+    if (S.simMois === undefined && _sc0.simMois !== undefined) S.simMois = _sc0.simMois;
     var cycleMois = (S.simMois !== undefined && S.simMois !== null) ? S.simMois : (CYCLE.dureeMois || 8);
 
     // ── État — valeurs par défaut réalistes marché sénégalais ──
@@ -6613,6 +6717,8 @@ function viewMarche(){
     var calim   = S.salim    !== undefined ? S.salim    : 180000; // alim FCFA/mois troupeau entier
     var cvet    = S.svet     !== undefined ? S.svet     : 20000;  // vét FCFA/bête/cycle
     var csec    = S.ssec     !== undefined ? S.ssec     : 50000;  // sécurité FCFA/mois
+    var ceau    = S.seau     !== undefined ? S.seau     : 5000;   // eau FCFA/mois
+    var cmdo    = S.smdo     !== undefined ? S.smdo     : 0;      // main d'œuvre gérant FCFA/mois
     var ctrans  = S.strans   !== undefined ? S.strans   : 0;      // transport FCFA (one-shot)
     var simpMode = S.simpMode || 'pct';
     var simpPct  = S.simpPct  !== undefined ? S.simpPct  : 5;
@@ -6625,7 +6731,9 @@ function viewMarche(){
     var cAlim   = calim * cycleMois;                  // mensuel × durée cycle
     var cVet    = nb * cvet;
     var cSec    = csec * cycleMois;
-    var cBase   = cVeau + cAlim + cVet + cSec;
+    var cEau    = ceau * cycleMois;                   // eau mensuelle × durée cycle
+    var cMdo    = cmdo * cycleMois;                   // MdO mensuelle × durée cycle
+    var cBase   = cVeau + cAlim + cVet + cSec + cEau + cMdo;
     var cImprev = simpMode === 'pct' ? Math.round(cBase * simpPct / 100) : simpFix;
     var cTrans  = ctrans;
     var cTotal  = cBase + cImprev + cTrans;
@@ -6758,6 +6866,20 @@ function viewMarche(){
     +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Coût unique (achat + livraison finale)</div>'
     + '</div>'
 
+    // ── Bloc Eau ──
+    + '<div class="card">'
+    +   '<div class="stitle">💧 Eau</div>'
+    +   simField('Coût de l\'eau / mois', 'seau', ceau, 0, 200000, 1000, 'FCFA / mois', false)
+    +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Sur ' + cycleMois + ' mois → <strong style="color:#eee">' + fmt(cEau) + ' FCFA</strong></div>'
+    + '</div>'
+
+    // ── Bloc Main d'œuvre ──
+    + '<div class="card">'
+    +   '<div class="stitle">👷 Main d\'œuvre gérant</div>'
+    +   simField('Salaire / rémunération par mois', 'smdo', cmdo, 0, 500000, 5000, 'FCFA / mois', false)
+    +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Sur ' + cycleMois + ' mois → <strong style="color:#eee">' + fmt(cMdo) + ' FCFA</strong></div>'
+    + '</div>'
+
     // ── Bloc Imprévus ──
     + '<div class="card">'
     +   '<div class="stitle">⚡ Imprévus</div>'
@@ -6780,6 +6902,8 @@ function viewMarche(){
     +   simRow('− Alimentation (' + cycleMois + 'm)', fmt(cAlim) + ' FCFA', '#ff9090')
     +   simRow('− Vétérinaire',               fmt(cVet)   + ' FCFA', '#ff9090')
     +   simRow('− Sécurité (' + cycleMois + 'm)',   fmt(cSec)  + ' FCFA', '#ff9090')
+    +   (cEau > 0 ? simRow('− Eau (' + cycleMois + 'm)',      fmt(cEau)  + ' FCFA', '#ff9090') : '')
+    +   (cMdo > 0 ? simRow('− Main d\'œuvre (' + cycleMois + 'm)', fmt(cMdo) + ' FCFA', '#ff9090') : '')
     +   (cTrans > 0 ? simRow('− Transport',              fmt(cTrans) + ' FCFA', '#ff9090') : '')
     +   simRow('− Imprévus',                  fmt(cImprev)+ ' FCFA', '#ff9800')
     +   '<div style="height:1px;background:#2a4a2a;margin:6px 0"></div>'
@@ -7430,7 +7554,10 @@ r();
   });
 })();
 setTimeout(initSwipe, 150);
-
+// R-13 : Service Worker — consultation hors-ligne
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(function(){});
+}
 </script>
 </body>
 </html>
