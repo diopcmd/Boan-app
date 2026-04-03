@@ -11,17 +11,19 @@ export default async function handler(req, res) {
     fallou:    { name:'Commerciale',    pwd: process.env.PWD_FALLOU,    tabs:['dashboard','marche'],                      sid: process.env.SID_FALLOU    },
   };
 
-  // R-03 : restreindre CORS au domaine Vercel de production + localhost dev
-  const allowedOrigins = [
-    'https://boan-app-ur3x.vercel.app',
-    'http://localhost:3000',
-    'http://localhost:5000'
-  ];
+  // R-03 : restreindre CORS — autoriser les domaines Vercel légitimes + localhost dev
+  // Les appels same-origin (depuis le front Vercel vers /api/auth) n'ont pas de header Origin
+  // Les previews Vercel utilisent *.vercel.app — on autorise tous les sous-domaines vercel.app
   const reqOrigin = req.headers.origin || '';
-  if (reqOrigin && !allowedOrigins.includes(reqOrigin)) {
+  const originOk = !reqOrigin  // same-origin : pas de header Origin → toujours OK
+    || reqOrigin.endsWith('.vercel.app')
+    || reqOrigin === 'https://vercel.app'
+    || reqOrigin === 'http://localhost:3000'
+    || reqOrigin === 'http://localhost:5000';
+  if (!originOk) {
     return res.status(403).json({ ok: false, error: 'Origin non autorisé' });
   }
-  res.setHeader('Access-Control-Allow-Origin', reqOrigin || 'https://boan-app-ur3x.vercel.app');
+  res.setHeader('Access-Control-Allow-Origin', reqOrigin || '*');
   res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
