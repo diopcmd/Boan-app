@@ -428,6 +428,7 @@ var CYCLE = lsGet('cycle') || {
   betes: [],  // [{id, race, poidsEntree, dateIntro}]
   initialized: false,
   simCharges: {},  // charges simulateur persistantes
+  _mktUpdated: '',  // date dernière modif paramètres marché (DD/MM/YYYY)
   gonogo: {contrats:false, infra:false, assurance:false, securite:false},
   // Objectifs configurables par le fondateur (lu/écrit dans Config_App)
   gmqCible:        1.0,   // seuil vert GMQ (kg/j)
@@ -1351,6 +1352,9 @@ function loadLiveData() {
               if (key === 'alerteSeuilTreso' && val && parseInt(val)   >= 0) CYCLE.alerteSeuilTreso = parseInt(val);
               if (key === 'mixSon'           && val !== null) CYCLE.mixSon      = parseFloat(val) || 60;
               if (key === 'mixTourteau'      && val !== null) CYCLE.mixTourteau = parseFloat(val) || 40;
+              if (key === 'prixAlim'     && val && parseFloat(val) > 0) CYCLE.prixAlim     = parseFloat(val);
+              if (key === 'objectifPrix' && val && parseInt(val)   > 0) CYCLE.objectifPrix = parseInt(val);
+              if (key === '_mktUpdated'  && val) CYCLE._mktUpdated = val;
               if (key === 'sopProtocol' && val && Array.isArray(val) && val.length) CYCLE.sopProtocol = val;
               // cycleDebut dans Config_App = détection changement de cycle indépendante de Config_Cycle
               if (key === 'cycleDebut' && val && val.length && val !== CYCLE.dateDebut) {
@@ -2045,6 +2049,9 @@ function _syncConfigApp() {
       ['poidsCible',    JSON.stringify(CYCLE.poidsCible      || 400)],
       ['mixSon',           JSON.stringify(CYCLE.mixSon             || 60)],
       ['mixTourteau',      JSON.stringify(CYCLE.mixTourteau        || 40)],
+      ['prixAlim',         JSON.stringify(CYCLE.prixAlim           || 0)],
+      ['objectifPrix',     JSON.stringify(CYCLE.objectifPrix       || 2000)],
+      ['_mktUpdated',      JSON.stringify(CYCLE._mktUpdated        || '')],
       ['poidsVenteMin',    JSON.stringify(CYCLE.poidsVenteMin      || 340)],
       ['tauxMortMax',      JSON.stringify(CYCLE.tauxMortMax        || 3)],
       ['coutRevientMax',   JSON.stringify(CYCLE.coutRevientMax     || 1100)],
@@ -5765,6 +5772,11 @@ function saveObjectifs(){
     ['alerteSeuilTreso', CYCLE.alerteSeuilTreso || 100000]
   ];
   if(CYCLE.sopProtocol) keys.push(['sopProtocol', JSON.stringify(CYCLE.sopProtocol)]);
+  keys.push(['prixAlim',     CYCLE.prixAlim     || 0]);
+  keys.push(['objectifPrix', CYCLE.objectifPrix || 2000]);
+  keys.push(['mixSon',       CYCLE.mixSon       || 60]);
+  keys.push(['mixTourteau',  CYCLE.mixTourteau  || 40]);
+  keys.push(['_mktUpdated',  CYCLE._mktUpdated  || '']);
   var promises = keys.map(function(kv){
     return appendRow(_sid, 'Config_App!A:B', [kv[0], JSON.stringify(kv[1])]);
   });
@@ -6303,6 +6315,57 @@ function viewLiv(){
       +_objField('Coût de revient max / kg gain', 'coutRevientMax',  1100,  50,    'F/kg',  'Coût production max par kg de prise de poids')
       +_objField('Marge brute min / bête',        'margeParBeteMin', 80000, 5000,  'FCFA',  'Marge brute minimale acceptable par tête')
       +_objField('Plancher trésorerie',           'alerteSeuilTreso',100000,10000, 'FCFA',  _tresoBadge)
+      +'</div>'
+      +'<div class="card">'
+      +'<div class="stitle">📦 Marché & Ration</div>'
+      +(CYCLE._mktUpdated?'<div style="font-size:10px;color:#88bb66;background:#0f1e08;border-radius:6px;padding:4px 8px;margin-bottom:10px">⚡ Mis à jour le '+CYCLE._mktUpdated+'</div>':'')
+      +(function(){
+        // Prix aliment
+        var _pa = CYCLE.prixAlim || 0;
+        var _op = CYCLE.objectifPrix || 2000;
+        var _ms = CYCLE.mixSon || 60;
+        var _mt = CYCLE.mixTourteau || 40;
+        var _mktTouch = "CYCLE._mktUpdated=today();";
+        var _rowStyle = 'display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #0f1f0f';
+        var _labelStyle = 'font-size:13px;color:#ccc';
+        var _hintStyle  = 'font-size:10px;color:#7a9a7a;margin-top:2px';
+        var _inputStyle = 'width:80px;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#C8A06A;font-size:13px;font-weight:700;padding:5px 7px;text-align:right';
+        var _unitStyle  = 'font-size:11px;color:#66aa66;min-width:26px';
+        if(_ro){
+          return '<div style="'+_rowStyle+'"><div><div style="'+_labelStyle+'">Prix aliment</div><div style="'+_hintStyle+'">Coût matière / kg — impacte le coût réel calculé</div></div><span style="font-size:14px;font-weight:700;color:#C8A06A">'+(_pa||'—')+' F/kg</span></div>'
+            +'<div style="'+_rowStyle+'"><div><div style="'+_labelStyle+'">Prix vente visé</div><div style="'+_hintStyle+'">Cours attendu à la vente</div></div><span style="font-size:14px;font-weight:700;color:#C8A06A">'+_op+' F/kg</span></div>'
+            +'<div style="'+_rowStyle+';border-bottom:none"><div><div style="'+_labelStyle+'">Ration standard</div><div style="'+_hintStyle+'">Son de blé '+_ms+'% / Tourteau arachide '+_mt+'%</div></div></div>';
+        }
+        return '<div style="'+_rowStyle+'">'
+          +'<div style="flex:1;padding-right:8px"><div style="'+_labelStyle+'">Prix aliment</div><div style="'+_hintStyle+'">Coût matière / kg — impacte le coût réel calculé</div></div>'
+          +'<span style="display:flex;align-items:center;gap:5px">'
+          +'<input type="number" inputmode="decimal" step="5" value="'+_pa+'" style="'+_inputStyle+'" oninput="CYCLE.prixAlim=parseFloat(this.value)||0;'+_mktTouch+'r()">'
+          +'<span style="'+_unitStyle+'">F/kg</span></span></div>'
+          +'<div style="'+_rowStyle+'">'
+          +'<div style="flex:1;padding-right:8px"><div style="'+_labelStyle+'">Prix vente visé</div><div style="'+_hintStyle+'">Cours attendu au foirail à la vente</div></div>'
+          +'<span style="display:flex;align-items:center;gap:5px">'
+          +'<input type="number" inputmode="decimal" step="50" value="'+_op+'" style="'+_inputStyle+'" oninput="CYCLE.objectifPrix=parseInt(this.value)||2000;'+_mktTouch+'r()">'
+          +'<span style="'+_unitStyle+'">F/kg</span></span></div>'
+          // Mix ration — deux champs liés, somme = 100
+          +'<div style="padding:8px 0">'
+          +'<div style="'+_labelStyle+';margin-bottom:4px">Ration standard (son / tourteau)</div>'
+          +'<div style="'+_hintStyle+';margin-bottom:8px">Les deux % totalisent 100. Modifier l\'un recalcule l\'autre.</div>'
+          +'<div style="display:flex;gap:10px;align-items:center">'
+          +'<div style="flex:1;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:8px;padding:8px">'
+          +'<div style="font-size:10px;color:#88aa88;margin-bottom:4px">Son de blé</div>'
+          +'<div style="display:flex;align-items:center;gap:4px">'
+          +'<input type="number" inputmode="decimal" min="0" max="100" step="5" value="'+_ms+'" style="'+_inputStyle+';width:60px" oninput="var v=Math.min(100,Math.max(0,parseFloat(this.value)||0));CYCLE.mixSon=v;CYCLE.mixTourteau=Math.round((100-v)*10)/10;'+_mktTouch+'r()">'
+          +'<span style="font-size:11px;color:#66aa66">%</span></div></div>'
+          +'<div style="font-size:14px;color:#556655">⇄</div>'
+          +'<div style="flex:1;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:8px;padding:8px">'
+          +'<div style="font-size:10px;color:#88aa88;margin-bottom:4px">Tourteau arachide</div>'
+          +'<div style="display:flex;align-items:center;gap:4px">'
+          +'<input type="number" inputmode="decimal" min="0" max="100" step="5" value="'+_mt+'" style="'+_inputStyle+';width:60px" oninput="var v=Math.min(100,Math.max(0,parseFloat(this.value)||0));CYCLE.mixTourteau=v;CYCLE.mixSon=Math.round((100-v)*10)/10;'+_mktTouch+'r()">'
+          +'<span style="font-size:11px;color:#66aa66">%</span></div></div>'
+          +'</div>'
+          +((Math.round((_ms+_mt)*10)/10!==100)?'<div style="font-size:10px;color:#f44336;margin-top:6px">⚠️ Total = '+Math.round((_ms+_mt)*10)/10+'% — doit être 100%</div>':'')
+          +'</div>';
+      })()
       +'</div>'
       +(function(){
         var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
