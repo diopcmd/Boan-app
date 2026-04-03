@@ -5705,7 +5705,7 @@ function saveObjectifs(){
 function viewLiv(){
   var _canObj=(S.user==='fondateur'||S.user==='rga');
   var subs=[['treso','Trésorerie'],['kpi','KPI'],['betes','Bêtes'],['incidents','Incidents']];
-  if(_canObj) subs.push(['objectifs','Objectifs'],['sopvet','SOP Véto'],['calendrier','Calendrier']);
+  if(_canObj) subs.push(['objectifs','Objectifs'],['sopvet','📅 SOP Véto']);
   subs.push(['gonogo','Go/No-Go']);
   var stabs=subs.map(function(s){return'<div class="stab '+(S.sub===s[0]?'on':'')+'" onclick="chSub(\''+s[0]+'\')">'+s[1]+'</div>';}).join('');
   var view='';
@@ -6380,71 +6380,31 @@ function viewLiv(){
         +(S.msg?'<div class="msg '+(S.msg.startsWith('ok')?'ok':'err')+'">' +S.msg.slice(3)+'</div>':'')
         +'<button class="btn" style="width:100%;margin-top:4px" onclick="saveObjectifs()">💾 Enregistrer le protocole</button>';
     }
-  } else if(S.sub==='calendrier'){
-    var _calDeb = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : null;
-    var _ndCal = _nowDakar();
-    var _calToday = new Date(_ndCal.year, _ndCal.month-1, _ndCal.day);
-    var _calProtocol = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
-    var _calCards = _calProtocol.map(function(evt){
-      if(!_calDeb){
-        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #1a2e1a">'
-          +'<div style="font-size:20px;width:32px;text-align:center">'+evt.ico+'</div>'
-          +'<div style="flex:1"><div style="font-size:13px;color:#88aa88;font-weight:600">J+'+evt.j+' — '+evt.label+'</div>'
-          +'<div style="font-size:10px;color:#7a9a7a">'+evt.note+'</div></div>'
-          +'<div style="font-size:11px;color:#2a4a2a;white-space:nowrap">Cycle non démarré</div>'
-          +'</div>';
-      }
-      var _targetDate = new Date(_calDeb.getTime()); _targetDate.setDate(_targetDate.getDate() + evt.j);
-      var _window = 7 * 86400000;
-      var _fait = HISTORY.some(function(h){
-        if(h.type !== evt.type) return false;
-        var _p = h.date.split('/'); if(_p.length !== 3) return false;
-        var _hd = new Date(_p[2], _p[1]-1, _p[0]);
-        return Math.abs(_hd - _targetDate) <= _window;
-      });
-      var _daysToTarget = Math.round((_targetDate - _calToday) / 86400000);
-      var _status, _statusCol, _statusBg, _statusBorder;
-      if(_fait){
-        _status = '✅ Fait'; _statusCol = '#4caf50'; _statusBg = '#0f2a0f'; _statusBorder = '#2d6a2d';
-      } else if(_daysToTarget < 0){
-        _status = '⚠️ En retard ('+Math.abs(_daysToTarget)+'j)'; _statusCol = '#f44336'; _statusBg = '#2e1010'; _statusBorder = '#8a2020';
-      } else if(_daysToTarget <= 7){
-        _status = '🔔 Dans '+_daysToTarget+' j'; _statusCol = '#ff9800'; _statusBg = '#2e2010'; _statusBorder = '#8a5a00';
-      } else {
-        var _d = _targetDate; var _ds = ('0'+_d.getDate()).slice(-2)+'/'+('0'+(_d.getMonth()+1)).slice(-2)+'/'+_d.getFullYear();
-        _status = '📅 '+_ds; _statusCol = '#88aa88'; _statusBg = '#0a150a'; _statusBorder = '#1a2e1a';
-      }
-      return '<div style="background:'+_statusBg+';border:1px solid '+_statusBorder+';border-radius:8px;padding:10px 12px;margin-bottom:8px">'
-        +'<div style="display:flex;align-items:center;gap:10px">'
-        +'<div style="font-size:20px;width:32px;text-align:center;flex-shrink:0">'+evt.ico+'</div>'
-        +'<div style="flex:1">'
-        +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">'
-        +'<div style="font-size:13px;color:#ccc;font-weight:700">J+'+evt.j+' — '+evt.label+'</div>'
-        +'<div style="font-size:11px;font-weight:700;color:'+_statusCol+'">' +_status+'</div>'
-        +'</div>'
-        +'<div style="font-size:10px;color:#7a9a7a;margin-top:2px">'+evt.note+'</div>'
-        +'</div>'
-        +'</div>';
-    }).join('');
-    var _calDone = _calProtocol.filter(function(evt){
-      if(!_calDeb) return false;
-      var _td = new Date(_calDeb.getTime()); _td.setDate(_td.getDate() + evt.j);
-      return HISTORY.some(function(h){
-        if(h.type !== evt.type) return false;
-        var _p = h.date.split('/'); if(_p.length !== 3) return false;
-        var _hd = new Date(_p[2], _p[1]-1, _p[0]);
-        return Math.abs(_hd - _td) <= 7*86400000;
-      });
-    }).length;
-    view = '<div class="stitle">📅 Calendrier SOP vétérinaire</div>'
-      +(!_calDeb
-        ? '<div style="background:#2e1500;border:1px solid #8a4400;border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:#ff9800">⚠️ Cycle non démarré — saisissez une date de début dans les paramètres pour voir les dates théoriques.</div>'
-        : '<div style="background:#0f1f0f;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">'
-          +'<div><div style="font-size:11px;color:#7a9a7a">Début cycle</div><div style="font-size:13px;color:#C8A06A;font-weight:700">'+isoToFr(CYCLE.dateDebut)+'</div></div>'
-          +'<div style="text-align:right"><div style="font-size:11px;color:#7a9a7a">Complétés</div><div style="font-size:20px;font-weight:800;color:'+(_calDone>=_calProtocol.length?'#4caf50':'#C8A06A')+'">' +_calDone+' / '+_calProtocol.length+'</div></div>'
-          +'</div>')
-      +'<div style="font-size:10px;color:#7a9a7a;margin-bottom:10px">Une saisie Santé ou Pesée dans ±7 jours de la date théorique est comptée comme réalisée.</div>'
-      +_calCards;
+    // ── Calendrier SOP fusionné en tête (ex-onglet séparé supprimé) ──
+    view = (function(){
+      var _cb = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : null;
+      var _cn = _nowDakar(); var _ct = new Date(_cn.year, _cn.month-1, _cn.day);
+      var _cp = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+      var _cc = _cp.map(function(evt){
+        if(!_cb) return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #1a2e1a"><div style="font-size:20px;width:32px;text-align:center">'+evt.ico+'</div><div style="flex:1"><div style="font-size:13px;color:#88aa88;font-weight:600">J+'+evt.j+' — '+evt.label+'</div><div style="font-size:10px;color:#7a9a7a">'+evt.note+'</div></div><div style="font-size:11px;color:#2a4a2a">Non démarré</div></div>';
+        var _td2 = new Date(_cb.getTime()); _td2.setDate(_td2.getDate()+evt.j);
+        var _win = 7*86400000;
+        var _f = HISTORY.some(function(h){ if(h.type!==evt.type)return false; var _p=h.date.split('/'); if(_p.length!==3)return false; return Math.abs(new Date(_p[2],_p[1]-1,_p[0])-_td2)<=_win; });
+        var _dt = Math.round((_td2-_ct)/86400000);
+        var _s,_sc,_sb,_sbd;
+        if(_f){_s='✅ Fait';_sc='#4caf50';_sb='#0f2a0f';_sbd='#2d6a2d';}
+        else if(_dt<0){_s='⚠️ En retard ('+Math.abs(_dt)+'j)';_sc='#f44336';_sb='#2e1010';_sbd='#8a2020';}
+        else if(_dt<=7){_s='🔔 Dans '+_dt+' j';_sc='#ff9800';_sb='#2e2010';_sbd='#8a5a00';}
+        else{var _d2=_td2,_ds=('0'+_d2.getDate()).slice(-2)+'/'+('0'+(_d2.getMonth()+1)).slice(-2)+'/'+_d2.getFullYear();_s='📅 '+_ds;_sc='#88aa88';_sb='#0a150a';_sbd='#1a2e1a';}
+        return '<div style="background:'+_sb+';border:1px solid '+_sbd+';border-radius:8px;padding:10px 12px;margin-bottom:8px"><div style="display:flex;align-items:center;gap:10px"><div style="font-size:20px;width:32px;text-align:center;flex-shrink:0">'+evt.ico+'</div><div style="flex:1"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px"><div style="font-size:13px;color:#ccc;font-weight:700">J+'+evt.j+' — '+evt.label+'</div><div style="font-size:11px;font-weight:700;color:'+_sc+'">'+_s+'</div></div><div style="font-size:10px;color:#7a9a7a;margin-top:2px">'+evt.note+'</div></div></div></div>';
+      }).join('');
+      var _cd = _cp.filter(function(e){ if(!_cb)return false; var _td3=new Date(_cb.getTime()); _td3.setDate(_td3.getDate()+e.j); return HISTORY.some(function(h){ if(h.type!==e.type)return false; var _p=h.date.split('/'); if(_p.length!==3)return false; return Math.abs(new Date(_p[2],_p[1]-1,_p[0])-_td3)<=7*86400000; }); }).length;
+      return '<div class="stitle">📅 Calendrier SOP vétérinaire</div>'
+        +(!_cb ? '<div style="background:#2e1500;border:1px solid #8a4400;border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:#ff9800">⚠️ Cycle non démarré — saisissez une date de début dans les paramètres.</div>'
+          : '<div style="background:#0f1f0f;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11px;color:#7a9a7a">Début cycle</div><div style="font-size:13px;color:#C8A06A;font-weight:700">'+isoToFr(CYCLE.dateDebut)+'</div></div><div style="text-align:right"><div style="font-size:11px;color:#7a9a7a">Complétés</div><div style="font-size:20px;font-weight:800;color:'+(_cd>=_cp.length?'#4caf50':'#C8A06A')+'">' +_cd+' / '+_cp.length+'</div></div></div>')
+        +'<div style="font-size:10px;color:#7a9a7a;margin-bottom:10px">Une saisie Santé ou Pesée dans ±7j de la date théorique est comptée comme réalisée.</div>'
+        +_cc;
+    })() + (view ? '<div class="sep"></div>' + view : '');
   }
   return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+view+'</div>';
 }
@@ -6468,7 +6428,6 @@ function viewMarche(){
   var subs=[['prix','Prix foirail']];
   if(_u==='fondateur'||_u==='fallou'||_u==='rga') subs.push(['alim','Prix aliments']);
   subs.push(['sim','Simulateur'],['reco','Recommandations']);
-  if(_u==='fondateur'||_u==='rga') subs.push(['calendrier','Calendrier SOP']);
   var stabs=subs.map(function(s){return'<div class="stab '+(S.sub===s[0]?'on':'')+'" onclick="chSub(\''+s[0]+'\')">'+s[1]+'</div>';}).join('');
   var view='';
   if(S.sub==='prix'){
@@ -7274,72 +7233,6 @@ function viewMarche(){
       +'<button class="btn'+(S.sending?' disabled':'')+'" onclick="if(!S.sending)doSubmit(\'alim\')"'+(S.sending?' disabled':'')+'>'
       +(S.sending?'Enregistrement...':'💾 Enregistrer le prix')+'</button>'
       +'</div>';
-  }
-  if(S.sub==='calendrier'){
-    var _calDeb = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : null;
-    var _ndCal = _nowDakar();
-    var _calToday = new Date(_ndCal.year, _ndCal.month-1, _ndCal.day);
-    var _calProtocol = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
-    var _calCards = _calProtocol.map(function(evt){
-      if(!_calDeb){
-        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #1a2e1a">'
-          +'<div style="font-size:20px;width:32px;text-align:center">'+evt.ico+'</div>'
-          +'<div style="flex:1"><div style="font-size:13px;color:#88aa88;font-weight:600">J+'+evt.j+' — '+evt.label+'</div>'
-          +'<div style="font-size:10px;color:#7a9a7a">'+evt.note+'</div></div>'
-          +'<div style="font-size:11px;color:#2a4a2a;white-space:nowrap">Cycle non démarré</div>'
-          +'</div>';
-      }
-      var _targetDate = new Date(_calDeb.getTime()); _targetDate.setDate(_targetDate.getDate() + evt.j);
-      var _window = 7 * 86400000;
-      var _fait = HISTORY.some(function(h){
-        if(h.type !== evt.type) return false;
-        var _p = h.date.split('/'); if(_p.length !== 3) return false;
-        var _hd = new Date(_p[2], _p[1]-1, _p[0]);
-        return Math.abs(_hd - _targetDate) <= _window;
-      });
-      var _daysToTarget = Math.round((_targetDate - _calToday) / 86400000);
-      var _status, _statusCol, _statusBg, _statusBorder;
-      if(_fait){
-        _status = '✅ Fait'; _statusCol = '#4caf50'; _statusBg = '#0f2a0f'; _statusBorder = '#2d6a2d';
-      } else if(_daysToTarget < 0){
-        _status = '⚠️ En retard ('+Math.abs(_daysToTarget)+'j)'; _statusCol = '#f44336'; _statusBg = '#2e1010'; _statusBorder = '#8a2020';
-      } else if(_daysToTarget <= 7){
-        _status = '🔔 Dans '+_daysToTarget+' j'; _statusCol = '#ff9800'; _statusBg = '#2e2010'; _statusBorder = '#8a5a00';
-      } else {
-        var _d = _targetDate; var _ds = ('0'+_d.getDate()).slice(-2)+'/'+('0'+(_d.getMonth()+1)).slice(-2)+'/'+_d.getFullYear();
-        _status = '📅 '+_ds; _statusCol = '#88aa88'; _statusBg = '#0a150a'; _statusBorder = '#1a2e1a';
-      }
-      return '<div style="background:'+_statusBg+';border:1px solid '+_statusBorder+';border-radius:8px;padding:10px 12px;margin-bottom:8px">'
-        +'<div style="display:flex;align-items:center;gap:10px">'
-        +'<div style="font-size:20px;width:32px;text-align:center;flex-shrink:0">'+evt.ico+'</div>'
-        +'<div style="flex:1">'
-        +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">'
-        +'<div style="font-size:13px;color:#ccc;font-weight:700">J+'+evt.j+' — '+evt.label+'</div>'
-        +'<div style="font-size:11px;font-weight:700;color:'+_statusCol+'">'+_status+'</div>'
-        +'</div>'
-        +'<div style="font-size:10px;color:#7a9a7a;margin-top:2px">'+evt.note+'</div>'
-        +'</div>'
-        +'</div>';
-    }).join('');
-    var _calDone = _calProtocol.filter(function(evt){
-      if(!_calDeb) return false;
-      var _td = new Date(_calDeb.getTime()); _td.setDate(_td.getDate() + evt.j);
-      return HISTORY.some(function(h){
-        if(h.type !== evt.type) return false;
-        var _p = h.date.split('/'); if(_p.length !== 3) return false;
-        var _hd = new Date(_p[2], _p[1]-1, _p[0]);
-        return Math.abs(_hd - _td) <= 7*86400000;
-      });
-    }).length;
-    view = '<div class="stitle">📅 Calendrier SOP vétérinaire</div>'
-      +(!_calDeb
-        ? '<div style="background:#2e1500;border:1px solid #8a4400;border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:#ff9800">⚠️ Cycle non démarré — saisissez une date de début dans les paramètres pour voir les dates théoriques.</div>'
-        : '<div style="background:#0f1f0f;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">'
-          +'<div><div style="font-size:11px;color:#7a9a7a">Début cycle</div><div style="font-size:13px;color:#C8A06A;font-weight:700">'+isoToFr(CYCLE.dateDebut)+'</div></div>'
-          +'<div style="text-align:right"><div style="font-size:11px;color:#7a9a7a">Complétés</div><div style="font-size:20px;font-weight:800;color:'+(_calDone>=_calProtocol.length?'#4caf50':'#C8A06A')+'">'+_calDone+' / '+_calProtocol.length+'</div></div>'
-          +'</div>')
-      +'<div style="font-size:10px;color:#7a9a7a;margin-bottom:10px">Une saisie Santé ou Pesée dans ±7 jours de la date théorique est comptée comme réalisée.</div>'
-      +_calCards;
   }
   return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+view+'</div>';
 }
