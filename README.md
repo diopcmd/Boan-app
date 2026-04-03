@@ -45,6 +45,8 @@ Interface de pilotage à distance multi-rôles : direction, gérant terrain, RGA
 - **Incidents** — liste avec gravité, statut, clôture
 - **Go/No-Go** — checklist 8 critères pour démarrage cycle suivant
 - **Objectifs configurables** (fondateur + RGA) — GMQ cible/alerte, poids cible, poids vente min, taux mortalité max, coût revient max, marge min, plancher tréso → persiste dans `Config_App` Sheets, propagé immédiatement dans tous les KPI
+- **SOP Véto** (fondateur + RGA) — éditeur complet du protocole vétérinaire : ajout/modification/suppression d'étapes J+N, types (santé/pesée), ↺ réinitialiser au standard, sauvegarde via `saveObjectifs()` dans `Config_App`
+- **Calendrier** (fondateur + RGA) — vue timeline des actes protocollés : dates théoriques J+N calculées depuis `CYCLE.dateDebut`, statuts en couleur ✅/⚠️/🔔/📅, compteur complétés/total, tolérance ±7 jours
 
 ### Marché (fondateur / RGA / Commerciale)
 - **Prix foirail** — hero card prix max/min du jour par foirail + tendance + vs objectif + courbe historique
@@ -75,13 +77,15 @@ Interface de pilotage à distance multi-rôles : direction, gérant terrain, RGA
 | IA | Anthropic Claude (claude-sonnet-4) |
 | Météo | Open-Meteo API |
 
+**État** : Commit `f14f74c` — ~7437 lignes — déployé sur https://boan-app-ur3x.vercel.app
+
 ---
 
 ## Structure du projet
 
 ```
 Boan-app/
-├── index.html              SPA complète (HTML + CSS + JS inline, ~7500+ lignes)
+├── index.html              SPA complète (HTML + CSS + JS inline, ~7437 lignes)
 ├── vercel.json             Rewrites SPA (exclut /api/ et /manifest.json)
 ├── manifest.json           Web App Manifest (PWA — icône, nom, display:standalone)
 ├── api/
@@ -123,6 +127,7 @@ Boan-app/
 - **Pesées** — poids individuel par bête avec calcul gain moyen quotidien (GMQ) + alerte si bête déjà pesée aujourd'hui
 - **Santé / Mortalité** — symptômes, traitement, coût, issue (résultat préservé dans le select)
 - **Bilan hebdo** — affiche nb pesées de la semaine + GMQ moyen avant envoi
+- **Protocole SOP Véto** (`📅 SOP Véto`) — onglet lecture seule pour le gérant : calendrier des actes vétérinaires avec statuts ✅/⚠️/🔔/📅, compteur réalisés, calculé depuis `CYCLE.dateDebut`
 
 ### Tableau de bord
 - **Score santé troupeau** — GMQ (50pts) + Stock (30pts) + Bêtes actives (20pts) − malus incidents ouverts (−8/G3, −4/G2, −2/G1)

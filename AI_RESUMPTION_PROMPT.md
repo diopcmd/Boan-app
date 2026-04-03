@@ -12,7 +12,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 - **GitHub** : https://github.com/diopcmd/Boan-app (branche `main`)
 - **Dossier local** : `C:\Temp\Boan-app\`
 - **Langue** : Tout en français (code, UI, communications)
-- **Dernier commit** : `c94fa36` — feat: SOP protocol configurable
+- **Dernier commit** : `f14f74c` — fix: sopvet corrige replace backslash-quote cassant JS
 - **Webhook Vercel** : cassé → redeploy manuel sur vercel.com (Deployments → Redeploy)
 
 ---
@@ -21,7 +21,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 
 | Couche | Technologie |
 |---|---|
-| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~6282 lignes) |
+| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~7437 lignes) |
 | Backend | Vercel Serverless Functions (ES Module `export default async function handler`) |
 | Auth | Session token custom HMAC-SHA256 (`base64(payload).hmac_hex`), 8h |
 | Données | Google Sheets API v4 via Service Account RS256 JWT |
@@ -254,9 +254,14 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 - Badge "+X nouveaux" dans le bouton ☰ (fondateur uniquement)
 - Point live/cache/loading uniquement — pas de texte encombrant
 
-### Livrables
-- Trésorerie, KPI, Bêtes (courbes de croissance + seuil de rentabilité), Go/No-Go
+### Saisie (gérant) — onglets
+- `fiche`, `SOP`, `stock`, `inc`, `pesée`, `santé`, `bilan` + **`📅 SOP Véto`** (lecture seule — calendrier protocole avec statuts ✅/⚠️/🔔/📅 calculés depuis `CYCLE.dateDebut`, compteur réalisés)
+
+### Livrables — onglets fondateur/rga
+- Trésorerie, KPI, Bêtes (courbes de croissance + seuil de rentabilité), **Objectifs**, **SOP Véto**, **Calendrier**, Go/No-Go
 - Onglet Bêtes : `poidsFinal` calculé dans les 2 branches (LIVE + démo)
+- **SOP Véto** : éditeur complet du protocole (ajout/modification/suppression étapes, ↺ réinitialiser, persisté via `saveObjectifs()`)
+- **Calendrier** : vue calendrier full — dates théoriques J+N avec statuts couleur, compteur complétés/total
 
 ### Sidebar
 - **Durée cycle** : stepper pur `−` / `+` (sans input — évite reset au re-render) — fondateur/rga/fallou — plage 1–60 mois — `updateDureeMois(v)` → `_syncCycle()`
@@ -346,4 +351,14 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 | `647b19a` | feat: objectifs pilotage — 8 variables configurables fondateur (taux mort, poids vente, coût revient, marge, plancher tréso) |
 | `918296c` | feat: 4 experts — IC indice consommation, saisonnalité prix foirail, calendrier SOP vétérinaire, GMQ prédictif |
 | `c94fa36` | feat: SOP protocol configurable — fondateur ajuste dates/étapes, persiste Config_App, calendrier SOP suit |
+| `bc7cdcb` | refactor: audit UX/roles/bugs — seuils GMQ hardcodés corrigés, docs mis à jour complets |
+| `4cd5a95` | fix: SOP row layout — overflow hidden, boutons compacts, alignement texte |
+| `82a03d4` | fix: persist CYCLE vers localStorage immédiatement après sync Config_Cycle Sheets |
+| `5fffcc0` | fix: SOP edits persist localStorage + light mode dark bg overrides |
+| `eae090f` | feat: bloc rentabilité dashboard — marge projetée, ROI, seuil foirail, badge confiance |
+| `8396131` | fix: 5 bugs — alimPrix persist+reset, _nbBetes side effect, prix consolidé _livePrixMax(), hero marge/cout badges, light mode gradients |
+| `11a218e` | design: rehausser contrastes #445544/#556655→#7a9a7a, unifier warning #ffaa40→#ff9800 |
+| `61872bb` | fix: page verte — supprime CSS timer 1s splash, JS double rAF après r() |
+| `9cf60e9` | feat: onglets SOP Véto — protocole (Saisie gérant), sopvet+calendrier (Livrables fondateur/rga) |
+| `f14f74c` | fix: sopvet — corrige `.replace(/"/g,\'&quot;\')` backslash-quote cassant tout le JS |
 

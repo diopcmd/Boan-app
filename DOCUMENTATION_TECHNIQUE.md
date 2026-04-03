@@ -1,7 +1,7 @@
 # Documentation Technique — BOANR
 
 > Application web mobile de gestion d'élevage bovin — Ferme BOAN, Thiès, Sénégal.
-> Mise à jour : mars 2026
+> Mise à jour : avril 2026 — commit `f14f74c`
 
 ---
 
@@ -171,7 +171,7 @@ Toutes les feuilles de saisie ont le même format :
 
 ## Frontend — Composants JS clés
 
-> `index.html` : **~4974 lignes** (ES5 strict, var uniquement)
+> `index.html` : **~7437 lignes** (ES5 strict, var uniquement)
 
 ### PWA — Clavier mobile (méta + CSS)
 
@@ -203,9 +203,9 @@ input,textarea,select,button,a { touch-action: manipulation; }
 | `pageLogin()` | L3498 | Page connexion |
 | `pageApp()` | L3516 | Shell app (header + tabs + contenu) |
 | `viewDash()` | L4106 | Dashboard (hero card + KPI + alertes) |
-| `viewSaisie()` | L4258 | Formulaires de saisie (dispatch sur S.sub) |
-| `viewLiv()` | L4599 | Livrables (trésorerie, simulations, projections) |
-| `viewMarche()` | L4858 | Marché (prix, recommandations, simulateur) |
+| `viewSaisie()` | ~L5119 | Saisies gérant (fiche/SOP/stock/inc/pesée/santé/bilan/protocole) |
+| `viewLiv()` | ~L5626 | Livrables (treso/kpi/bêtes/incidents/objectifs/sopvet/calendrier/gonogo) |
+| `viewMarche()` | ~L6389 | Marché (prix/alim/calendrier) |
 | `buildSidebar()` | L3642 | Sidebar (météo, stock, checklist, stepper durée+pesée) |
 | `pageModal()` | L2056 | Modale configuration cycle |
 | `pageAI()` | L2470 | Modale assistant IA Claude |
@@ -225,7 +225,12 @@ input,textarea,select,button,a { touch-action: manipulation; }
 | `loadPrix()` | L1880 | Charge suivi marché depuis Sheets (`Suivi_Marche!A4:J500`, filtre bas ou moy présent) |
 | `doSubmit(type)` | L1478 | Soumission formulaire — valide, préfixe `ok:`, écrit Sheets |
 | `addStockLigne(mode)` | L2281 | Ajout/consommation stock — valide dispo avant acceptation |
-| `_syncCycle()` | L1717 | Réécrit `Config_Cycle!A1:O1` dans les 4 sheets disponibles |
+| `_sopEdit(i)` | — | Charge étape i dans `S._sopEd` pour édition |
+| `_sopDel(i)` | — | Supprime étape i du protocole personnalisé (clone d'abord `SOP_PROTOCOL_DEFAULT`) |
+| `_sopSave(isNew)` | — | Valide et sauvegarde étape éditée ou nouvelle dans `CYCLE.sopProtocol` |
+| `_sopReset()` | — | Réinitialise `CYCLE.sopProtocol = null` (retour au standard) |
+| `saveObjectifs()` | ~L5538 | Persiste objectifs + sopProtocol dans `Config_App` via `appendRow()` |
+| `_syncCycle()` | ~L1717 | Réécrit `Config_Cycle!A1:O1` dans les 4 sheets disponibles |
 | `updateDureeMois(v)` | L1734 | Met à jour `CYCLE.dureeMois` + appelle `_syncCycle()` |
 | `updatePeseeFreq(v)` | L1739 | Met à jour `CYCLE.peseeFreq` + appelle `_syncCycle()` |
 | `saveCycle()` | L3272 | Valide et enregistre la configuration cycle complète |
@@ -350,7 +355,8 @@ body.light .tab.on  { border-bottom-color: #fff; }
 
 | Erreur | Cause probable | Solution |
 |---|---|---|
-| Page blanche sans console | `,,` dans objet JS | Chercher `,,` dans index.html |
+| Page blanche / login introuvable | Erreur JS fatale (syntaxe) dans `index.html` | Chercher `,,` et `.replace(/"/g,\'&quot;\')` (backslash-quote invalide) |
+| Page verte entre splash et login | CSS timer `animation:splashOut Xs` avant que r() finisse | Supprimer le timer CSS, utiliser double `requestAnimationFrame` après `r()` |
 | "Requested entity was not found" | Mauvais nom d'onglet ou SID manquant | Vérifier noms onglets + variables Vercel |
 | "unable to parse range" | `%3A` dans l'URL Sheets | encode `sheetName` uniquement, pas la plage |
 | Écriture décalée d'une ligne | Cellules vides formatées comptées | Filtre `r[0] !== ''` dans appendRow |
