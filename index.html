@@ -408,6 +408,8 @@ function todayISO() {
 function nowHeure() { return _nowDakar().hour; }   // remplace nowHeure()
 function nowJour()  { return _nowDakar().weekday; } // remplace nowJour()
 function isoToFr(iso) { if(!iso) return today(); var p=iso.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
+// parseISO : parse une date ISO YYYY-MM-DD en Date locale (évite le décalage UTC midnight)
+function parseISO(iso) { if(!iso) return null; var p=iso.split('-'); return new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2])); }
 
 // LocalStorage helpers
 function lsGet(k) { try { return JSON.parse(localStorage.getItem('boanr_'+k)); } catch(e) { return null; } }
@@ -463,7 +465,7 @@ function _gmqLabel() {
 }
 function calcSemaine() {
   if (!CYCLE.dateDebut) return MOCK.sem;
-  var debut = new Date(CYCLE.dateDebut);
+  var debut = parseISO(CYCLE.dateDebut);
   var _nd3  = _nowDakar();
   var now   = new Date(_nd3.year, _nd3.month-1, _nd3.day);
   var diff  = Math.floor((now - debut) / (7 * 24 * 3600 * 1000)) + 1;
@@ -1243,7 +1245,7 @@ function loadLiveData() {
     var parts = dateFR.split('/');
     if (parts.length !== 3) return false;
     var d = new Date(parts[2], parts[1]-1, parts[0]);
-    var debut = new Date(CYCLE.dateDebut);
+    var debut = parseISO(CYCLE.dateDebut);
     return d >= debut;
   }
 
@@ -1412,7 +1414,8 @@ function loadLiveData() {
         var gains = peseesCycle.map(function(r){ return safeNum(r[5]); }).filter(function(v){ return v !== null && v > 0; });
         if (gains.length > 0) {
           var moy = gains.reduce(function(a,b){return a+b;},0) / gains.length;
-          var gmq = Math.round((moy/7)*100)/100;
+          var _peseeFreqV1 = CYCLE.peseeFreq || 30; // fix: diviseur réel au lieu de 7 fixe
+          var gmq = Math.round((moy/_peseeFreqV1)*100)/100;
           if (gmq > 0 && gmq < 5) {
             MOCK.gmq = gmq;
             SPARK.gmq = gains.slice(-7).map(function(g){ return Math.round((g/7)*100)/100; });
@@ -1651,7 +1654,7 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   if (!stocks.length)    _emptyInSheets['stock']  = true;
 
   // Filtre cycle : rejeter les entrées locales antérieures au début du cycle courant
-  var _cycleStart = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : null;
+  var _cycleStart = parseISO(CYCLE.dateDebut);
   var localOnly = (HISTORY || []).filter(function(h) {
     if (h._src === 'sheets') return false; // déjà issu de Sheets
     if (_emptyInSheets[h.type]) return false; // Sheets vide pour ce type → orphelin invalide
@@ -1686,7 +1689,7 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
 
   // 4. Trier par date décroissante — les bilans utilisent une date synthétique
   // basée sur CYCLE.dateDebut + _sem semaines pour ne pas être éjectés en queue
-  var _cycleDebutD = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : null;
+  var _cycleDebutD = parseISO(CYCLE.dateDebut);
   function _entryDate(e) {
     if (e.type === 'bilan' && e._sem && _cycleDebutD) {
       var _d = new Date(_cycleDebutD.getTime() + (parseInt(e._sem, 10) - 1) * 7 * 86400000);
@@ -2202,7 +2205,7 @@ function loadPesees() {
         if (i === 0 || !p.prev || !p.gain) {
           // Première pesée : utiliser jours réels depuis début du cycle, sinon 30j
           var _dP0 = parseDate(p.date);
-          var _dRef0 = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : null;
+          var _dRef0 = parseISO(CYCLE.dateDebut);
           var _jP0 = (_dP0 && _dRef0) ? Math.round((_dP0 - _dRef0) / 86400000) : 30;
           p.gmq = (p.gain && _jP0 > 0) ? Math.round((p.gain / _jP0) * 100) / 100 : 0;
         } else {
@@ -2263,7 +2266,7 @@ function loadPrix() {
         if (!CYCLE.dateDebut) return true;
         var _p = r[0].split('/');
         if (_p.length !== 3) return true;
-        return new Date(_p[2], _p[1]-1, _p[0]) >= new Date(CYCLE.dateDebut);
+        return new Date(_p[2], _p[1]-1, _p[0]) >= (parseISO(CYCLE.dateDebut) || new Date(0));
       })
       .map(function(r){
         return {
@@ -2304,7 +2307,7 @@ function loadAlimPrix() {
         if (!CYCLE.dateDebut) return true;
         var _p = r[0].split('/');
         if (_p.length !== 3) return true;
-        return new Date(_p[2], _p[1]-1, _p[0]) >= new Date(CYCLE.dateDebut);
+        return new Date(_p[2], _p[1]-1, _p[0]) >= (parseISO(CYCLE.dateDebut) || new Date(0));
       })
       .map(function(r){
         return {
@@ -2640,6 +2643,8 @@ function confirmResetWithPwd() {
     MODAL.open = true;
     MODAL.step = 1;
     MODAL.data = Object.assign({}, CYCLE);
+    // fix: oninput ne se déclenche pas si l'utilisateur ne touche pas le champ date
+    if (!MODAL.data.dateDebut) MODAL.data.dateDebut = todayISO();
     closeSB();
     r();
   })
@@ -4157,7 +4162,7 @@ function pageApp(){
       var _dp = p.date.split('/');
       if (_dp.length !== 3) return;
       var _d = new Date(_dp[2],_dp[1]-1,_dp[0]);
-      var _ref = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : _d;
+      var _ref = parseISO(CYCLE.dateDebut) || _d;
       var wk = Math.floor((_d - _ref) / (7*24*3600*1000));
       if (!byWeek[wk]) byWeek[wk] = [];
       byWeek[wk].push(p.gmq||0);
@@ -4355,7 +4360,7 @@ function buildSidebar(){
             if (_jourSem === 5) return 0;
             var _base = 5 - _jourSem;
             if (!bilanSem && calcSemaine() === 1 && CYCLE.dateDebut) {
-              var _age = Math.floor((Date.now()-new Date(CYCLE.dateDebut))/86400000);
+              var _age = Math.floor((Date.now()-(parseISO(CYCLE.dateDebut)||new Date()).getTime())/86400000);
               if (_age + _base < 3) return _base + 7; // 1er bilan = vendredi prochain
             }
             return _base;
@@ -4928,7 +4933,7 @@ function viewDash(){
       var _dp = p.date.split('/');
       if (_dp.length !== 3) return;
       var _d = new Date(_dp[2],_dp[1]-1,_dp[0]);
-      var _ref = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : _d;
+      var _ref = parseISO(CYCLE.dateDebut) || _d;
       var wk = Math.floor((_d - _ref) / (7*24*3600*1000));
       if (!byWeek[wk]) byWeek[wk] = [];
       byWeek[wk].push(p.gmq||0);
@@ -5587,7 +5592,7 @@ function viewSaisie(){
       +msgHtml()+'</div>';
   } else if(S.sub==='protocole'){
     var _pdProto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
-    var _pdDeb   = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : null;
+    var _pdDeb   = parseISO(CYCLE.dateDebut);
     var _ndPd    = _nowDakar();
     var _pdToday = new Date(_ndPd.year, _ndPd.month-1, _ndPd.day);
     var _pdJour  = _pdDeb ? Math.floor((_pdToday - _pdDeb) / 86400000) : null;
@@ -6385,7 +6390,7 @@ function viewLiv(){
     }
     // ── Calendrier SOP fusionné en tête (ex-onglet séparé supprimé) ──
     view = (function(){
-      var _cb = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : null;
+      var _cb = parseISO(CYCLE.dateDebut);
       var _cn = _nowDakar(); var _ct = new Date(_cn.year, _cn.month-1, _cn.day);
       var _cp = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
       var _cc = _cp.map(function(evt){
@@ -7297,7 +7302,7 @@ function pageGuide() {
   // Reporter au vendredi suivant si cycle vient de démarrer (< 3 jours) et vendredi trop proche
   var _guideJoursVen = (function(){
     if (!_guideBilanFait && calcSemaine() === 1 && CYCLE.dateDebut) {
-      var _age = Math.floor((Date.now()-new Date(CYCLE.dateDebut))/86400000);
+      var _age = Math.floor((Date.now()-(parseISO(CYCLE.dateDebut)||new Date()).getTime())/86400000);
       if (_age + _guideJoursVenBase < 3) return _guideJoursVenBase + 7;
     }
     return _guideJoursVenBase;
