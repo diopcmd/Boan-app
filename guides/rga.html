@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Guide RGA — BOAN</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#1a1a1a;background:#fff;padding:20px}
+  h1{font-size:22px;color:#1a3a1a;border-bottom:3px solid #2d6a2d;padding-bottom:8px;margin-bottom:16px}
+  h2{font-size:14px;color:#fff;background:#2d6a2d;padding:7px 12px;border-radius:6px;margin:18px 0 8px;letter-spacing:.03em}
+  h3{font-size:12px;color:#2d6a2d;font-weight:700;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.04em}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px}
+  .role-badge{background:#003060;color:#66bbff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px}
+  .card{border:1px solid #d0e8d0;border-radius:8px;padding:12px;margin-bottom:12px;break-inside:avoid}
+  .row{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid #f0f5f0}
+  .row:last-child{border-bottom:none}
+  .ico{font-size:16px;min-width:22px;text-align:center;flex-shrink:0}
+  .label{font-weight:700;color:#1a1a1a;font-size:13px}
+  .desc{color:#556655;font-size:11px;margin-top:2px;line-height:1.4}
+  .lexique{background:#f5f9ff;border:1px solid #c0d8f0;border-radius:8px;padding:12px;margin-bottom:12px}
+  .lex-row{display:flex;gap:12px;padding:7px 0;border-bottom:1px solid #ddeeff}
+  .lex-row:last-child{border-bottom:none}
+  .lex-term{min-width:140px;font-weight:700;color:#003060;font-size:12px}
+  .lex-def{font-size:11px;color:#336;line-height:1.5}
+  .escalade{background:#fff8e8;border:1px solid #e8c860;border-radius:8px;padding:12px;margin-bottom:12px}
+  .escalade-title{font-weight:800;color:#8a6000;font-size:13px;margin-bottom:8px}
+  .esc-row{font-size:11px;color:#5a4000;padding:3px 0;line-height:1.4;border-bottom:1px solid #ffeebb}
+  .esc-row:last-child{border-bottom:none}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .footer{margin-top:20px;padding-top:10px;border-top:2px solid #d0e8d0;font-size:10px;color:#888;display:flex;justify-content:space-between}
+  @media print{
+    body{padding:12px;font-size:12px}
+    h1{font-size:18px}
+    .no-print{display:none}
+    @page{margin:1.5cm;size:A4}
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>📋 BOAN — Guide RGA (Responsable Gestion Administrative)</h1>
+    <div style="font-size:11px;color:#557755;margin-top:4px">Contrôle, reporting, analyse. Rôle : vérifier la cohérence des données, préparer les décisions, escalader les alertes.</div>
+  </div>
+  <div class="role-badge">RGA</div>
+</div>
+
+<button class="no-print" onclick="window.print()" style="background:#2d6a2d;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:12px;cursor:pointer;margin-bottom:16px">🖨️ Imprimer / Enregistrer en PDF</button>
+
+<!-- ═══ RÔLE ET ACCÈS ═══ -->
+<h2>🗂️ Votre rôle et vos onglets</h2>
+<div class="card">
+  <div class="row"><div class="ico">👁️</div><div><div class="label">Vous voyez — Dashboard, Livrables, Marché</div><div class="desc">Lecture et analyse uniquement. Pas d'accès à la Saisie terrain.</div></div></div>
+  <div class="row"><div class="ico">✅</div><div><div class="label">Vous pouvez modifier</div><div class="desc">Livrables > Objectifs : les seuils GMQ, financiers, protocole SOP, paramètres marché.</div></div></div>
+  <div class="row"><div class="ico">🚫</div><div><div class="label">Vous ne pouvez pas</div><div class="desc">Clôturer un cycle, démarrer un nouveau cycle, modifier les SIDs — réservé au Fondateur.</div></div></div>
+</div>
+
+<!-- ═══ CONTRÔLE HEBDO ═══ -->
+<h2>📅 Contrôle hebdomadaire — Chaque vendredi</h2>
+<div class="card">
+  <div class="row"><div class="ico">📊</div><div><div class="label">Bilan gérant reçu ?</div><div class="desc">Dashboard — vérifier que le bilan hebdo de cette semaine a bien été saisi par le gérant.</div></div></div>
+  <div class="row"><div class="ico">📈</div><div><div class="label">KPI cohérents ?</div><div class="desc">Livrables > KPI — GMQ dans la cible ? Mortalité sous le seuil ? Tréso > plancher ? Coût de revient ≤ max ?</div></div></div>
+  <div class="row"><div class="ico">⚖️</div><div><div class="label">Pesée à jour ?</div><div class="desc">Dashboard — alerte pesée. Si en retard de plus d'une semaine, signaler au Fondateur.</div></div></div>
+  <div class="row"><div class="ico">⚠️</div><div><div class="label">Incidents traités ?</div><div class="desc">Livrables > Incidents — tous les incidents saisis ont-ils été lus et décision prise ?</div></div></div>
+  <div class="row"><div class="ico">💹</div><div><div class="label">Relevés foirail à jour ?</div><div class="desc">Marché > Prix foirail — dernier relevé de moins de 7 jours ? Sinon, relancer Fallou.</div></div></div>
+  <div class="row"><div class="ico">💰</div><div><div class="label">Synthèse à transmettre</div><div class="desc">Préparer un message court au Fondateur : état KPI semaine, alertes éventuelles, point stock.</div></div></div>
+</div>
+
+<!-- ═══ CONTRÔLE MENSUEL ═══ -->
+<h2>📆 Contrôle mensuel</h2>
+<div class="card">
+  <div class="row"><div class="ico">🌽</div><div><div class="label">Rapport mensuel aliments</div><div class="desc">Marché > Prix aliments > bouton "Rapport mensuel". Compare prix ce mois vs mois précédent par type. Partager à la Direction.</div></div></div>
+  <div class="row"><div class="ico">📜</div><div><div class="label">Comparer avec cycle précédent</div><div class="desc">Livrables > Cycles — historique archivé. Comparer GMQ, marge/tête, durée, décès.</div></div></div>
+  <div class="row"><div class="ico">💰</div><div><div class="label">Coût de revient vs objectif</div><div class="desc">Livrables > KPI. Coût réel / kg gain vs coutRevientMax configuré. Écart > 10% = alerte.</div></div></div>
+  <div class="row"><div class="ico">🎯</div><div><div class="label">Réviser les objectifs si besoin</div><div class="desc">Si le marché ou la race change, adapter GMQ cible, marge min, prix aliment dans Livrables > Objectifs.</div></div></div>
+</div>
+
+<!-- ═══ PRÉPARER RECOMMANDATION VENTE ═══ -->
+<h2>🏁 Préparer une recommandation de vente</h2>
+<div class="card">
+  <div class="row"><div class="ico">1️⃣</div><div><div class="label">Vérifier que les relevés foirail sont récents</div><div class="desc">Marché > Prix foirail. Si le dernier relevé date de plus de 3 jours, demander à Fallou avant de simuler.</div></div></div>
+  <div class="row"><div class="ico">2️⃣</div><div><div class="label">Vérifier les poids individuels</div><div class="desc">Livrables > Bêtes. Quelle proportion de bêtes dépasse poidsVenteMin ? Quelle est la moyenne actuelle ?</div></div></div>
+  <div class="row"><div class="ico">3️⃣</div><div><div class="label">Lancer le simulateur</div><div class="desc">Marché > Simulateur. Tester 3 scénarios : prix bas / moyen / haut du foirail. La marge/tête est-elle ≥ margeParBeteMin ?</div></div></div>
+  <div class="row"><div class="ico">4️⃣</div><div><div class="label">Vérifier le Go/No-Go</div><div class="desc">Livrables > Go/No-Go. Tous les feux verts ? Un feu rouge bloquant = identifier la cause et proposer une solution.</div></div></div>
+  <div class="row"><div class="ico">5️⃣</div><div><div class="label">Formuler la recommandation</div><div class="desc">Rédiger : "Recommande vente dans X semaines si prix foirail ≥ Y FCFA/kg. Marge projetée = Z FCFA/tête."</div></div></div>
+</div>
+
+<!-- ═══ LEXIQUE ═══ -->
+<h2>📖 Lexique économique opérationnel</h2>
+<div class="lexique">
+  <div class="lex-row"><div class="lex-term">GMQ (kg/j)</div><div class="lex-def">Gain Moyen Quotidien = (poids fin − poids départ) ÷ nombre de jours. Mesure la vitesse de croissance. Cible typique : 1,0 kg/j. Vérification manuelle : (poids pesée 2 − poids pesée 1) ÷ jours entre les deux pesées.</div></div>
+  <div class="lex-row"><div class="lex-term">Coût de revient (F/kg)</div><div class="lex-def">Total charges sur le cycle ÷ kg de gain de poids produit. Décomposition : alimentation + santé + charges fixes. L'app calcule un coût estimé. Compléter manuellement avec : transport, commission foirail, gardiennage.</div></div>
+  <div class="lex-row"><div class="lex-term">Marge brute / tête</div><div class="lex-def">= (Prix de vente × poids fin) − Capital investi ÷ nb bêtes. L'app calcule Tréso finale − Capital. ⚠️ Ne déduit pas transport ni commission courtier (à déduire manuellement).</div></div>
+  <div class="lex-row"><div class="lex-term">Taux de mortalité (%)</div><div class="lex-def">= (Nb bêtes départ − Nb bêtes fin) ÷ Nb bêtes départ × 100. Seuil acceptable : ≤ 3% sur un cycle de 8 mois. Au-delà = signaler et investiguer.</div></div>
+  <div class="lex-row"><div class="lex-term">Plancher tréso</div><div class="lex-def">Solde minimal de sécurité en FCFA. Si le solde passe sous ce seuil → alerte rouge dans Dashboard. Ne pas laisser la tréso atteindre ce plancher sans anticipation.</div></div>
+  <div class="lex-row"><div class="lex-term">Capital investi</div><div class="lex-def">= Prix d'achat total des bêtes au foirail. C'est la mise de départ du cycle. Configuré dans Saisie > Nouveau cycle.</div></div>
+  <div class="lex-row"><div class="lex-term">objetifPrix (F/kg)</div><div class="lex-def">Prix de vente minimum visé par kg de poids vif. Doit être mis à jour à chaque relevé foirail. Utilisé pour calculer la marge projetée et le signal Go/No-Go.</div></div>
+</div>
+
+<!-- ═══ ESCALADE ═══ -->
+<h2>🚨 Situations à escalader vers le Fondateur</h2>
+<div class="escalade">
+  <div class="escalade-title">À signaler immédiatement — ne pas attendre</div>
+  <div class="esc-row">🔴 <strong>Trésorerie sous le plancher</strong> — Risque de rupture d'approvisionnement aliment.</div>
+  <div class="esc-row">🔴 <strong>Taux de mortalité > seuil</strong> sur la semaine — Possible épidémie ou problème systémique.</div>
+  <div class="esc-row">🔴 <strong>GMQ négatif 2 semaines consécutives</strong> — Les bêtes perdent du poids. Investiguer alimentation ou santé.</div>
+  <div class="esc-row">🔴 <strong>Bilan gérant absent 2 vendredis consécutifs</strong> — Problème de fiabilité terrain.</div>
+  <div class="esc-row">🟠 <strong>Cours foirail en baisse de plus de 15%</strong> sur 2 semaines — Reconsidérer la date de vente.</div>
+  <div class="esc-row">🟠 <strong>Stock aliment non saisi depuis 3 semaines</strong> — Incohérence possible dans la consommation réelle.</div>
+</div>
+
+<div class="footer">
+  <span>BOAN — Guide RGA</span>
+  <span>Généré depuis l'application BOAN.</span>
+</div>
+</body>
+</html>

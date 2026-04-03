@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Guide Commerciale — BOAN</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#1a1a1a;background:#fff;padding:20px}
+  h1{font-size:22px;color:#1a3a1a;border-bottom:3px solid #2d6a2d;padding-bottom:8px;margin-bottom:16px}
+  h2{font-size:14px;color:#fff;background:#2d6a2d;padding:7px 12px;border-radius:6px;margin:18px 0 8px;letter-spacing:.03em}
+  h3{font-size:12px;color:#2d6a2d;font-weight:700;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.04em}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px}
+  .role-badge{background:#3a2400;color:#ffcc66;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px}
+  .card{border:1px solid #d0e8d0;border-radius:8px;padding:12px;margin-bottom:12px;break-inside:avoid}
+  .row{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid #f0f5f0}
+  .row:last-child{border-bottom:none}
+  .ico{font-size:16px;min-width:22px;text-align:center;flex-shrink:0}
+  .label{font-weight:700;color:#1a1a1a;font-size:13px}
+  .desc{color:#556655;font-size:11px;margin-top:2px;line-height:1.4}
+  .info-box{background:#fff8e8;border:1px solid #e8c860;border-radius:8px;padding:12px;margin-bottom:12px}
+  .info-title{font-weight:800;color:#8a6000;font-size:13px;margin-bottom:8px}
+  .info-row{font-size:11px;color:#5a4000;padding:4px 0;border-bottom:1px solid #ffeebb;line-height:1.4}
+  .info-row:last-child{border-bottom:none}
+  .cadence{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .cadence-card{border:2px solid #2d6a2d;border-radius:8px;padding:12px;text-align:center}
+  .cadence-freq{font-size:22px;font-weight:800;color:#2d6a2d}
+  .cadence-label{font-size:11px;color:#557755;margin-top:4px}
+  .cadence-detail{font-size:11px;color:#334433;margin-top:6px;line-height:1.4}
+  .steps{counter-reset:step}
+  .step{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid #f0f5f0}
+  .step:last-child{border-bottom:none}
+  .step-num{min-width:26px;height:26px;background:#2d6a2d;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0}
+  .footer{margin-top:20px;padding-top:10px;border-top:2px solid #d0e8d0;font-size:10px;color:#888;display:flex;justify-content:space-between}
+  .signal-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .signal-card{border:1px solid #d0e8d0;border-radius:6px;padding:8px;background:#f9fff9}
+  .signal-ico{font-size:20px;margin-bottom:4px}
+  .signal-label{font-size:11px;font-weight:700;color:#1a3a1a}
+  .signal-desc{font-size:10px;color:#557755;margin-top:2px;line-height:1.3}
+  @media print{
+    body{padding:12px;font-size:12px}
+    h1{font-size:18px}
+    .no-print{display:none}
+    @page{margin:1.5cm;size:A4}
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>💹 BOAN — Guide Commerciale (Fallou)</h1>
+    <div style="font-size:11px;color:#557755;margin-top:4px">Veille marché, relevés de prix, recommandations de vente. Rôle : alimenter les décisions d'achat et de vente.</div>
+  </div>
+  <div class="role-badge">COMMERCIALE</div>
+</div>
+
+<button class="no-print" onclick="window.print()" style="background:#2d6a2d;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:12px;cursor:pointer;margin-bottom:16px">🖨️ Imprimer / Enregistrer en PDF</button>
+
+<!-- ═══ RÔLE ═══ -->
+<h2>🎯 Votre rôle dans l'écosystème BOAN</h2>
+<div class="card">
+  <div class="row"><div class="ico">📊</div><div><div class="label">Vous alimentez les décisions de vente</div><div class="desc">Vos relevés foirail sont la matière première des projections de marge. Un relevé approximatif = une mauvaise décision.</div></div></div>
+  <div class="row"><div class="ico">🌽</div><div><div class="label">Vous alimentez le calcul du coût réel</div><div class="desc">Vos prix aliments permettent à l'app d'utiliser la consommation réelle (kg × prix/kg) au lieu d'estimations. Plus précis = meilleure gestion.</div></div></div>
+  <div class="row"><div class="ico">🧮</div><div><div class="label">Vous construisez les recommandations</div><div class="desc">Via le Simulateur, vous proposez une fenêtre de vente chiffrée à la Direction.</div></div></div>
+  <div class="row"><div class="ico">👁️</div><div><div class="label">Vous voyez — Dashboard et Marché</div><div class="desc">Lecture des KPI + saisie des relevés. Vous n'avez pas accès à la Saisie terrain ni aux Livrables admin.</div></div></div>
+</div>
+
+<!-- ═══ CADENCE DES RELEVÉS ═══ -->
+<h2>📅 Cadence des relevés — À respecter impérativement</h2>
+<div class="cadence">
+  <div class="cadence-card">
+    <div class="cadence-freq">1×/sem</div>
+    <div class="cadence-label">Prix foirail — en cycle actif</div>
+    <div class="cadence-detail">Minimum. Passer à 2×/sem quand la fin de cycle est à ≤ 3 semaines.</div>
+  </div>
+  <div class="cadence-card">
+    <div class="cadence-freq">1×/sem</div>
+    <div class="cadence-label">Prix aliments (son + tourteau)</div>
+    <div class="cadence-detail">À chaque modification de prix fournisseur, même sans attendre la semaine.</div>
+  </div>
+</div>
+
+<!-- ═══ COMMENT SAISIR UN RELEVÉ FOIRAIL ═══ -->
+<h2>📍 Comment saisir un relevé foirail — Pas à pas</h2>
+<div class="card">
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div><div class="label">Aller dans Marché > Prix foirail</div><div class="desc">Onglet Marché > sous-onglet "Prix foirail".</div></div></div>
+    <div class="step"><div class="step-num">2</div><div><div class="label">Sélectionner la date du relevé et le foirail</div><div class="desc">Utiliser la date réelle du passage au marché, pas la date du jour si différente.</div></div></div>
+    <div class="step"><div class="step-num">3</div><div><div class="label">Saisir le prix BAS et le prix MOYEN</div><div class="desc">Prix BAS = un animal ordinaire / médiocre état. Prix MOYEN = la référence standard pour la race dominante du marché ce jour-là.</div></div></div>
+    <div class="step"><div class="step-num">4</div><div><div class="label">Prix HAUT (optionnel)</div><div class="desc">Ne saisir le prix haut que s'il est représentatif. Le prix d'un animal exceptionnel (Tabaski, coup de cœur) fausse les projections — à mentionner dans les notes si atypique.</div></div></div>
+    <div class="step"><div class="step-num">5</div><div><div class="label">Valider</div><div class="desc">Le graphique de prix se met à jour instantanément. Vérifier que la courbe est cohérente avec l'historique.</div></div></div>
+  </div>
+</div>
+
+<!-- ═══ LIRE UN PRIX FOIRAIL ═══ -->
+<h2>🐄 Comment lire un prix foirail — Essentiel</h2>
+<div class="info-box">
+  <div class="info-title">⚠️ Les 3 niveaux de prix et ce qu'ils signifient</div>
+  <div class="info-row"><strong>Prix BAS</strong> — Animal en mauvais état corporel, vieux, petite race, stressé. Indicateur du bas du marché. Ne pas utiliser comme référence de cycle.</div>
+  <div class="info-row"><strong>Prix MOYEN</strong> — La vraie référence. Animal standard de la race dominante du marché ce jour-là, en bon état. C'est le chiffre à comparer avec l'objectifPrix configuré dans l'app.</div>
+  <div class="info-row"><strong>Prix HAUT</strong> — Animal exceptionnel : race premium, fin de saison Tabaski, coup de cœur acheteur. <em>Ne pas l'utiliser comme base de projection</em> — il gonflerait la marge estimée.</div>
+</div>
+<div class="info-box">
+  <div class="info-title">📆 Facteurs qui font varier les prix — À noter lors de chaque relevé</div>
+  <div class="info-row">🕌 <strong>Approche Tabaski</strong> : les prix peuvent doubler 4-6 semaines avant. Opportunité si les bêtes sont prêtes.</div>
+  <div class="info-row">🌧️ <strong>Hivernage</strong> : les prix baissent généralement (offre abondante). Éviter de vendre si possible.</div>
+  <div class="info-row">🌵 <strong>Saison sèche</strong> : les prix remontent (offre réduite). Meilleure fenêtre en dehors de Tabaski.</div>
+  <div class="info-row">📍 <strong>Foirail proche de la fin de cycle</strong> : noter plusieurs foirails pour comparer et choisir le meilleur.</div>
+</div>
+
+<!-- ═══ SAISIR PRIX ALIMENT ═══ -->
+<h2>🌽 Saisir un prix aliment</h2>
+<div class="card">
+  <div class="row"><div class="ico">1️⃣</div><div><div class="label">Marché > Prix aliments</div><div class="desc">Sélectionner le type : "Son de blé", "Tourteau arachide", ou autre.</div></div></div>
+  <div class="row"><div class="ico">2️⃣</div><div><div class="label">Saisir le prix FCFA / kg</div><div class="desc">Prix réel payé chez le fournisseur ou relevé sur le marché. Inclure les frais de transport si livré.</div></div></div>
+  <div class="row"><div class="ico">3️⃣</div><div><div class="label">Valider + notifier le Fondateur</div><div class="desc">Si le prix a changé de plus de 10% vs le précédent, informer la Direction pour mise à jour de prixAlim.</div></div></div>
+</div>
+
+<!-- ═══ UTILISER LE SIMULATEUR ═══ -->
+<h2>🧮 Utiliser le Simulateur pour une recommandation de vente</h2>
+<div class="card">
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div><div class="label">Aller dans Marché > Simulateur</div><div class="desc">Les charges du cycle actuel sont pré-remplies.</div></div></div>
+    <div class="step"><div class="step-num">2</div><div><div class="label">Ajuster le prix de vente visé (sn)</div><div class="desc">Tester 3 valeurs : prix bas du foirail / prix moyen / prix attendu dans 3 semaines.</div></div></div>
+    <div class="step"><div class="step-num">3</div><div><div class="label">Lire la marge brute par tête</div><div class="desc">Est-elle ≥ margeParBeteMin ? (configuré dans Livrables > Objectifs). Si oui : signal favorable.</div></div></div>
+    <div class="step"><div class="step-num">4</div><div><div class="label">Lire le prix seuil de rentabilité</div><div class="desc">C'est le prix minimum sous lequel on perd de l'argent. Ne jamais vendre en dessous.</div></div></div>
+    <div class="step"><div class="step-num">5</div><div><div class="label">Partager le rapport</div><div class="desc">Bouton "Partager" dans le Simulateur. Envoyer à la Direction avec votre recommandation.</div></div></div>
+  </div>
+</div>
+
+<!-- ═══ SIGNAUX DE VENTE ═══ -->
+<h2>🏁 Quand déclencher l'alerte vente — Les 4 signaux</h2>
+<div class="signal-grid">
+  <div class="signal-card">
+    <div class="signal-ico">⚖️</div>
+    <div class="signal-label">Signal poids</div>
+    <div class="signal-desc">Poids moyen ≥ poids cible configuré. Voir Dashboard > Pesées. Bêtes biologiquement prêtes.</div>
+  </div>
+  <div class="signal-card">
+    <div class="signal-ico">📉</div>
+    <div class="signal-label">Signal GMQ plateau</div>
+    <div class="signal-desc">GMQ en plateau ou décroissant depuis 2 pesées. Gain marginal nul. Chaque jour coûte sans gagner.</div>
+  </div>
+  <div class="signal-card">
+    <div class="signal-ico">📅</div>
+    <div class="signal-label">Signal fin de cycle</div>
+    <div class="signal-desc">Fin de cycle ≤ 2–3 semaines. Urgence de positionnement au foirail avant les autres vendeurs.</div>
+  </div>
+  <div class="signal-card">
+    <div class="signal-ico">💹</div>
+    <div class="signal-label">Signal marché</div>
+    <div class="signal-desc">Cours foirail ≥ objectifPrix. Fenêtre favorable. Ne pas attendre si les autres signaux sont aussi présents.</div>
+  </div>
+</div>
+
+<div style="height:12px"></div>
+
+<!-- ═══ RAPPORT MENSUEL ═══ -->
+<h2>📋 Rapport mensuel aliments</h2>
+<div class="card">
+  <div class="row"><div class="ico">📊</div><div><div class="label">Générer le rapport</div><div class="desc">Marché > Prix aliments > bouton "Rapport mensuel" (visible si des prix ont été saisis ce mois).</div></div></div>
+  <div class="row"><div class="ico">📤</div><div><div class="label">Partager</div><div class="desc">Copier/partager le texte généré. L'envoyer au Fondateur et au RGA en début de mois.</div></div></div>
+  <div class="row"><div class="ico">📈</div><div><div class="label">Ce que le rapport contient</div><div class="desc">Prix actuel vs mois précédent par type d'aliment. Variation en % et en FCFA/kg. Signal de tendance.</div></div></div>
+</div>
+
+<div class="footer">
+  <span>BOAN — Guide Commerciale (Fallou)</span>
+  <span>Généré depuis l'application BOAN.</span>
+</div>
+</body>
+</html>

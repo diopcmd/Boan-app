@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Guide Gérant Terrain — BOAN</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#1a1a1a;background:#fff;padding:20px}
+  h1{font-size:22px;color:#1a3a1a;border-bottom:3px solid #2d6a2d;padding-bottom:8px;margin-bottom:16px}
+  h2{font-size:14px;color:#fff;background:#2d6a2d;padding:7px 12px;border-radius:6px;margin:18px 0 8px;letter-spacing:.03em}
+  h3{font-size:12px;color:#2d6a2d;font-weight:700;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.04em}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px}
+  .role-badge{background:#2d4a00;color:#aaee66;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px}
+  .card{border:1px solid #d0e8d0;border-radius:8px;padding:12px;margin-bottom:12px;break-inside:avoid}
+  .row{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid #f0f5f0}
+  .row:last-child{border-bottom:none}
+  .ico{font-size:16px;min-width:22px;text-align:center;flex-shrink:0}
+  .label{font-weight:700;color:#1a1a1a;font-size:13px}
+  .desc{color:#556655;font-size:11px;margin-top:2px;line-height:1.4}
+  .danger{background:#fff0f0;border:1px solid #ff6060;border-radius:8px;padding:12px;margin-bottom:12px;break-inside:avoid}
+  .danger-title{font-weight:800;color:#cc0000;font-size:14px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+  .danger-row{font-size:12px;color:#880000;padding:4px 0;border-bottom:1px solid #ffdddd;line-height:1.4}
+  .danger-row:last-child{border-bottom:none}
+  .checklist{border:2px solid #2d6a2d;border-radius:8px;padding:12px;margin-bottom:12px}
+  .checklist-title{font-weight:800;font-size:14px;color:#2d6a2d;margin-bottom:10px}
+  .check-item{display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid #e8f5e8}
+  .check-item:last-child{border-bottom:none}
+  .checkbox{width:16px;height:16px;border:2px solid #2d6a2d;border-radius:3px;flex-shrink:0;margin-top:1px}
+  .check-label{font-size:12px;color:#1a1a1a;line-height:1.4}
+  .footer{margin-top:20px;padding-top:10px;border-top:2px solid #d0e8d0;font-size:10px;color:#888;display:flex;justify-content:space-between}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .contacts{border:2px dashed #2d6a2d;border-radius:8px;padding:12px;margin-bottom:12px}
+  .contact-line{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid #e8f5e8}
+  .contact-line:last-child{border-bottom:none}
+  @media print{
+    body{padding:12px;font-size:12px}
+    h1{font-size:18px}
+    .no-print{display:none}
+    @page{margin:1.5cm;size:A4}
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>🧑‍🌾 BOAN — Guide Gérant Terrain</h1>
+    <div style="font-size:11px;color:#557755;margin-top:4px">Opérations quotidiennes d'élevage. Rôle : saisie terrain, surveillance des bêtes, alertes.</div>
+  </div>
+  <div class="role-badge">GÉRANT</div>
+</div>
+
+<button class="no-print" onclick="window.print()" style="background:#2d6a2d;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:12px;cursor:pointer;margin-bottom:16px">🖨️ Imprimer / Enregistrer en PDF</button>
+
+<!-- ═══ RYTHME QUOTIDIEN ═══ -->
+<h2>☀️ Rythme quotidien — SANS EXCEPTION</h2>
+<div class="two-col">
+  <div class="checklist">
+    <div class="checklist-title">🌅 MATIN (6h–8h)</div>
+    <div class="check-item"><div class="checkbox"></div><div class="check-label">Compter les bêtes → Saisie > Fiche du jour</div></div>
+    <div class="check-item"><div class="checkbox"></div><div class="check-label">Eau disponible dans les abreuvoirs ?</div></div>
+    <div class="check-item"><div class="checkbox"></div><div class="check-label">Ration du matin distribuée ?</div></div>
+    <div class="check-item"><div class="checkbox"></div><div class="check-label">Observation : bête isolée, couchée, boiteuse ?</div></div>
+    <div class="check-item"><div class="checkbox"></div><div class="check-label">Enclos en bon état, aucune fuite ?</div></div>
+  </div>
+  <div class="checklist">
+    <div class="checklist-title">🌙 SOIR (18h–20h)</div>
+    <div class="check-item"><div class="checkbox"></div><div class="check-label">Checklist SOP → Saisie > SOP</div></div>
+    <div class="check-item"><div class="checkbox"></div><div class="check-label">Nettoyage fait ?</div></div>
+    <div class="check-item"><div class="checkbox"></div><div class="check-label">Ration du soir distribuée ?</div></div>
+    <div class="check-item"><div class="checkbox"></div><div class="check-label">Stock aliment suffisant pour demain matin ?</div></div>
+    <div class="check-item"><div class="checkbox"></div><div class="check-label">État général correct ?</div></div>
+  </div>
+</div>
+
+<!-- ═══ SAISIES OBLIGATOIRES ═══ -->
+<h2>📱 Saisies obligatoires — Quand et pourquoi</h2>
+<div class="card">
+  <div class="row"><div class="ico">🌅</div><div><div class="label">Fiche du jour — chaque matin</div><div class="desc">Saisie > Fiche. Nb bêtes présentes, consommation eau/nourriture, observations. Si pas rempli avant 14h → alerte automatique à la Direction.</div></div></div>
+  <div class="row"><div class="ico">🌙</div><div><div class="label">Checklist SOP — chaque soir</div><div class="desc">Saisie > SOP. 8 points à valider. Si pas fait avant 20h → alerte Direction.</div></div></div>
+  <div class="row"><div class="ico">📊</div><div><div class="label">Bilan hebdomadaire — chaque vendredi avant 20h</div><div class="desc">Saisie > Bilan. Résumé de la semaine : bêtes, nourriture, incidents, message à la Direction. OBLIGATOIRE chaque vendredi.</div></div></div>
+  <div class="row"><div class="ico">📦</div><div><div class="label">Mouvement de stock — à chaque livraison</div><div class="desc">Saisie > Stock. Saisir type d'aliment + poids reçu dès réception. Chaque sac, chaque camion.</div></div></div>
+  <div class="row"><div class="ico">⚖️</div><div><div class="label">Pesée — tous les X jours (fréquence configurée)</div><div class="desc">Saisie > Pesées. Peser CHAQUE bête individuellement. Numéro de bête + race + poids. L'app vous rappelle avec une alerte.</div></div></div>
+</div>
+
+<!-- ═══ QUE FAIRE SI ═══ -->
+<h2>🚨 Que faire si… — Situations d'urgence</h2>
+<div class="card">
+  <div class="row"><div class="ico">🤒</div><div>
+    <div class="label">Bête qui ne mange pas depuis 24h</div>
+    <div class="desc">→ Saisie > Santé : noter les symptômes. Observer 24h de plus.</div>
+  </div></div>
+  <div class="row"><div class="ico">🤒</div><div>
+    <div class="label">Bête qui ne mange pas depuis 48h</div>
+    <div class="desc">→ Saisie > Santé + appeler le contact vétérinaire (ci-dessous).</div>
+  </div></div>
+  <div class="row"><div class="ico">🐄</div><div>
+    <div class="label">Bête couchée et ne se lève pas</div>
+    <div class="desc">→ Traiter comme urgence vétérinaire. Appeler le vétérinaire ET la Direction. Saisir dans Santé immédiatement.</div>
+  </div></div>
+  <div class="row"><div class="ico">💀</div><div>
+    <div class="label">Décès d'une bête</div>
+    <div class="desc">→ Saisie > Santé : "Décès = OUI". Prévenir la Direction dans l'heure. Si possible : photo.</div>
+  </div></div>
+  <div class="row"><div class="ico">🌡️</div><div>
+    <div class="label">Bête avec fièvre (température > 39,5°C)</div>
+    <div class="desc">→ Isoler la bête. Saisir dans Santé. Appeler le vétérinaire si aucune amélioration en 12h.</div>
+  </div></div>
+  <div class="row"><div class="ico">🏚️</div><div>
+    <div class="label">Incident enclos (fuite, dégât, intrusion)</div>
+    <div class="desc">→ Saisie > Incidents. Appeler la Direction si bête(s) manquante(s) ou blessée(s).</div>
+  </div></div>
+  <div class="row"><div class="ico">⚡</div><div>
+    <div class="label">Panne téléphone / Internet</div>
+    <div class="desc">→ Noter les saisies sur papier. Les saisir dès retour connexion. Appeler la Direction pour le signaler.</div>
+  </div></div>
+</div>
+
+<!-- ═══ SEUILS ALERTE ═══ -->
+<h2>🔴 Seuils d'alerte — Appeler immédiatement</h2>
+<div class="danger">
+  <div class="danger-title">🔴 Ces situations = appel immédiat à la Direction</div>
+  <div class="danger-row">💀 <strong>Décès d'une bête</strong> — Dans l'heure suivante.</div>
+  <div class="danger-row">📉 <strong>Perte de poids visible</strong> sur plusieurs bêtes (BCS qui baisse) — Saisir + appeler.</div>
+  <div class="danger-row">📦 <strong>Stock aliments ≤ 4 semaines</strong> restantes — Avant que le stock atteigne ce niveau.</div>
+  <div class="danger-row">🌡️ <strong>2 bêtes ou plus malades en même temps</strong> — Risque épidémique. Appeler vétérinaire + Direction.</div>
+  <div class="danger-row">🏚️ <strong>Fuite d'enclos avec bête(s) disparue(s)</strong> — Urgence immédiate.</div>
+  <div class="danger-row">💧 <strong>Panne d'eau > 6h</strong> — Les bêtes ne peuvent rester sans eau. Appeler.</div>
+</div>
+
+<!-- ═══ COMPRENDRE LES ALERTES APP ═══ -->
+<h2>📱 Comprendre les alertes bannières de l'app</h2>
+<div class="card">
+  <div class="row"><div class="ico">🟠</div><div><div class="label">« Fiche du jour non remplie »</div><div class="desc">Apparaît si la fiche de ce jour n'est pas saisie après 14h. Tap → Saisie > Fiche.</div></div></div>
+  <div class="row"><div class="ico">🟠</div><div><div class="label">« Checklist SOP non validée »</div><div class="desc">Apparaît après 20h si le SOP du soir n'est pas validé. Tap → Saisie > SOP.</div></div></div>
+  <div class="row"><div class="ico">🟠</div><div><div class="label">« Stock non vérifié depuis X jours »</div><div class="desc">Aucun mouvement de stock depuis 14+ jours. Vérifier le stock et saisir une entrée ou consommation.</div></div></div>
+  <div class="row"><div class="ico">🔴</div><div><div class="label">« PESÉE EN RETARD »</div><div class="desc">Pesée dépassée. Peser toutes les bêtes dès que possible. Saisie > Pesées.</div></div></div>
+  <div class="row"><div class="ico">🔴</div><div><div class="label">« Bilan hebdo à envoyer »</div><div class="desc">C'est vendredi. Envoyer le bilan avant 20h. Saisie > Bilan.</div></div></div>
+</div>
+
+<!-- ═══ CONTACTS ═══ -->
+<h2>📞 Contacts d'urgence</h2>
+<div class="contacts">
+  <div class="contact-line"><div style="min-width:120px;font-weight:700;color:#2d6a2d">Direction :</div><div style="color:#888">______________________________</div></div>
+  <div class="contact-line"><div style="min-width:120px;font-weight:700;color:#2d6a2d">Vétérinaire :</div><div style="color:#888">______________________________</div></div>
+  <div class="contact-line"><div style="min-width:120px;font-weight:700;color:#2d6a2d">RGA :</div><div style="color:#888">______________________________</div></div>
+  <div class="contact-line"><div style="min-width:120px;font-weight:700;color:#2d6a2d">Commerciale :</div><div style="color:#888">______________________________</div></div>
+  <div class="contact-line"><div style="min-width:120px;font-weight:700;color:#2d6a2d">Urgence autre :</div><div style="color:#888">______________________________</div></div>
+</div>
+
+<div class="footer">
+  <span>BOAN — Guide Gérant Terrain</span>
+  <span>Imprimer → plastifier → coller dans l'enclos ou la bergerie.</span>
+</div>
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Guide Fondateur — BOAN</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#1a1a1a;background:#fff;padding:20px}
+  h1{font-size:22px;color:#1a3a1a;border-bottom:3px solid #2d6a2d;padding-bottom:8px;margin-bottom:16px}
+  h2{font-size:14px;color:#fff;background:#2d6a2d;padding:7px 12px;border-radius:6px;margin:18px 0 8px;letter-spacing:.03em}
+  h3{font-size:12px;color:#2d6a2d;font-weight:700;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.04em}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px}
+  .role-badge{background:#1a3a1a;color:#88ee88;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px}
+  .card{border:1px solid #d0e8d0;border-radius:8px;padding:12px;margin-bottom:12px;break-inside:avoid}
+  .row{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid #f0f5f0}
+  .row:last-child{border-bottom:none}
+  .ico{font-size:16px;min-width:22px;text-align:center;flex-shrink:0}
+  .label{font-weight:700;color:#1a1a1a;font-size:13px}
+  .desc{color:#556655;font-size:11px;margin-top:2px;line-height:1.4}
+  .warn{background:#fff8e8;border:1px solid #e8c860;border-radius:6px;padding:10px 12px;margin-bottom:12px}
+  .warn-title{font-weight:700;color:#8a6000;font-size:12px;margin-bottom:6px}
+  .warn-row{font-size:11px;color:#5a4000;padding:3px 0;line-height:1.4}
+  .footer{margin-top:20px;padding-top:10px;border-top:2px solid #d0e8d0;font-size:10px;color:#888;display:flex;justify-content:space-between}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .tag{display:inline-block;background:#e8f5e8;color:#2d6a2d;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:4px}
+  @media print{
+    body{padding:12px;font-size:12px}
+    h1{font-size:18px}
+    .no-print{display:none}
+    @page{margin:1.5cm;size:A4}
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>🐄 BOAN — Guide Fondateur / Direction</h1>
+    <div style="font-size:11px;color:#557755;margin-top:4px">Pilotage complet du projet d'élevage bovin. Rôle : décision stratégique, configuration, clôture de cycle.</div>
+  </div>
+  <div class="role-badge">FONDATEUR</div>
+</div>
+
+<button class="no-print" onclick="window.print()" style="background:#2d6a2d;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:12px;cursor:pointer;margin-bottom:16px">🖨️ Imprimer / Enregistrer en PDF</button>
+
+<!-- ═══ ONGLETS ET ACCÈS ═══ -->
+<h2>🗂️ Vos onglets dans l'application</h2>
+<div class="two-col">
+  <div class="card">
+    <h3>Dashboard</h3>
+    <div class="row"><div class="ico">📊</div><div><div class="label">Vue d'ensemble</div><div class="desc">KPI du jour, alertes, sidebar avec état du cycle en temps réel.</div></div></div>
+    <div class="row"><div class="ico">🔔</div><div><div class="label">Bandeaux d'alertes</div><div class="desc">Stock faible, pesée en retard, fin de cycle proche → actions directes.</div></div></div>
+  </div>
+  <div class="card">
+    <h3>Saisie</h3>
+    <div class="row"><div class="ico">🚀</div><div><div class="label">Nouveau cycle</div><div class="desc">Initialiser race, bêtes, capital, durée, foirail d'achat.</div></div></div>
+    <div class="row"><div class="ico">🔄</div><div><div class="label">Clôturer un cycle</div><div class="desc">Archive automatique dans Historique_Cycles avant reset.</div></div></div>
+  </div>
+  <div class="card">
+    <h3>Livrables</h3>
+    <div class="row"><div class="ico">💵</div><div><div class="label">Trésorerie</div><div class="desc">Solde actuel vs plancher. Statut Cash Min.</div></div></div>
+    <div class="row"><div class="ico">📈</div><div><div class="label">KPI</div><div class="desc">GMQ, mortalité, coût de revient, rentabilité projetée.</div></div></div>
+    <div class="row"><div class="ico">✅</div><div><div class="label">Go/No-Go</div><div class="desc">Feux de décision de vente sur 6 critères.</div></div></div>
+    <div class="row"><div class="ico">⚙️</div><div><div class="label">Objectifs + Marché</div><div class="desc">Réglages GMQ cible, prix aliment, mix ration, protocole SOP.</div></div></div>
+    <div class="row"><div class="ico">📜</div><div><div class="label">Cycles archivés</div><div class="desc">Historique de tous les cycles clôturés.</div></div></div>
+  </div>
+  <div class="card">
+    <h3>Marché</h3>
+    <div class="row"><div class="ico">💹</div><div><div class="label">Prix foirail</div><div class="desc">Courbe des relevés + comparaison vs objectif de vente.</div></div></div>
+    <div class="row"><div class="ico">🧮</div><div><div class="label">Simulateur</div><div class="desc">Projeter la marge selon price de vente et charges.</div></div></div>
+  </div>
+</div>
+
+<!-- ═══ DÉMARRER UN CYCLE ═══ -->
+<h2>🚀 Checklist — Démarrer un nouveau cycle</h2>
+<div class="card">
+  <div class="row"><div class="ico">1️⃣</div><div><div class="label">Vérifier la trésorerie disponible</div><div class="desc">Livrables > Trésorerie. Solde suffisant pour capital + 2 mois de charges ?</div></div></div>
+  <div class="row"><div class="ico">2️⃣</div><div><div class="label">Relever le prix aliment du marché actuel</div><div class="desc">Appeler le fournisseur ou vérifier avec Fallou. Prix son de blé + tourteau arachide ce jour.</div></div></div>
+  <div class="row"><div class="ico">3️⃣</div><div><div class="label">Saisir le nouveau cycle</div><div class="desc">Saisie > Nouveau cycle : race, nb bêtes, capital investi, foirail d'achat, durée prévue, date de début.</div></div></div>
+  <div class="row"><div class="ico">4️⃣</div><div><div class="label">Mettre à jour le prix aliment</div><div class="desc">Livrables > Objectifs > Marché & Ration. Saisir prixAlim = prix/kg actuel, mix ration si changé.</div></div></div>
+  <div class="row"><div class="ico">5️⃣</div><div><div class="label">Vérifier les objectifs du cycle</div><div class="desc">GMQ cible, marge min/bête, plancher tréso. Les adapter si race ou saison différente.</div></div></div>
+  <div class="row"><div class="ico">6️⃣</div><div><div class="label">Vérifier/adapter le protocole SOP</div><div class="desc">Livrables > Objectifs > SOP. Ajuster les dates J+ si foirail éloigné (stress transit plus long).</div></div></div>
+  <div class="row"><div class="ico">7️⃣</div><div><div class="label">Briefer le gérant</div><div class="desc">Rappeler les saisies obligatoires : fiche matin, SOP soir, bilan vendredi, stock à chaque livraison.</div></div></div>
+  <div class="row"><div class="ico">8️⃣</div><div><div class="label">Confirmer les SIDs Google Sheets</div><div class="desc">Chaque acteur doit pouvoir se connecter. Tester l'accès et la synchro des données.</div></div></div>
+</div>
+
+<!-- ═══ PILOTAGE HEBDO ═══ -->
+<h2>📅 Pilotage hebdomadaire — Chaque vendredi</h2>
+<div class="card">
+  <div class="row"><div class="ico">📊</div><div><div class="label">Bilan gérant reçu ?</div><div class="desc">Vérifier via Dashboard > sidebar que la saisie de bilan a eu lieu cette semaine.</div></div></div>
+  <div class="row"><div class="ico">📈</div><div><div class="label">GMQ dans la cible ?</div><div class="desc">Dashboard > bloc GMQ ou Livrables > KPI. Vert = OK, Orange = surveiller, Rouge = agir.</div></div></div>
+  <div class="row"><div class="ico">💵</div><div><div class="label">Trésorerie au-dessus du plancher ?</div><div class="desc">Livrables > Trésorerie. Si sous plancher → ajuster charges ou accélérer vente.</div></div></div>
+  <div class="row"><div class="ico">⚠️</div><div><div class="label">Incidents non traités ?</div><div class="desc">Livrables > Incidents. Chaque incident doit être lu et décision prise.</div></div></div>
+  <div class="row"><div class="ico">💹</div><div><div class="label">Cours foirail à jour (Fallou) ?</div><div class="desc">Marché > Prix foirail. Dernier relevé > 7 jours = demander à Fallou de relever.</div></div></div>
+  <div class="row"><div class="ico">⚖️</div><div><div class="label">Pesée à jour ?</div><div class="desc">Dashboard > alerte pesée. Si en retard, relancer le gérant.</div></div></div>
+</div>
+
+<!-- ═══ DÉCISION DE VENTE ═══ -->
+<h2>🏁 Décider de vendre — Processus complet</h2>
+<div class="card">
+  <div class="row"><div class="ico">1️⃣</div><div><div class="label">Lire le Go/No-Go</div><div class="desc">Livrables > Go/No-Go. Tous les feux verts recommandés. Un feu orange = vérifier avant de décider.</div></div></div>
+  <div class="row"><div class="ico">2️⃣</div><div><div class="label">Vérifier le cours foirail actuel</div><div class="desc">Marché > Prix foirail. Comparer prix moyen actuel vs objectifPrix configuré.</div></div></div>
+  <div class="row"><div class="ico">3️⃣</div><div><div class="label">Simuler la marge finale</div><div class="desc">Marché > Simulateur. Tester prix bas / moyen / haut. Valider que marge > margeParBeteMin.</div></div></div>
+  <div class="row"><div class="ico">4️⃣</div><div><div class="label">Confirmer les poids individuels</div><div class="desc">Livrables > Bêtes. Toutes les bêtes au-dessus du poidsVenteMin ?</div></div></div>
+  <div class="row"><div class="ico">5️⃣</div><div><div class="label">Déclencher la vente</div><div class="desc">Coordonner avec Fallou pour le foirail, le transporteur, la date.</div></div></div>
+  <div class="row"><div class="ico">6️⃣</div><div><div class="label">Clôturer le cycle dans l'app</div><div class="desc">Saisie > Clôturer cycle. Archive automatique dans Livrables > Cycles. Données vidées pour nouveau cycle.</div></div></div>
+</div>
+
+<!-- ═══ RÉGLAGES MID-CYCLE ═══ -->
+<h2>⚙️ Réglages à réviser en cours de cycle</h2>
+<div class="card">
+  <div class="row"><div class="ico">📦</div><div><div class="label">Prix aliment — chaque semaine si marché change</div><div class="desc">Le cours du son de blé peut varier ±20% entre saisons. Mettre à jour dans Livrables > Objectifs > Marché & Ration. Impact immédiat sur le coût de revient calculé.</div></div></div>
+  <div class="row"><div class="ico">💹</div><div><div class="label">Prix de vente visé — avant chaque décision</div><div class="desc">Le marché Tabaski peut doubler les prix. Mettre à jour objectifPrix avant de lire le Go/No-Go.</div></div></div>
+  <div class="row"><div class="ico">🌿</div><div><div class="label">Mix ration — si rupture d'un intrant</div><div class="desc">Si tourteau en rupture : passer à 70/30 dans Marché & Ration. Les deux champs sont liés (total = 100%).</div></div></div>
+</div>
+
+<!-- ═══ LIMITES DU MODÈLE ═══ -->
+<h2>⚠️ Ce que l'application ne calcule pas — À connaître</h2>
+<div class="warn">
+  <div class="warn-title">Limites du modèle — Données à ajouter manuellement</div>
+  <div class="warn-row">• <strong>Transport foirail</strong> : coût du camion + chauffeur non intégré dans la marge brute calculée.</div>
+  <div class="warn-row">• <strong>Commission courtier</strong> : 2-5% du prix de vente. À déduire de la marge simulée.</div>
+  <div class="warn-row">• <strong>GMQ = moyenne</strong> : il masque les bêtes en retard individuel. Toujours croiser avec Livrables > Bêtes.</div>
+  <div class="warn-row">• <strong>Marge = brute</strong> : ne déduisant pas charges fixes (loyer, eau, gardien). Le simulateur peut être enrichi avec ces charges spécifiques.</div>
+  <div class="warn-row">• <strong>Prix seuil = indicatif</strong> : basé sur les paramètres saisis. Si prix aliment ou mix ration non mis à jour, le calcul est décalé.</div>
+</div>
+
+<div class="footer">
+  <span>BOAN — Guide Fondateur / Direction</span>
+  <span>Généré depuis l'application — Imprimer pour archiver ou partager.</span>
+</div>
+</body>
+</html>
