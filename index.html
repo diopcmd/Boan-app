@@ -3736,6 +3736,41 @@ function addBeteModal(){
   r();
 }
 
+// ── ARCHIVAGE CYCLE ──
+// Écrit une ligne de synthèse dans Historique_Cycles (sheet fondateur uniquement).
+// Colonnes A:N — voir en-têtes dans la ligne 1 du sheet.
+// snap : objet snapshot capturé juste avant le reset de CYCLE.
+function _archiveCycle(snap) {
+  if (!snap || !snap.dateDebut) return; // cycle jamais initialisé — rien à archiver
+  if (!SID.fondateur) return;
+  var margineBrute = Math.round(snap.tresoFin - snap.capital);
+  var margeParBete = snap.nbBetesFin > 0 ? Math.round(margineBrute / snap.nbBetesFin) : 0;
+  var dureeReelle  = (function(){
+    var d1 = parseISO(snap.dateDebut);
+    if (!d1) return '';
+    var d2p = snap.dateFin.split('/');
+    var d2 = d2p.length===3 ? new Date(d2p[2],d2p[1]-1,d2p[0]) : new Date();
+    return Math.round((d2-d1)/86400000);
+  })();
+  var row = [
+    snap.dateDebut,             // A — Début (ISO)
+    snap.dateFin,               // B — Fin (DD/MM/YYYY)
+    dureeReelle,                // C — Durée réelle (jours)
+    snap.race,                  // D — Race
+    snap.foirail,               // E — Foirail
+    snap.nbBetes,               // F — Nb bêtes départ
+    snap.nbBetesFin,            // G — Nb bêtes fin
+    snap.deces,                 // H — Décès
+    snap.poidsDepart,           // I — Poids moyen départ (kg)
+    snap.poidsFin || '',        // J — Poids moyen fin (kg)
+    snap.gmq,                   // K — GMQ moyen (kg/j)
+    snap.capital,               // L — Capital investi (FCFA)
+    snap.tresoFin,              // M — Tréso finale (FCFA)
+    margeParBete                // N — Marge brute / bête (FCFA)
+  ];
+  appendRow(SID.fondateur, 'Historique_Cycles!A:N', row);
+}
+
 function saveCycle(){
   // Résoudre les races custom avant sauvegarde
   if (MODAL.data.betes) {
@@ -3745,6 +3780,24 @@ function saveCycle(){
       });
     });
   }
+  // ── Snapshot du cycle sortant (avant écrasement de CYCLE) ──
+  var _prevCycleSnap = CYCLE.initialized ? {
+    dateDebut:   CYCLE.dateDebut  || '',
+    dateFin:     today(),
+    nbBetes:     CYCLE.nbBetes    || 4,
+    nbBetesFin:  MOCK.betes       || CYCLE.nbBetes || 4,
+    deces:       Math.max(0, (CYCLE.nbBetes||4) - (MOCK.betes||CYCLE.nbBetes||4)),
+    poidsDepart: CYCLE.poidsDepart|| 0,
+    poidsFin:    (LIVE.pesees && LIVE.pesees.length)
+                   ? Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.poids||0);},0)/LIVE.pesees.length)
+                   : 0,
+    gmq:         MOCK.gmq         || 0,
+    capital:     CYCLE.capital    || 0,
+    tresoFin:    MOCK.treso       || 0,
+    race:        CYCLE.race       || '',
+    dureeMois:   CYCLE.dureeMois  || 8,
+    foirail:     CYCLE.foirail    || ''
+  } : null;
   CYCLE = Object.assign(CYCLE, MODAL.data, {initialized:true});
   // Réinitialiser les mouvements de stock au démarrage d'un nouveau cycle
   STOCK_MVTS = [];
@@ -3809,6 +3862,11 @@ function saveCycle(){
   _lastFondVisitTS = 0;
   lsSet('fondateur_last_visit', 0);
   // MOCK.betes et MOCK.stock déjà mis à jour plus haut dans saveCycle()
+
+  // ── ARCHIVAGE cycle sortant (avant reset) ──
+  // Snapshot depuis mémoire — zéro lecture Sheets supplémentaire
+  _archiveCycle(_prevCycleSnap);
+
   r();
 
   // ── Écriture Sheets + vidage données ancien cycle ──
@@ -5725,7 +5783,7 @@ function saveObjectifs(){
 function viewLiv(){
   var _canObj=(S.user==='fondateur'||S.user==='rga');
   var subs=[['treso','Trésorerie'],['kpi','KPI'],['betes','Bêtes'],['incidents','Incidents']];
-  if(_canObj) subs.push(['objectifs','Objectifs'],['sopvet','📅 SOP Véto']);
+  if(_canObj) subs.push(['objectifs','Objectifs'],['sopvet','📅 SOP Véto'],['cycles','📜 Cycles']);
   subs.push(['gonogo','Go/No-Go']);
   var stabs=subs.map(function(s){return'<div class="stab '+(S.sub===s[0]?'on':'')+'" onclick="chSub(\''+s[0]+'\')">'+s[1]+'</div>';}).join('');
   var view='';
@@ -6425,6 +6483,62 @@ function viewLiv(){
         +'<div style="font-size:10px;color:#7a9a7a;margin-bottom:10px">Une saisie Santé ou Pesée dans ±7j de la date théorique est comptée comme réalisée.</div>'
         +_cc;
     })() + (view ? '<div class="sep"></div>' + view : '');
+  } else if(S.sub==='cycles'){
+    // ── Historique des cycles ──
+    view='<div class="stitle">📜 Historique des cycles</div>';
+    if(!SID.fondateur){
+      view+='<div style="color:#ff9800;font-size:12px">SID fondateur introuvable.</div>';
+    } else if(!LIVE._histCycles){
+      LIVE._histCycles='loading';
+      readSheet(SID.fondateur,'Historique_Cycles!A:N').then(function(rows){
+        // rows[0] = en-têtes éventuels (si présent) ou première ligne de données
+        // On garde toutes les lignes non-vides
+        LIVE._histCycles = (rows || []).filter(function(r){ return r && r[0] && r[0]!=='Début'; });
+        r();
+      }).catch(function(){
+        LIVE._histCycles=[];
+        r();
+      });
+      view+='<div style="color:#7a9a7a;font-size:12px">Chargement…</div>';
+    } else if(LIVE._histCycles==='loading'){
+      view+='<div style="color:#7a9a7a;font-size:12px">Chargement…</div>';
+    } else if(!LIVE._histCycles.length){
+      view+='<div style="color:#7a9a7a;font-size:12px">Aucun cycle archivé pour le moment.<br>À chaque clôture de cycle un snapshot est enregistré ici automatiquement.</div>';
+    } else {
+      // Tableau — affichage du plus récent au plus ancien
+      var _hRows=[].concat(LIVE._histCycles).reverse();
+      view+='<div style="overflow-x:auto">';
+      view+='<table style="width:100%;border-collapse:collapse;font-size:11px">';
+      view+='<thead><tr style="color:#7a9a7a;border-bottom:1px solid #2a4a2a">';
+      ['Début','Fin','Durée','Race','Bêtes↓','Décès','P.dép','P.fin','GMQ','Capital','Tréso fin','Marge/tête'].forEach(function(h){
+        view+='<th style="padding:4px 6px;text-align:right;white-space:nowrap">'+h+'</th>';
+      });
+      view+='</tr></thead><tbody>';
+      _hRows.forEach(function(row,idx){
+        var bg = idx%2===0 ? '#0f1f0f' : '#0a180a';
+        // A=dateDebut B=dateFin C=duree D=race E=foirail F=nbBetes G=nbBetesFin H=deces I=poidsDep J=poidsFin K=gmq L=capital M=tresoFin N=margeParBete
+        var marge = parseInt(row[13]||0);
+        var mCol = marge>=0 ? '#4caf50' : '#f44336';
+        view+='<tr style="background:'+bg+'">';
+        view+='<td style="padding:4px 6px;white-space:nowrap">'+isoToFr(row[0]||'')+'</td>';
+        view+='<td style="padding:4px 6px;white-space:nowrap">'+(row[1]||'')+'</td>';
+        view+='<td style="padding:4px 6px;text-align:right">'+(row[2]||'')+' j</td>';
+        view+='<td style="padding:4px 6px">'+(row[3]||'')+'</td>';
+        view+='<td style="padding:4px 6px;text-align:right">'+(row[5]||0)+' → '+(row[6]||0)+'</td>';
+        view+='<td style="padding:4px 6px;text-align:right;color:'+(parseInt(row[7]||0)>0?'#f44336':'#7a9a7a')+'">'+(row[7]||0)+'</td>';
+        view+='<td style="padding:4px 6px;text-align:right">'+(row[8]||'')+(row[8]?'kg':'')+'</td>';
+        view+='<td style="padding:4px 6px;text-align:right">'+(row[9]||'')+(row[9]?'kg':'')+'</td>';
+        view+='<td style="padding:4px 6px;text-align:right">'+(row[10]||'')+(row[10]?'kg/j':'')+'</td>';
+        view+='<td style="padding:4px 6px;text-align:right">'+(row[11]?fmt(parseInt(row[11])):'')+'</td>';
+        view+='<td style="padding:4px 6px;text-align:right">'+(row[12]?fmt(parseInt(row[12])):'')+'</td>';
+        view+='<td style="padding:4px 6px;text-align:right;color:'+mCol+'">'+(row[13]?fmt(marge):'—')+'</td>';
+        view+='</tr>';
+      });
+      view+='</tbody></table></div>';
+      view+='<div style="font-size:10px;color:#556855;margin-top:8px">'+_hRows.length+' cycle(s) archivé(s). Marge = Tréso fin − Capital investi ÷ Nb bêtes fin.</div>';
+      // Bouton refresh
+      view+='<button class="btn" style="margin-top:10px;width:100%" onclick="LIVE._histCycles=null;r()">🔄 Rafraîchir</button>';
+    }
   }
   return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+view+'</div>';
 }
