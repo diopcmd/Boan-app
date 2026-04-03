@@ -19,7 +19,7 @@
 body{background:#0f1a0f;color:#fff;font-family:'Inter',system-ui,sans-serif}
 /* PWA keyboard fix: supprime le délai 300ms iOS + empêche le blocage du clavier */
 input,textarea,select,button,a{touch-action:manipulation}
-#splash{position:fixed;inset:0;background:#0f1a0f;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;animation:splashOut 0.4s ease-in 1s forwards}
+#splash{position:fixed;inset:0;background:#0f1a0f;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999}
 @keyframes splashOut{to{opacity:0;pointer-events:none;visibility:hidden}}
 .splash-logo{width:80px;height:80px;background:#2d6a2d;border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:700;color:#fff;margin-bottom:18px;box-shadow:0 0 40px rgba(45,106,45,0.5)}
 .splash-title{font-size:28px;font-weight:700;letter-spacing:.04em}
@@ -7216,6 +7216,17 @@ function pageGuide() {
 }
 
 r();
+(function(){
+  var sp = document.getElementById('splash');
+  if (!sp) return;
+  sp.style.pointerEvents = 'none';
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      sp.style.animation = 'splashOut 0.4s ease-in forwards';
+      setTimeout(function(){ sp.style.display = 'none'; }, 450);
+    });
+  });
+})();
 setTimeout(initSwipe, 150);
 
 </script>
