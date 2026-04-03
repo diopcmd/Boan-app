@@ -5119,7 +5119,7 @@ function viewDash(){
 }
 
 function viewSaisie(){
-  var subs=[['fiche','Fiche du jour'],['sop','SOP'],['stock','Stock'],['inc','Incident'],['pesee','Pesée'],['sante','Santé'],['bilan','Bilan']];
+  var subs=[['fiche','Fiche du jour'],['sop','SOP'],['stock','Stock'],['inc','Incident'],['pesee','Pesée'],['sante','Santé'],['bilan','Bilan'],['protocole','📅 SOP Véto']];
   var stabs=subs.map(function(s){return'<div class="stab '+(S.sub===s[0]?'on':'')+'" onclick="chSub(\''+s[0]+'\')">'+s[1]+'</div>';}).join('');
   var td=todayISO();
   var form='';
@@ -5503,6 +5503,66 @@ function viewSaisie(){
           : '<div class="al al-o" style="margin-bottom:8px">⚠️ Aucune pesée cette semaine — penser à peser les bêtes</div>';
       })() : '')
       +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'bilan\')">Envoyer le bilan</button>'+msgHtml()+'</div>';
+  } else if(S.sub==='protocole'){
+    var _pdProto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+    var _pdDeb   = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : null;
+    var _ndPd    = _nowDakar();
+    var _pdToday = new Date(_ndPd.year, _ndPd.month-1, _ndPd.day);
+    var _pdJour  = _pdDeb ? Math.floor((_pdToday - _pdDeb) / 86400000) : null;
+    var _pdCards = _pdProto.map(function(evt){
+      var _td = null, _daysTo = null, _fait = false;
+      if(_pdDeb){
+        _td = new Date(_pdDeb.getTime()); _td.setDate(_td.getDate() + evt.j);
+        _daysTo = Math.round((_td - _pdToday) / 86400000);
+        _fait = HISTORY.some(function(h){
+          if(h.type !== evt.type) return false;
+          var _p = h.date.split('/'); if(_p.length !== 3) return false;
+          var _hd = new Date(_p[2], _p[1]-1, _p[0]);
+          return Math.abs(_hd - _td) <= 7*86400000;
+        });
+      }
+      var _bg, _bdr, _col, _badge;
+      if(_fait){
+        _bg='#0f2a0f'; _bdr='#2d6a2d'; _col='#4caf50';
+        _badge = '✅ Réalisé';
+      } else if(_pdDeb && _daysTo < 0){
+        _bg='#2e1010'; _bdr='#8a2020'; _col='#f44336';
+        _badge = '⚠️ En retard ('+Math.abs(_daysTo)+'j)';
+      } else if(_pdDeb && _daysTo <= 7){
+        _bg='#2e2010'; _bdr='#8a5a00'; _col='#ff9800';
+        _badge = '🔔 Dans '+_daysTo+' j';
+      } else {
+        _bg='#0a150a'; _bdr='#1a2e1a'; _col='#88aa88';
+        var _ds = _td ? ('0'+_td.getDate()).slice(-2)+'/'+('0'+(_td.getMonth()+1)).slice(-2)+'/'+_td.getFullYear() : 'J+'+evt.j;
+        _badge = '📅 '+_ds;
+      }
+      return '<div style="background:'+_bg+';border:1px solid '+_bdr+';border-radius:8px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px">'
+        +'<div style="font-size:20px;width:28px;text-align:center;flex-shrink:0">'+evt.ico+'</div>'
+        +'<div style="flex:1">'
+        +'<div style="font-size:13px;color:#ccc;font-weight:700">'+evt.label+'</div>'
+        +(evt.note?'<div style="font-size:10px;color:#556655;margin-top:1px">'+evt.note+'</div>':'')
+        +'</div>'
+        +'<div style="font-size:11px;font-weight:700;color:'+_col+';white-space:nowrap;text-align:right">'+_badge+'</div>'
+        +'</div>';
+    }).join('');
+    var _pdDone = _pdDeb ? _pdProto.filter(function(evt){
+      var _td2 = new Date(_pdDeb.getTime()); _td2.setDate(_td2.getDate() + evt.j);
+      return HISTORY.some(function(h){
+        if(h.type!==evt.type) return false;
+        var _p=h.date.split('/'); if(_p.length!==3) return false;
+        var _hd=new Date(_p[2],_p[1]-1,_p[0]); return Math.abs(_hd-_td2)<=7*86400000;
+      });
+    }).length : 0;
+    form = '<div class="card">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+      +'<div class="stitle" style="margin-bottom:0">📋 Protocole SOP vétérinaire</div>'
+      +'<div style="font-size:11px;color:#88aa88">'+_pdDone+'/'+_pdProto.length+' réalisés</div>'
+      +'</div>'
+      +(!_pdDeb
+        ? '<div class="al al-o">Cycle non démarré — aucune date de référence</div>'
+        : '<div style="font-size:10px;color:#556655;margin-bottom:10px">Aujourd\u2019hui J+'+(_pdJour||0)+' depuis le début du cycle. Une saisie Santé ou Pesée dans ±7 j de la date théorique est comptée réalisée.</div>')
+      +_pdCards
+      +'</div>';
   }
   return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+form+'</div>';
 }
@@ -5565,8 +5625,9 @@ function saveObjectifs(){
 }
 function viewLiv(){
   var _canObj=(S.user==='fondateur'||S.user==='rga');
-  var subs=[['treso','Trésorerie'],['kpi','KPI'],['betes','Bêtes'],['incidents','Incidents'],['gonogo','Go/No-Go']];
-  if(_canObj) subs.push(['objectifs','Objectifs']);
+  var subs=[['treso','Trésorerie'],['kpi','KPI'],['betes','Bêtes'],['incidents','Incidents']];
+  if(_canObj) subs.push(['objectifs','Objectifs'],['sopvet','SOP Véto'],['calendrier','Calendrier']);
+  subs.push(['gonogo','Go/No-Go']);
   var stabs=subs.map(function(s){return'<div class="stab '+(S.sub===s[0]?'on':'')+'" onclick="chSub(\''+s[0]+'\')">'+s[1]+'</div>';}).join('');
   var view='';
   if(S.sub==='treso'){
@@ -6164,6 +6225,147 @@ function viewLiv(){
       +(S.msg?'<div class="msg '+(S.msg.startsWith('ok')?'ok':'err')+'">'+S.msg.slice(3)+'</div>':'')
       +(!_ro?'<button class="btn" style="width:100%;margin-top:4px" onclick="saveObjectifs()">💾 Enregistrer les objectifs</button>':'')
       +'<div style="font-size:10px;color:#7a9a7a;text-align:center;margin-top:6px">Persist\u00e9s dans Config_App \u2014 appliqu\u00e9s imm\u00e9diatement partout.</div>';
+  } else if(S.sub==='sopvet'){
+    if(S.user==='fondateur'||S.user==='rga'){
+      var _ro = false;
+      var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+      var _sed = S._sopEd || null;
+      var _isCustom = !!CYCLE.sopProtocol;
+      var rows = '';
+      _proto.forEach(function(step, i){
+        if(_sed && _sed.idx === i){
+          rows += '<div style="background:#0a1e0a;border:1px solid #2d6a2d;border-radius:8px;padding:10px;margin-bottom:6px">'
+            +'<div style="display:flex;gap:6px;margin-bottom:6px">'
+            +'<div style="flex:0 0 80px"><label style="font-size:10px;color:#88aa88">J+ (jour)</label>'
+            +'<input type="number" min="1" max="365" value="'+_sed.j+'" style="width:72px;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#C8A06A;font-size:13px;font-weight:700;padding:4px 6px" oninput="S._sopEd.j=parseInt(this.value)||1"></div>'
+            +'<div style="flex:1"><label style="font-size:10px;color:#88aa88">Type</label>'
+            +'<select style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:5px 6px" onchange="S._sopEd.type=this.value">'
+            +'<option value="sante"'+(_sed.type==='sante'?' selected':'')+'>🩺 Saisie Santé</option>'
+            +'<option value="pesee"'+(_sed.type==='pesee'?' selected':'')+'>⚖️ Pesée</option>'
+            +'</select></div>'
+            +'</div>'
+            +'<div style="margin-bottom:6px"><label style="font-size:10px;color:#88aa88">Libellé</label>'
+            +'<input type="text" value="'+(_sed.label||'').replace(/"/g,\'&quot;\')+'" placeholder="Ex: Déparasitage interne" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:4px 6px" oninput="S._sopEd.label=this.value"></div>'
+            +'<div style="margin-bottom:8px"><label style="font-size:10px;color:#88aa88">Note protocole (optional)</label>'
+            +'<input type="text" value="'+(_sed.note||'').replace(/"/g,\'&quot;\')+'" placeholder="Ex: Ivermectine PO" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#7a9a7a;font-size:11px;padding:4px 6px" oninput="S._sopEd.note=this.value"></div>'
+            +'<div style="display:flex;gap:6px">'
+            +'<button onclick="_sopSave(false)" style="flex:1;background:#2d6a2d;color:#fff;border:none;border-radius:6px;padding:7px;font-size:12px;font-weight:700;cursor:pointer">✓ Valider</button>'
+            +'<button onclick="S._sopEd=null;r()" style="flex:1;background:#2a2a2a;color:#aaa;border:none;border-radius:6px;padding:7px;font-size:12px;cursor:pointer">✗ Annuler</button>'
+            +'</div>'
+            +'</div>';
+        } else {
+          rows += '<div style="display:flex;align-items:flex-start;gap:6px;padding:8px 0;border-bottom:1px solid #0f1f0f;overflow:hidden">'
+            +'<div style="font-size:10px;font-weight:800;color:#C8A06A;min-width:32px;flex-shrink:0;padding-top:2px;line-height:1.3">J+'+step.j+'</div>'
+            +'<div style="font-size:14px;width:18px;flex-shrink:0;padding-top:1px;text-align:center">'+step.ico+'</div>'
+            +'<div style="flex:1;min-width:0;overflow:hidden">'
+            +'<div style="font-size:12px;color:#ccc;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+step.label+'</div>'
+            +(step.note?'<div style="font-size:10px;color:#7a9a7a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+step.note+'</div>':'')
+            +'</div>'
+            +'<div style="display:flex;gap:4px;flex-shrink:0;padding-top:1px">'
+            +'<button onclick="_sopEdit('+i+')" style="background:none;border:1px solid #2a4a2a;border-radius:4px;color:#88aa88;font-size:11px;padding:2px 5px;cursor:pointer;line-height:1">✏️</button>'
+            +'<button onclick="_sopDel('+i+')" style="background:none;border:1px solid #3a1010;border-radius:4px;color:#aa4444;font-size:11px;padding:2px 5px;cursor:pointer;line-height:1">🗑</button>'
+            +'</div>'
+            +'</div>';
+        }
+      });
+      if(_sed && _sed.idx === -1){
+        rows += '<div style="background:#0a1e0a;border:1px solid #2d6a2d;border-radius:8px;padding:10px;margin-top:6px">'
+          +'<div style="font-size:11px;color:#88aa88;margin-bottom:8px;font-weight:700">➕ Nouvelle étape</div>'
+          +'<div style="display:flex;gap:6px;margin-bottom:6px">'
+          +'<div style="flex:0 0 80px"><label style="font-size:10px;color:#88aa88">J+ (jour)</label>'
+          +'<input type="number" min="1" max="365" value="'+(_sed.j||1)+'" style="width:72px;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#C8A06A;font-size:13px;font-weight:700;padding:4px 6px" oninput="S._sopEd.j=parseInt(this.value)||1"></div>'
+          +'<div style="flex:1"><label style="font-size:10px;color:#88aa88">Type</label>'
+          +'<select style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:5px 6px" onchange="S._sopEd.type=this.value">'
+          +'<option value="sante">🩺 Saisie Santé</option>'
+          +'<option value="pesee">⚖️ Pesée</option>'
+          +'</select></div>'
+          +'</div>'
+          +'<div style="margin-bottom:6px"><label style="font-size:10px;color:#88aa88">Libellé</label>'
+          +'<input type="text" placeholder="Ex: Déparasitage interne" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:4px 6px" oninput="S._sopEd.label=this.value"></div>'
+          +'<div style="margin-bottom:8px"><label style="font-size:10px;color:#88aa88">Note protocole (optionnel)</label>'
+          +'<input type="text" placeholder="Ex: Ivermectine PO" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#7a9a7a;font-size:11px;padding:4px 6px" oninput="S._sopEd.note=this.value"></div>'
+          +'<div style="display:flex;gap:6px">'
+          +'<button onclick="_sopSave(true)" style="flex:1;background:#2d6a2d;color:#fff;border:none;border-radius:6px;padding:7px;font-size:12px;font-weight:700;cursor:pointer">✓ Ajouter</button>'
+          +'<button onclick="S._sopEd=null;r()" style="flex:1;background:#2a2a2a;color:#aaa;border:none;border-radius:6px;padding:7px;font-size:12px;cursor:pointer">✗ Annuler</button>'
+          +'</div>'
+          +'</div>';
+      } else {
+        rows += '<button onclick="S._sopEd={idx:-1,j:30,type:\'sante\',label:\'\',note:\'\'}; r()" style="width:100%;background:none;border:1px dashed #2a4a2a;border-radius:6px;color:#557755;font-size:12px;padding:7px;cursor:pointer;margin-top:6px">+ Ajouter une étape</button>';
+      }
+      rows += (_isCustom?'<button onclick="_sopReset()" style="width:100%;background:none;border:none;color:#554444;font-size:10px;margin-top:6px;cursor:pointer">↺ Réinitialiser au protocole standard</button>':'');
+      view = '<div class="card">'
+        +'<div class="stitle">📅 Protocole SOP vétérinaire'+(_isCustom?' <span style="font-size:9px;background:#1a2e1a;color:#88aa88;padding:2px 6px;border-radius:8px;margin-left:4px">Personnalisé</span>':' <span style="font-size:9px;background:#1a1a2a;color:#6688aa;padding:2px 6px;border-radius:8px;margin-left:4px">Standard</span>')+'</div>'
+        +'<div style="font-size:10px;color:#7a9a7a;margin-bottom:10px">Les jours J+ sont calculés depuis la date de début de cycle. Modifiez selon votre contexte terrain (race, saison, disponibilité vétérinaire).</div>'
+        +rows
+        +'</div>'
+        +(S.msg?'<div class="msg '+(S.msg.startsWith('ok')?'ok':'err')+'">' +S.msg.slice(3)+'</div>':'')
+        +'<button class="btn" style="width:100%;margin-top:4px" onclick="saveObjectifs()">💾 Enregistrer le protocole</button>';
+    }
+  } else if(S.sub==='calendrier'){
+    var _calDeb = CYCLE.dateDebut ? new Date(CYCLE.dateDebut) : null;
+    var _ndCal = _nowDakar();
+    var _calToday = new Date(_ndCal.year, _ndCal.month-1, _ndCal.day);
+    var _calProtocol = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+    var _calCards = _calProtocol.map(function(evt){
+      if(!_calDeb){
+        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #1a2e1a">'
+          +'<div style="font-size:20px;width:32px;text-align:center">'+evt.ico+'</div>'
+          +'<div style="flex:1"><div style="font-size:13px;color:#88aa88;font-weight:600">J+'+evt.j+' — '+evt.label+'</div>'
+          +'<div style="font-size:10px;color:#7a9a7a">'+evt.note+'</div></div>'
+          +'<div style="font-size:11px;color:#2a4a2a;white-space:nowrap">Cycle non démarré</div>'
+          +'</div>';
+      }
+      var _targetDate = new Date(_calDeb.getTime()); _targetDate.setDate(_targetDate.getDate() + evt.j);
+      var _window = 7 * 86400000;
+      var _fait = HISTORY.some(function(h){
+        if(h.type !== evt.type) return false;
+        var _p = h.date.split('/'); if(_p.length !== 3) return false;
+        var _hd = new Date(_p[2], _p[1]-1, _p[0]);
+        return Math.abs(_hd - _targetDate) <= _window;
+      });
+      var _daysToTarget = Math.round((_targetDate - _calToday) / 86400000);
+      var _status, _statusCol, _statusBg, _statusBorder;
+      if(_fait){
+        _status = '✅ Fait'; _statusCol = '#4caf50'; _statusBg = '#0f2a0f'; _statusBorder = '#2d6a2d';
+      } else if(_daysToTarget < 0){
+        _status = '⚠️ En retard ('+Math.abs(_daysToTarget)+'j)'; _statusCol = '#f44336'; _statusBg = '#2e1010'; _statusBorder = '#8a2020';
+      } else if(_daysToTarget <= 7){
+        _status = '🔔 Dans '+_daysToTarget+' j'; _statusCol = '#ff9800'; _statusBg = '#2e2010'; _statusBorder = '#8a5a00';
+      } else {
+        var _d = _targetDate; var _ds = ('0'+_d.getDate()).slice(-2)+'/'+('0'+(_d.getMonth()+1)).slice(-2)+'/'+_d.getFullYear();
+        _status = '📅 '+_ds; _statusCol = '#88aa88'; _statusBg = '#0a150a'; _statusBorder = '#1a2e1a';
+      }
+      return '<div style="background:'+_statusBg+';border:1px solid '+_statusBorder+';border-radius:8px;padding:10px 12px;margin-bottom:8px">'
+        +'<div style="display:flex;align-items:center;gap:10px">'
+        +'<div style="font-size:20px;width:32px;text-align:center;flex-shrink:0">'+evt.ico+'</div>'
+        +'<div style="flex:1">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">'
+        +'<div style="font-size:13px;color:#ccc;font-weight:700">J+'+evt.j+' — '+evt.label+'</div>'
+        +'<div style="font-size:11px;font-weight:700;color:'+_statusCol+'">' +_status+'</div>'
+        +'</div>'
+        +'<div style="font-size:10px;color:#7a9a7a;margin-top:2px">'+evt.note+'</div>'
+        +'</div>'
+        +'</div>';
+    }).join('');
+    var _calDone = _calProtocol.filter(function(evt){
+      if(!_calDeb) return false;
+      var _td = new Date(_calDeb.getTime()); _td.setDate(_td.getDate() + evt.j);
+      return HISTORY.some(function(h){
+        if(h.type !== evt.type) return false;
+        var _p = h.date.split('/'); if(_p.length !== 3) return false;
+        var _hd = new Date(_p[2], _p[1]-1, _p[0]);
+        return Math.abs(_hd - _td) <= 7*86400000;
+      });
+    }).length;
+    view = '<div class="stitle">📅 Calendrier SOP vétérinaire</div>'
+      +(!_calDeb
+        ? '<div style="background:#2e1500;border:1px solid #8a4400;border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:#ff9800">⚠️ Cycle non démarré — saisissez une date de début dans les paramètres pour voir les dates théoriques.</div>'
+        : '<div style="background:#0f1f0f;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">'
+          +'<div><div style="font-size:11px;color:#7a9a7a">Début cycle</div><div style="font-size:13px;color:#C8A06A;font-weight:700">'+isoToFr(CYCLE.dateDebut)+'</div></div>'
+          +'<div style="text-align:right"><div style="font-size:11px;color:#7a9a7a">Complétés</div><div style="font-size:20px;font-weight:800;color:'+(_calDone>=_calProtocol.length?'#4caf50':'#C8A06A')+'">' +_calDone+' / '+_calProtocol.length+'</div></div>'
+          +'</div>')
+      +'<div style="font-size:10px;color:#7a9a7a;margin-bottom:10px">Une saisie Santé ou Pesée dans ±7 jours de la date théorique est comptée comme réalisée.</div>'
+      +_calCards;
   }
   return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+view+'</div>';
 }
