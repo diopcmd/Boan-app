@@ -443,6 +443,9 @@ var CYCLE = lsGet('cycle') || {
   mixTourteau:     40,    // % tourteau arachide dans la ration standard
   sopProtocol:     null   // protocole SOP personnalisé (null = utilise SOP_PROTOCOL_DEFAULT)
 };
+// Seed MOCK depuis le cache localStorage — évite le flash "4 bêtes" avant la sync Sheets
+if (CYCLE.nbBetes  && CYCLE.nbBetes  > 0) MOCK.betes = CYCLE.nbBetes;
+if (CYCLE.capital  && MOCK.treso === 680000) MOCK.treso = CYCLE.capital;
 
 // Protocole SOP vétérinaire standard — utilisé si CYCLE.sopProtocol === null
 var SOP_PROTOCOL_DEFAULT = [

@@ -78,7 +78,7 @@
   <div class="row"><div class="ico">1️⃣</div><div><div class="label">Vérifier la trésorerie disponible</div><div class="desc">Livrables > Trésorerie. Solde suffisant pour capital + 2 mois de charges ?</div></div></div>
   <div class="row"><div class="ico">2️⃣</div><div><div class="label">Relever le prix aliment du marché actuel</div><div class="desc">Appeler le fournisseur ou vérifier avec Fallou. Prix son de blé + tourteau arachide ce jour.</div></div></div>
   <div class="row"><div class="ico">3️⃣</div><div><div class="label">Saisir le nouveau cycle</div><div class="desc">Saisie > Nouveau cycle : race, nb bêtes, capital investi, foirail d'achat, durée prévue, date de début.</div></div></div>
-  <div class="row"><div class="ico">4️⃣</div><div><div class="label">Mettre à jour le prix aliment</div><div class="desc">Livrables > Objectifs > Marché & Ration. Saisir prixAlim = prix/kg actuel, mix ration si changé.</div></div></div>
+  <div class="row"><div class="ico">4️⃣</div><div><div class="label">Mettre à jour le prix aliment</div><div class="desc">Livrables &gt; Objectifs &gt; Marché &amp; Ration. Saisir prixAlim = prix/kg actuel, mix ration si changé.<br><em>Note : le nombre de bêtes saisi est persisté en cache local ET dans Google Sheets (Config_Cycle col B) — il est restauré instantanément même hors ligne.</em></div></div></div>
   <div class="row"><div class="ico">5️⃣</div><div><div class="label">Vérifier les objectifs du cycle</div><div class="desc">GMQ cible, marge min/bête, plancher tréso. Les adapter si race ou saison différente.</div></div></div>
   <div class="row"><div class="ico">6️⃣</div><div><div class="label">Vérifier/adapter le protocole SOP</div><div class="desc">Livrables > Objectifs > SOP. Ajuster les dates J+ si foirail éloigné (stress transit plus long).</div></div></div>
   <div class="row"><div class="ico">7️⃣</div><div><div class="label">Briefer le gérant</div><div class="desc">Rappeler les saisies obligatoires : fiche matin, SOP soir, bilan vendredi, stock à chaque livraison.</div></div></div>
@@ -112,13 +112,14 @@
 <div class="card">
   <div class="row"><div class="ico">📦</div><div><div class="label">Prix aliment — chaque semaine si marché change</div><div class="desc">Le cours du son de blé peut varier ±20% entre saisons. Mettre à jour dans Livrables > Objectifs > Marché & Ration. Impact immédiat sur le coût de revient calculé.</div></div></div>
   <div class="row"><div class="ico">💹</div><div><div class="label">Prix de vente visé — avant chaque décision</div><div class="desc">Le marché Tabaski peut doubler les prix. Mettre à jour objectifPrix avant de lire le Go/No-Go.</div></div></div>
-  <div class="row"><div class="ico">🌿</div><div><div class="label">Mix ration — si rupture d'un intrant</div><div class="desc">Si tourteau en rupture : passer à 70/30 dans Marché & Ration. Les deux champs sont liés (total = 100%).</div></div></div>
+  <div class="row"><div class="ico">🌿</div><div><div class="label">Mix ration — si rupture d'un intrant</div><div class="desc">Si tourteau en rupture : passer à 70/30 dans Marché &amp; Ration. Les deux champs sont liés (total = 100%). Badge ⚡ affiché après chaque modification avec la date.</div></div></div>
 </div>
 
 <!-- ═══ LIMITES DU MODÈLE ═══ -->
 <h2>⚠️ Ce que l'application ne calcule pas — À connaître</h2>
 <div class="warn">
   <div class="warn-title">Limites du modèle — Données à ajouter manuellement</div>
+  <div class="warn-row">• <strong>Nombre de bêtes</strong> : persisté en localStorage ET dans Google Sheets (Config_Cycle). Restauré instantanément même sans connexion.</div>
   <div class="warn-row">• <strong>Transport foirail</strong> : coût du camion + chauffeur non intégré dans la marge brute calculée.</div>
   <div class="warn-row">• <strong>Commission courtier</strong> : 2-5% du prix de vente. À déduire de la marge simulée.</div>
   <div class="warn-row">• <strong>GMQ = moyenne</strong> : il masque les bêtes en retard individuel. Toujours croiser avec Livrables > Bêtes.</div>

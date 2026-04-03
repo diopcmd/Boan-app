@@ -97,6 +97,7 @@
   <div class="lex-row"><div class="lex-term">Plancher tréso</div><div class="lex-def">Solde minimal de sécurité en FCFA. Si le solde passe sous ce seuil → alerte rouge dans Dashboard. Ne pas laisser la tréso atteindre ce plancher sans anticipation.</div></div>
   <div class="lex-row"><div class="lex-term">Capital investi</div><div class="lex-def">= Prix d'achat total des bêtes au foirail. C'est la mise de départ du cycle. Configuré dans Saisie > Nouveau cycle.</div></div>
   <div class="lex-row"><div class="lex-term">objetifPrix (F/kg)</div><div class="lex-def">Prix de vente minimum visé par kg de poids vif. Doit être mis à jour à chaque relevé foirail. Utilisé pour calculer la marge projetée et le signal Go/No-Go.</div></div>
+  <div class="lex-row"><div class="lex-term">Persistance données</div><div class="lex-def">Le nombre de bêtes, le capital, la race et tous les paramètres de cycle sont stockés en double : cache local (localStorage) + Google Sheets. Restaurés instantanément même hors ligne. Mis à jour à chaque connexion.</div></div>
 </div>
 
 <!-- ═══ ESCALADE ═══ -->
