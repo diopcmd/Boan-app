@@ -1294,6 +1294,10 @@ function loadLiveData() {
           // Détection changement de cycle — wipe immédiat sur l'appareil des autres acteurs
           var _prevDateDebut = CYCLE.dateDebut;
           Object.assign(CYCLE, updates);
+          // fix: synchroniser MOCK depuis CYCLE immédiatement après lecture Config_Cycle
+          // (avant Vague 2 — évite MOCK.betes=4 si aucune saisie santé ce cycle)
+          MOCK.betes = CYCLE.nbBetes || MOCK.betes;
+          if (CYCLE.capital && MOCK.treso === 680000) MOCK.treso = CYCLE.capital;
           // Toujours persister après sync Sheets — fix: sans ça le cache vide ne se repeuple jamais
           lsSet('cycle', CYCLE);
           if (updates.dateDebut && _prevDateDebut && updates.dateDebut !== _prevDateDebut) {
@@ -1723,6 +1727,12 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   if (_emptyInSheets['inc'])    { CYCLE._lastIncDate   = ''; _cycleChanged = true; }
   if (_emptyInSheets['sante'])  { CYCLE._lastSanteDate = ''; _cycleChanged = true; }
   if (_cycleChanged) lsSet('cycle', CYCLE);
+
+  // fix: mettre à jour MOCK.betes depuis santés (décès) — Vague 2
+  // Vague 1 le fait aussi mais seulement s'il y a des lignes santé non vides
+  var _decesV2 = (santes||[]).filter(function(r){ return apresDebut(r[0]) && r[6] && r[6].toString().toUpperCase()==='OUI'; }).length;
+  var _betesV2 = Math.max(0, (CYCLE.nbBetes||MOCK.betes) - _decesV2);
+  if (!isNaN(_betesV2) && _betesV2 > 0) MOCK.betes = _betesV2;
 
   // 7. Mettre à jour MOCK.incidents — incidents de la semaine courante (lun→dim, fuseau Dakar)
   var _n = _nowDakar();
@@ -3812,7 +3822,9 @@ function saveCycle(){
       CYCLE.foirail, CYCLE.commission, CYCLE.contactUrgence, CYCLE.peseeFreq,
       JSON.stringify(CYCLE.betes||[]),
       JSON.stringify(CYCLE.stockLines||[]),
-      CYCLE.dureeMois  // col P (index 15)
+      CYCLE.dureeMois,                       // col P (index 15)
+      JSON.stringify(CYCLE.simCharges||{}),  // col Q (index 16) — fix: aligné avec _syncCycle
+      CYCLE.prixAlim || 0                    // col R (index 17) — fix: aligné avec _syncCycle
     ];
     var allSids = [SID.fondateur, SID.gerant, SID.rga, SID.fallou].filter(Boolean);
     allSids.forEach(function(sid){
