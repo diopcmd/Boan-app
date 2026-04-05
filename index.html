@@ -2800,9 +2800,7 @@ function buildAIContext() {
   var mort = CYCLE.nbBetes > 0
     ? Math.round(((CYCLE.nbBetes||4) - MOCK.betes) / (CYCLE.nbBetes||4) * 100)
     : 0;
-  var _gmqLiveAI = LIVE.loaded && LIVE.pesees && LIVE.pesees.length
-    ? Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100
-    : MOCK.gmq;
+  var _gmqLiveAI = MOCK.gmq; // valeur canonique (loadPesees filtre gmq>0)
   var _incOuvertsAI = (LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';});
   var _incResume = _incOuvertsAI.length
     ? _incOuvertsAI.map(function(i){return 'G'+i.grav+' '+i.id+' ('+i.date+'): '+i.type;}).join(' | ')
@@ -3317,9 +3315,7 @@ function exportKpiPDF(){
   var sem = calcSemaine();
   var totalSemCycle = Math.round((CYCLE.dureeMois||8)*4.33);
   var pct = Math.round((sem/totalSemCycle)*100);
-  var gmqL = LIVE.loaded&&LIVE.pesees.length
-    ? Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100
-    : MOCK.gmq;
+  var gmqL = MOCK.gmq; // valeur canonique (loadPesees filtre gmq>0)
 
   // ── En-tête ──
   doc.setFillColor(15,26,15);
@@ -3543,9 +3539,7 @@ function partagerKpiWhatsApp(){
   var sem = calcSemaine();
   var totalSemCycle = Math.round((CYCLE.dureeMois||8)*4.33);
   var pct = Math.round((sem/totalSemCycle)*100);
-  var gmqL = LIVE.loaded&&LIVE.pesees.length
-    ? Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100
-    : MOCK.gmq;
+  var gmqL = MOCK.gmq; // valeur canonique (loadPesees filtre gmq>0)
   var today = (function(){var n=_nowDakar();var mFR=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];return (n.day<10?'0':'')+n.day+' '+mFR[n.month-1]+' '+n.year;})();
   var debut = CYCLE.dateDebut ? isoToFr(CYCLE.dateDebut) : '—';
 
@@ -4061,7 +4055,7 @@ function exportPDF() {
     doc.line(14, 42, 196, 42);
     var kpis = [
       ['Bêtes actives', MOCK.betes+' / '+(CYCLE.nbBetes||4)+' têtes', (function(){var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;return mort+'% mortalité'+(mort===0?' ✓':' ⚠');}())],
-      ['GMQ moyen', (function(){return LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq;})()+' kg/j', 'Cible \u2265 '+(CYCLE.gmqCible||1)+' kg/j'],
+      ['GMQ moyen', (function(){return MOCK.gmq;})()+' kg/j', 'Cible \u2265 '+(CYCLE.gmqCible||1)+' kg/j'],
       ['Stock aliments', (MOCK.stock>0?MOCK.stock:calcStockLocal())+' semaines', (MOCK.stock>0?MOCK.stock:calcStockLocal())>=6?'Suffisant ✓':'Attention ⚠'],
       ['Trésorerie', fmt(MOCK.treso)+' FCFA', MOCK.treso>=600000?'Seuil OK':'Surveiller']
     ];
@@ -4549,7 +4543,7 @@ function buildSidebar(){
         +'<div class="sb-section-title">Fiches cette semaine</div>'
         +daysHtml+'</div>'
         +'<div class="sb-card">'
-        +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val '+(((LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq))>=(CYCLE.gmqCible||1)?'kval-ok':'kval-warn')+'">'+((LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq))+' kg/j'+(LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?' <span style="font-size:10px;color:#4caf50">🟢 live</span>':'')+'</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val '+(((MOCK.gmq))>=(CYCLE.gmqCible||1)?'kval-ok':'kval-warn')+'">'+((MOCK.gmq))+' kg/j'+(LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?' <span style="font-size:10px;color:#4caf50">🟢 live</span>':'')+'</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Objectif</span><span style="font-size:12px;color:'+_calSub+'">&ge; '+(CYCLE.gmqCible||1)+' kg/j</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Incidents</span><span class="sb-val '+(HISTORY.filter(function(h){var d=new Date(_monday.getTime());var end=new Date(_monday.getTime()+6*86400000);var p=h.date.split('/');if(p.length!==3)return false;var hd=new Date(p[2],p[1]-1,p[0]);return h.type==='inc'&&hd>=d&&hd<=end;}).length>0?'kval-warn':'kval-ok')+'">'+(HISTORY.filter(function(h){var d=new Date(_monday.getTime());var end=new Date(_monday.getTime()+6*86400000);var p=h.date.split('/');if(p.length!==3)return false;var hd=new Date(p[2],p[1]-1,p[0]);return h.type==='inc'&&hd>=d&&hd<=end;}).length)+' cette sem.</span></div>'
         +(function(){
@@ -4587,12 +4581,7 @@ function buildSidebar(){
         if(_avgR > _avgA*1.02){ _gmqTrend='\u2191'; _gmqTrendCol='#4caf50'; }
         else if(_avgR < _avgA*0.98){ _gmqTrend='\u2193'; _gmqTrendCol='#f44336'; }
       }
-      var _gmqByBete = {};
-      (LIVE.pesees||[]).forEach(function(p){ if(p.id&&p.gmq>0) _gmqByBete[p.id]=p.gmq; });
-      var _gmqIds = Object.keys(_gmqByBete);
-      var _gmqSidebar = _gmqIds.length
-        ? Math.round(_gmqIds.reduce(function(s,id){return s+_gmqByBete[id];},0)/_gmqIds.length*100)/100
-        : MOCK.gmq;
+      var _gmqSidebar = MOCK.gmq; // valeur canonique (loadPesees filtre gmq>0)
       var _gmqCl = _gmqSidebar>=(CYCLE.gmqCible||1)?'kval-ok':_gmqSidebar>=(CYCLE.gmqWarn||0.8)?'kval-warn':'kval-crit';
       body='<div class="sb-card">'
         +'<div class="sb-row"><span class="sb-lbl">'+_gmqLabel()+' mensuel</span><span class="sb-val '+_gmqCl+'">'+_gmqSidebar+' kg/j <span style="color:'+_gmqTrendCol+';font-weight:700">'+_gmqTrend+'</span></span></div>'
@@ -4744,7 +4733,7 @@ function buildSidebar(){
           return '<div class="sb-row"><span class="sb-lbl">Dépenses cumulées<span style="font-size:10px;color:#7a9a7a">'+src+'</span></span><span style="font-size:12px;color:#f44336">-'+dep+'k FCFA</span></div>';
         })()
         +'<div class="sb-row"><span class="sb-lbl">Solde actuel</span><span class="sb-val '+(MOCK.treso>=Math.max(600000,(CYCLE.alerteSeuilTreso||100000)*3)?'kval-ok':MOCK.treso>(CYCLE.alerteSeuilTreso||100000)?'kval-warn':'kval-crit')+'">'+Math.round(MOCK.treso/1000)+'k FCFA</span></div>'
-        +(function(){ var gmqL=LIVE.loaded&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq; var sem=calcSemaine(); var totalSem=Math.round((CYCLE.dureeMois||8)*4.33); var joursR=(totalSem-sem)*7; var poidsF=Math.round((CYCLE.poidsDepart||270)+gmqL*sem*7+gmqL*joursR); var caProj=Math.round((CYCLE.nbBetes||4)*poidsF*(CYCLE.objectifPrix||2000)/1000000*10)/10; return '<div class="sb-row"><span class="sb-lbl">Projection vente</span><span style="font-size:12px;color:#C8A06A">~'+caProj+'M FCFA</span></div>'; })()
+        +(function(){ var gmqL=MOCK.gmq; var sem=calcSemaine(); var totalSem=Math.round((CYCLE.dureeMois||8)*4.33); var joursR=(totalSem-sem)*7; var poidsF=Math.round((CYCLE.poidsDepart||270)+gmqL*sem*7+gmqL*joursR); var caProj=Math.round((CYCLE.nbBetes||4)*poidsF*(CYCLE.objectifPrix||2000)/1000000*10)/10; return '<div class="sb-row"><span class="sb-lbl">Projection vente</span><span style="font-size:12px;color:#C8A06A">~'+caProj+'M FCFA</span></div>'; })()
         +(function(){
           var _ndM2=_nowDakar();
           var _moisDeb2=new Date(_ndM2.year,_ndM2.month-1,1);
@@ -4771,7 +4760,7 @@ function buildSidebar(){
       body='<div class="sb-card">'
         +'<div class="sb-row"><span class="sb-lbl">Avancement</span><span class="sb-val gold">Sem. '+calcSemaine()+'/'+Math.round((CYCLE.dureeMois||8)*4.33)+'</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Capital investi</span><span style="font-size:12px;color:'+_sbData+'">'+fmt(CYCLE.capital||1450000)+' FCFA</span></div>'+'<div class="sb-row"><span class="sb-lbl">Rappel pesée</span><span style="font-size:12px;color:'+_sbSub+'">Tous les '+(CYCLE.peseeFreq||30)+' jours</span></div>'
-        +(function(){          var sem=calcSemaine();          var totalSem=Math.round((CYCLE.dureeMois||8)*4.33);          var gmqL=LIVE.loaded&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq;          var poidsF=Math.round((CYCLE.poidsDepart||270)+gmqL*totalSem*7);          var caProj=(CYCLE.nbBetes||4)*poidsF*(CYCLE.objectifPrix||2000);          var roiCalc=CYCLE.capital>0?Math.round((caProj-CYCLE.capital)/CYCLE.capital*100):0;          return '<div class="sb-row"><span class="sb-lbl">ROI projeté</span><span style="font-size:12px;color:#C8A06A">'+roiCalc+'%</span></div>';        })()
+        +(function(){          var sem=calcSemaine();          var totalSem=Math.round((CYCLE.dureeMois||8)*4.33);          var gmqL=MOCK.gmq;          var poidsF=Math.round((CYCLE.poidsDepart||270)+gmqL*totalSem*7);          var caProj=(CYCLE.nbBetes||4)*poidsF*(CYCLE.objectifPrix||2000);          var roiCalc=CYCLE.capital>0?Math.round((caProj-CYCLE.capital)/CYCLE.capital*100):0;          return '<div class="sb-row"><span class="sb-lbl">ROI projeté</span><span style="font-size:12px;color:#C8A06A">'+roiCalc+'%</span></div>';        })()
         +'</div>'
         +'<div class="sb-section-title">Activité récente</div>'
         +(function(){
@@ -4980,10 +4969,8 @@ function viewDash(){
   if(stkLocal > 0) MOCK.stock = stkLocal;
   var totalSemCycle = Math.round((CYCLE.dureeMois||8)*4.33);
   var pct=Math.round((semActuelle/totalSemCycle)*100);
-  // GMQ affiché : LIVE.pesees (intervalles réels) prioritaire sur MOCK.gmq (toujours /7)
-  var _gmqDisplay = LIVE.loaded && LIVE.pesees && LIVE.pesees.length
-    ? Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100
-    : MOCK.gmq;
+  // GMQ affiché : MOCK.gmq est déjà la valeur live (mis à jour par loadPesees)
+  var _gmqDisplay = MOCK.gmq;
   var _gc=CYCLE.gmqCible||1, _gw=CYCLE.gmqWarn||0.8;
   var gmqC=_gmqDisplay>=_gc?'kval-ok':_gmqDisplay>=_gw?'kval-warn':'kval-crit';
   var stkC=MOCK.stock>=6?'kval-ok':MOCK.stock>=4?'kval-warn':'kval-crit';
@@ -5921,9 +5908,7 @@ function viewLiv(){
     var actBetes   = MOCK.betes;
     var semCourante = calcSemaine();
     var totalSemCycle = Math.round((CYCLE.dureeMois||8)*4.33);
-    var gmqLive = LIVE.loaded && LIVE.pesees && LIVE.pesees.length
-      ? Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100
-      : MOCK.gmq;
+    var gmqLive = MOCK.gmq; // valeur canonique (loadPesees filtre gmq>0)
     var actGMQ = gmqLive;
     var poidsProj    = Math.round((CYCLE.poidsDepart||270) + gmqLive*semCourante*7);
     var poidsObjActuel = Math.round((CYCLE.poidsDepart||270) + objGMQ*semCourante*7);
