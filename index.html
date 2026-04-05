@@ -3812,6 +3812,15 @@ function saveCycle(){
     numCycle:    CYCLE.numCycle   || 1
   } : null;
   CYCLE = Object.assign(CYCLE, MODAL.data, {initialized:true});
+  // ── Reset des variables qui ne doivent PAS persister du cycle précédent ──
+  CYCLE.gonogo     = {contrats:false, infra:false, assurance:false, securite:false}; // [fix] cases Go/No-Go manuelles remises à 0
+  CYCLE.simCharges = {};        // [fix] charges simulateur spécifiques au cycle sortant
+  CYCLE._mktUpdated = '';       // [fix] date de mise à jour marché — repart de zéro
+  // ── Reset état UI SOP ──
+  S._sopEd          = null;     // [fix] formulaire d'édition SOP ouvert
+  S._sopInlineIdx   = null;     // [fix] formulaire inline SOP ouvert
+  S._sopCtx         = null;     // [fix] contexte SOP pesée
+  S._sopInlineData  = {};       // [fix] données saisies dans le formulaire inline
   // Réinitialiser les mouvements de stock au démarrage d'un nouveau cycle
   STOCK_MVTS = [];
   saveMvts();
@@ -3867,6 +3876,7 @@ function saveCycle(){
   LIVE.incidents = [];
   LIVE.loaded    = false;
   LIVE.source    = 'loading';
+  LIVE._histCycles = null;     // [fix] cache périmé — forcé à recharger depuis Sheets
   MOCK.gmq       = 1.1;
   MOCK.incidents = 0;
   MOCK.treso     = CYCLE.capital || 0;
