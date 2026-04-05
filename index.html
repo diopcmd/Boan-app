@@ -5533,6 +5533,7 @@ function viewSaisie(){
     }
     var prog=formProgress(countFilled([f.date,f.id,f.poids]),3);
     form='<div class="card">'+prog
+      +(S._sopCtx?'<div style="background:#0a1e0a;border:1px solid #2d6a2d;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#88ee88">\uD83D\uDCCB Pes\u00e9e SOP J+'+S._sopCtx.j+' \u2014 '+S._sopCtx.label+'</div>':'')
       +'<div class="frow">'
       +fl('Date pesée','<input type="date" value="'+f.date+'" oninput="S.fp.date=this.value">',f.date)
       +beteDropdown(f.id, 'S.fp.id', 'S.fp._autoFilled=false')
@@ -5703,12 +5704,30 @@ function viewSaisie(){
         +'</div>'
         +(function(){
           if(!_pdDeb||_fait) return '';
+          // Inline sante form when active
+          if(S._sopInlineIdx===idx){
+            var _ifd = S._sopInlineData || {};
+            return '<div style="margin-top:8px;background:#0a1e0a;border:1px solid #2d6a2d;border-radius:8px;padding:10px">'
+              +'<div style="font-size:11px;font-weight:700;color:#88ee88;margin-bottom:8px">\uD83E\uDE7A '+evt.label+' \u2014 saisie rapide</div>'
+              +beteDropdown(_ifd.id||'','S._sopInlineData.id','')
+              +'<div class="fg" style="margin-top:6px"><label>R\u00e9sultat</label>'
+              +'<select onchange="S._sopInlineData.res=this.value;r()" style="background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:5px 6px;width:100%">'
+              +'<option value="Gu\u00e9ri"'+(_ifd.res==='Gu\u00e9ri'||!_ifd.res?' selected':'')+'>Gu\u00e9ri</option>'
+              +'<option value="En traitement"'+(_ifd.res==='En traitement'?' selected':'')+'>En traitement</option>'
+              +'<option value="D\u00e9c\u00e8s"'+(_ifd.res==='D\u00e9c\u00e8s'?' selected':'')+'>D\u00e9c\u00e8s</option>'
+              +'</select></div>'
+              +'<div style="display:flex;gap:6px;margin-top:8px">'
+              +'<button onclick="_sopInlineSave('+idx+')" style="flex:1;background:#2d6a2d;color:#fff;border:none;border-radius:6px;padding:7px;font-size:12px;font-weight:700;cursor:pointer">\u2705 Valider</button>'
+              +'<button onclick="S._sopInlineIdx=null;r()" style="flex:1;background:#2a2a2a;color:#aaa;border:none;border-radius:6px;padding:7px;font-size:12px;cursor:pointer">\u2715 Annuler</button>'
+              +'</div>'
+              +'</div>';
+          }
           var _absD = _daysTo!==null ? Math.abs(_daysTo) : 0;
           var _actLbl = evt.type==='pesee'?'Peser les b\u00eates':'Sant\u00e9';
           if(_daysTo===null||_daysTo>=-7){
             return '<button onclick="_sopValider('+idx+')" style="width:100%;margin-top:8px;background:#1a2e1a;border:1px solid #2d6a2d;border-radius:6px;color:#88ee88;font-size:11px;font-weight:700;padding:6px 8px;cursor:pointer">\u2705 Saisir l\'acte \u2014 '+_actLbl+'</button>';
           }
-          if(_daysTo>=-14){
+          if(_daysTo>=-21){
             return '<button onclick="if(confirm(\'Cet acte \u00e9tait pr\u00e9vu il y a '+_absD+' jours.\\nIl sera enregistr\u00e9 mais ne comptera plus dans la conformit\u00e9 SOP.\\nContinuer quand m\u00eame ?\'))_sopValider('+idx+')" style="width:100%;margin-top:8px;background:#2e1a00;border:1px solid #8a4a00;border-radius:6px;color:#ffaa44;font-size:11px;font-weight:700;padding:6px 8px;cursor:pointer">\u26a0\ufe0f Saisir hors d\u00e9lai ('+_absD+'j) \u2014 ne comptera pas</button>';
           }
           return '<div style="margin-top:8px;padding:6px 8px;border-radius:6px;background:#1a0f0f;border:1px solid #4a1a1a;color:#664444;font-size:11px;text-align:center">\uD83D\uDD12 D\u00e9lai expir\u00e9 ('+_absD+'j) \u2014 acte non r\u00e9alisable</div>';
@@ -5723,10 +5742,20 @@ function viewSaisie(){
         var _hd=new Date(_p[2],_p[1]-1,_p[0]); return Math.abs(_hd-_td2)<=7*86400000;
       });
     }).length : 0;
+    var _pdLate = _pdDeb ? _pdProto.filter(function(evt){
+      var _td2 = new Date(_pdDeb.getTime()); _td2.setDate(_td2.getDate() + evt.j);
+      return HISTORY.some(function(h){
+        if(h.type!==evt.type) return false;
+        var _p=h.date.split('/'); if(_p.length!==3) return false;
+        var _hd=new Date(_p[2],_p[1]-1,_p[0]);
+        var _diff = _hd - _td2;
+        return _diff > 7*86400000 && _diff <= 21*86400000;
+      });
+    }).length : 0;
     form = '<div class="card">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
       +'<div class="stitle" style="margin-bottom:0">📋 Protocole SOP vétérinaire</div>'
-      +'<div style="font-size:11px;color:#88aa88">'+_pdDone+'/'+_pdProto.length+' réalisés</div>'
+      +'<div style="font-size:11px;color:#88aa88">\u2705 '+_pdDone+(_pdLate>0?' \u00b7 \u26a0\ufe0f '+_pdLate:'')+' / '+_pdProto.length+'</div>'
       +'</div>'
       +(!_pdDeb
         ? '<div class="al al-o">Cycle non démarré — aucune date de référence</div>'
@@ -5769,21 +5798,43 @@ function _sopValider(idx){
   var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
   var evt = _proto[idx];
   if(!evt) return;
-  // Guard: block if >14 days past scheduled date
+  // Guard: block if >21 days past scheduled date
   var _sdeb = parseISO(CYCLE.dateDebut);
   if(_sdeb){
     var _snv = _nowDakar();
     var _stv = new Date(_snv.year, _snv.month-1, _snv.day);
     var _stgt = new Date(_sdeb.getTime()); _stgt.setDate(_stgt.getDate() + evt.j);
-    if((_stv - _stgt) > 14*86400000) return;
+    if((_stv - _stgt) > 21*86400000) return;
   }
-  var td = todayISO();
   if(evt.type === 'pesee'){
+    S._sopCtx = {label: evt.label, j: evt.j};
     S.sub = 'pesee';
   } else {
-    S.fsa = {date:td, id:'', sym:evt.label, tra:evt.note||'Acte SOP vét.', cout:'', res:'Guéri', dec:'', bcs:'', muq:''};
-    S.sub = 'sante';
+    S._sopInlineIdx = idx;
+    S._sopInlineData = {id: '', res: 'Gu\u00e9ri'};
   }
+  r();
+}
+function _sopInlineSave(idx){
+  var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+  var evt = _proto[idx];
+  if(!evt) return;
+  var d = S._sopInlineData || {};
+  HISTORY.push({
+    type: 'sante',
+    date: today(),
+    id: d.id || '',
+    sym: evt.label,
+    tra: evt.note || 'Acte SOP v\u00e9t.',
+    cout: '',
+    res: d.res || 'Gu\u00e9ri',
+    dec: '',
+    bcs: '',
+    muq: ''
+  });
+  lsSet('history', HISTORY);
+  S._sopInlineIdx = null;
+  S._sopInlineData = {};
   r();
 }
 function saveObjectifs(){
@@ -6392,81 +6443,6 @@ function viewLiv(){
           +'</div>';
       })()
       +'</div>'
-      +(function(){
-        var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
-        var _sed = S._sopEd || null;
-        var _isCustom = !!CYCLE.sopProtocol;
-        var rows = '';
-        _proto.forEach(function(step, i){
-          if(_sed && _sed.idx === i){
-            rows += '<div style="background:#0a1e0a;border:1px solid #2d6a2d;border-radius:8px;padding:10px;margin-bottom:6px">'
-              +'<div style="display:flex;gap:6px;margin-bottom:6px">'
-              +'<div style="flex:0 0 80px"><label style="font-size:10px;color:#88aa88">J+ (jour)</label>'
-              +'<input type="number" min="1" max="365" value="'+_sed.j+'" style="width:72px;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#C8A06A;font-size:13px;font-weight:700;padding:4px 6px" oninput="S._sopEd.j=parseInt(this.value)||1"></div>'
-              +'<div style="flex:1"><label style="font-size:10px;color:#88aa88">Type</label>'
-              +'<select style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:5px 6px" onchange="S._sopEd.type=this.value">'
-              +'<option value="sante"'+(_sed.type==='sante'?' selected':'')+'>🩺 Saisie Santé</option>'
-              +'<option value="pesee"'+(_sed.type==='pesee'?' selected':'')+'>⚖️ Pesée</option>'
-              +'</select></div>'
-              +'</div>'
-              +'<div style="margin-bottom:6px"><label style="font-size:10px;color:#88aa88">Libellé</label>'
-              +'<input type="text" value="'+(_sed.label||'').replace(/"/g,'&quot;')+'" placeholder="Ex: Déparasitage interne" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:4px 6px" oninput="S._sopEd.label=this.value"></div>'
-              +'<div style="margin-bottom:8px"><label style="font-size:10px;color:#88aa88">Note protocole (optional)</label>'
-              +'<input type="text" value="'+(_sed.note||'').replace(/"/g,'&quot;')+'" placeholder="Ex: Ivermectine PO" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#7a9a7a;font-size:11px;padding:4px 6px" oninput="S._sopEd.note=this.value"></div>'
-              +'<div style="display:flex;gap:6px">'
-              +'<button onclick="_sopSave(false)" style="flex:1;background:#2d6a2d;color:#fff;border:none;border-radius:6px;padding:7px;font-size:12px;font-weight:700;cursor:pointer">✓ Valider</button>'
-              +'<button onclick="S._sopEd=null;r()" style="flex:1;background:#2a2a2a;color:#aaa;border:none;border-radius:6px;padding:7px;font-size:12px;cursor:pointer">✗ Annuler</button>'
-              +'</div>'
-              +'</div>';
-          } else {
-            rows += '<div style="display:flex;align-items:flex-start;gap:6px;padding:8px 0;border-bottom:1px solid #0f1f0f;overflow:hidden">'
-              +'<div style="font-size:10px;font-weight:800;color:#C8A06A;min-width:32px;flex-shrink:0;padding-top:2px;line-height:1.3">J+'+step.j+'</div>'
-              +'<div style="font-size:14px;width:18px;flex-shrink:0;padding-top:1px;text-align:center">'+step.ico+'</div>'
-              +'<div style="flex:1;min-width:0;overflow:hidden">'
-              +'<div style="font-size:12px;color:#ccc;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+step.label+'</div>'
-              +(step.note?'<div style="font-size:10px;color:#7a9a7a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+step.note+'</div>':'')
-              +'</div>'
-              +(!_ro?'<div style="display:flex;gap:4px;flex-shrink:0;padding-top:1px">'
-                    +'<button onclick="_sopEdit('+i+')" style="background:none;border:1px solid #2a4a2a;border-radius:4px;color:#88aa88;font-size:11px;padding:2px 5px;cursor:pointer;line-height:1">✏️</button>'
-                    +'<button onclick="_sopDel('+i+')" style="background:none;border:1px solid #3a1010;border-radius:4px;color:#aa4444;font-size:11px;padding:2px 5px;cursor:pointer;line-height:1">🗑</button>'
-                    +'</div>':'')
-              +'</div>';
-          }
-        });
-        // Ligne ajout
-        if(!_ro){
-          if(_sed && _sed.idx === -1){
-            rows += '<div style="background:#0a1e0a;border:1px solid #2d6a2d;border-radius:8px;padding:10px;margin-top:6px">'
-              +'<div style="font-size:11px;color:#88aa88;margin-bottom:8px;font-weight:700">➕ Nouvelle étape</div>'
-              +'<div style="display:flex;gap:6px;margin-bottom:6px">'
-              +'<div style="flex:0 0 80px"><label style="font-size:10px;color:#88aa88">J+ (jour)</label>'
-              +'<input type="number" min="1" max="365" value="'+(_sed.j||1)+'" style="width:72px;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#C8A06A;font-size:13px;font-weight:700;padding:4px 6px" oninput="S._sopEd.j=parseInt(this.value)||1"></div>'
-              +'<div style="flex:1"><label style="font-size:10px;color:#88aa88">Type</label>'
-              +'<select style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:5px 6px" onchange="S._sopEd.type=this.value">'
-              +'<option value="sante">🩺 Saisie Santé</option>'
-              +'<option value="pesee">⚖️ Pesée</option>'
-              +'</select></div>'
-              +'</div>'
-              +'<div style="margin-bottom:6px"><label style="font-size:10px;color:#88aa88">Libellé</label>'
-              +'<input type="text" placeholder="Ex: Déparasitage interne" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:4px 6px" oninput="S._sopEd.label=this.value"></div>'
-              +'<div style="margin-bottom:8px"><label style="font-size:10px;color:#88aa88">Note protocole (optionnel)</label>'
-              +'<input type="text" placeholder="Ex: Ivermectine PO" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#7a9a7a;font-size:11px;padding:4px 6px" oninput="S._sopEd.note=this.value"></div>'
-              +'<div style="display:flex;gap:6px">'
-              +'<button onclick="_sopSave(true)" style="flex:1;background:#2d6a2d;color:#fff;border:none;border-radius:6px;padding:7px;font-size:12px;font-weight:700;cursor:pointer">✓ Ajouter</button>'
-              +'<button onclick="S._sopEd=null;r()" style="flex:1;background:#2a2a2a;color:#aaa;border:none;border-radius:6px;padding:7px;font-size:12px;cursor:pointer">✗ Annuler</button>'
-              +'</div>'
-              +'</div>';
-          } else {
-            rows += '<button onclick="S._sopEd={idx:-1,j:30,type:\'sante\',label:\'\',note:\'\'};r()" style="width:100%;background:none;border:1px dashed #2a4a2a;border-radius:6px;color:#557755;font-size:12px;padding:7px;cursor:pointer;margin-top:6px">+ Ajouter une étape</button>';
-          }
-          rows += (_isCustom?'<button onclick="_sopReset()" style="width:100%;background:none;border:none;color:#554444;font-size:10px;margin-top:6px;cursor:pointer">↺ Réinitialiser au protocole standard</button>':'');
-        }
-        return '<div class="card">'
-          +'<div class="stitle">📅 Protocole SOP vétérinaire'+(_isCustom?' <span style="font-size:9px;background:#1a2e1a;color:#88aa88;padding:2px 6px;border-radius:8px;margin-left:4px">Personnalisé</span>':' <span style="font-size:9px;background:#1a1a2a;color:#6688aa;padding:2px 6px;border-radius:8px;margin-left:4px">Standard</span>')+'</div>'
-          +'<div style="font-size:10px;color:#7a9a7a;margin-bottom:10px">Les jours J+ sont calculés depuis la date de début de cycle. Modifiez selon votre contexte terrain (race, saison, disponibilité vétérinaire).</div>'
-          +rows
-          +'</div>';
-      })()
       +(S.msg?'<div class="msg '+(S.msg.startsWith('ok')?'ok':'err')+'">'+S.msg.slice(3)+'</div>':'')
       +(!_ro?'<button class="btn" style="width:100%;margin-top:4px" onclick="saveObjectifs()">💾 Enregistrer les objectifs</button>':'')
       +'<div style="font-size:10px;color:#7a9a7a;text-align:center;margin-top:6px">Persist\u00e9s dans Config_App \u2014 appliqu\u00e9s imm\u00e9diatement partout.</div>';
@@ -7518,7 +7494,7 @@ function viewGuide(){
       ['🐄','Saisir le nombre de bêtes + race','Saisie > Init cycle — foirail, capital, durée.'],
       ['📦','Mettre à jour prix aliment','Livrables > Objectifs > Marché & Ration.'],
       ['🎯','Vérifier les objectifs','GMQ cible, marge min, plancher tréso — Livrables > Objectifs.'],
-      ['📅','Vérifier le protocole SOP','Livrables > Objectifs > SOP — adapter à la saison / race.'],
+      ['📅','Vérifier le protocole SOP','Livrables > SOP V\u00e9to — adapter \u00e0 la saison / race.'],
     ]);
     view += _card('📅','Pilotage hebdomadaire (chaque vendredi)',[
       ['📊','Bilan gérant reçu ?','Dashboard > sidebar — vérifier que le bilan est envoyé.'],
