@@ -1143,17 +1143,18 @@ function getTok() {
 
 // Plages des tableaux formatés — start = 1ère ligne de saisie (après en-tête), end = dernière ligne réservée
 var TABLE_RANGES = {
-  'Fiche_Quotidienne': { start: 4, end: 500 },
-  'SOP_Check':         { start: 4, end: 200 },
-  'Stock_Nourriture':  { start: 5, end: 500 },
-  'Incidents':         { start: 5, end: 200 },
-  'Pesees':            { start: 4, end: 200 },
-  'Sante_Mortalite':   { start: 5, end: 200 },
-  'Hebdomadaire':      { start: 4, end: 200 },
-  'Suivi_Marche':      { start: 4, end: 200 },
-  'Suivi_Aliments':    { start: 4, end: 200 },
-  'KPI_Mensuels':      { start: 4, end: 50  },
-  'KPI_Hebdo':         { start: 4, end: 50  }
+  'Fiche_Quotidienne':  { start: 4, end: 500 },
+  'SOP_Check':          { start: 4, end: 200 },
+  'Stock_Nourriture':   { start: 5, end: 500 },
+  'Incidents':          { start: 5, end: 200 },
+  'Pesees':             { start: 4, end: 200 },
+  'Sante_Mortalite':    { start: 5, end: 200 },
+  'Hebdomadaire':       { start: 4, end: 200 },
+  'Suivi_Marche':       { start: 4, end: 200 },
+  'Suivi_Aliments':     { start: 4, end: 200 },
+  'KPI_Mensuels':       { start: 4, end: 50  },
+  'KPI_Hebdo':          { start: 4, end: 50  },
+  'Historique_Cycles':  { start: 2, end: 200 }  // ligne 1 = en-têtes, données à partir de 2
 };
 
 function appendRow(sid, range, vals) {
@@ -5041,15 +5042,17 @@ function viewDash(){
   if ((S.user==='fondateur'||S.user==='rga') && CYCLE.capital > 0 && (CYCLE.objectifPrix||0) > 0) {
     var _simD    = _calcDepSim();
     var _pc      = CYCLE.poidsCible || 400;
-    var _op      = CYCLE.objectifPrix || 2000;
+    // Prix : utilise le dernier cours saisi au foirail si disponible, sinon l'objectif initial
+    var _dernierPrixEntry = _livePrixMax();
+    var _dernierPrix = _dernierPrixEntry ? _dernierPrixEntry.moy : null;
+    var _op      = (_dernierPrix && _dernierPrix > 0) ? _dernierPrix : (CYCLE.objectifPrix || 2000);
+    var _opLabel = (_dernierPrix && _dernierPrix > 0) ? 'marché live' : 'objectif';
     var _nb      = MOCK.betes || (CYCLE.nbBetes||4);
     var _caProj  = _nb * _pc * _op;
     var _chargesT = _simD.total;
     var _marge   = _caProj - _chargesT;
     var _roi     = CYCLE.capital > 0 ? Math.round(_marge / CYCLE.capital * 100) : null;
     var _seuilPrix = _nb > 0 && _pc > 0 ? Math.round(_chargesT / (_nb * _pc)) : null;
-    var _dernierPrixEntry = _livePrixMax();
-    var _dernierPrix = _dernierPrixEntry ? _dernierPrixEntry.moy : null;
     var _prixOk  = _seuilPrix && _dernierPrix ? _dernierPrix >= _seuilPrix : null;
     // Niveau de confiance : GMQ + mortalité + tréso
     var _gc2 = CYCLE.gmqCible || 1, _gw2 = CYCLE.gmqWarn || 0.8;
@@ -5067,7 +5070,7 @@ function viewDash(){
     var _semRestT  = Math.max(0, totalSemCycle - semActuelle);
     _rentaHtml = '<div style="background:'+_margeBg+';border:1px solid '+_margeBdr+';border-radius:14px;padding:16px 18px;margin-bottom:14px;position:relative;overflow:hidden">'
       +'<div style="position:absolute;right:-20px;top:-20px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,0.03)"></div>'
-      +'<div style="font-size:10px;color:#88aa88;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Rentabilité projetée — fin de cycle</div>'
+      +'<div style="font-size:10px;color:#88aa88;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Rentabilité projetée — fin de cycle'+(_dernierPrix?' <span style="font-size:9px;background:#1a2e1a;color:#4caf50;padding:1px 5px;border-radius:5px;font-weight:600">🟢 '+_opLabel+'</span>':'')+'</div>'
       +'<div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:10px">'
       +'<div><div style="font-size:32px;font-weight:900;color:'+_margeCol+';line-height:1">'+_margeSign+fmt(Math.round(_marge/1000))+'k</div>'
       +'<div style="font-size:11px;color:#7a9a7a;margin-top:2px">FCFA marge brute</div></div>'
