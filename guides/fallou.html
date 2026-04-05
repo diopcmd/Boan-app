@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -167,6 +167,64 @@
 <div class="footer">
   <span>BOAN — Guide Commerciale (Fallou)</span>
   <span>Généré depuis l'application BOAN.</span>
+</div>
+
+<!-- ═══ FORMULES DE CALCUL ═══════════════════════════════════════ -->
+<div style="page-break-before:always"></div>
+<h2>📐 Comment l'app calcule les chiffres du marché</h2>
+<div style="font-size:11px;color:#556655;margin-bottom:14px;border-left:3px solid #2d6a2d;padding-left:10px">
+  Chaque indication visible dans Marché et Dashboard est tirée de données saisies.
+  Si un chiffre vous semble faux, vérifiez la source indiquée ici.
+</div>
+
+<div class="card">
+  <h3>💹 Prix foirail affiché (Marché > Prix foirail)</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700;width:30%">Source</td><td style="padding:5px 8px"><strong>Suivi_Marche!A:G</strong> — 10 derniers relevés. Col A = date, C = Bas, D = Moyen, E = Haut</td></tr>
+    <tr><td style="padding:5px 8px;font-weight:700">Prix affiché</td><td style="padding:5px 8px">Moyenne des prix "Moyen" (col D) sur les 10 derniers relevés. Le max affiché = max de la colonne E (Haut).</td></tr>
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700">Tendance</td><td style="padding:5px 8px">↑ ou ↓ = comparaison dernier relevé vs avant-dernier relevé (col D).</td></tr>
+    <tr><td style="padding:5px 8px;font-weight:700">Vs objectif</td><td style="padding:5px 8px">Badge vert si prix moyen actuel ≥ objectifPrix (Config_App). Badge rouge si inférieur.</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>🧮 Seuil de rentabilité (Marché > Simulateur)</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700;width:30%">Formule</td><td style="padding:5px 8px"><strong>Prix_break_even (F/kg vif) = (Capital + Charges alim) ÷ (poids_actuel_moyen × nbBêtes)</strong></td></tr>
+    <tr><td style="padding:5px 8px;font-weight:700">Capital</td><td style="padding:5px 8px">Config_Cycle col F (achat veaux + transport initial)</td></tr>
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700">Charges alim</td><td style="padding:5px 8px">prixAlim (F/kg) × ration/j × nbBêtes × jours_cycle (depuis dateDebut)</td></tr>
+    <tr><td style="padding:5px 8px;font-weight:700">Exemple</td><td style="padding:5px 8px">Capital 1 450 000 + 750 000 alim = 2 200 000 F. 18 bêtes × 340 kg = 6 120 kg → seuil = <strong>359 F/kg</strong></td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>💰 Marge projetée au cours saisi (Simulateur)</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700;width:30%">Formule</td><td style="padding:5px 8px"><strong>Marge totale = (prix_saisi × poids_moyen × nbBêtes) − Capital − Charges alim</strong></td></tr>
+    <tr><td style="padding:5px 8px;font-weight:700">Marge / tête</td><td style="padding:5px 8px">Marge totale ÷ nbBêtes actives</td></tr>
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700">Attention</td><td style="padding:5px 8px">Transport foirail et commission courtier (2–5%) NON déduits. À soustraire manuellement.</td></tr>
+    <tr><td style="padding:5px 8px;font-weight:700">Exemple</td><td style="padding:5px 8px">1 800 F/kg × 340 kg × 18 = 11 016 000 F − 2 200 000 = <strong>8 816 000 F</strong> soit ~490 000 F/tête</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>📊 Signaux automatiques de vente dans l'app</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700;width:40%">Signal</td><td style="padding:5px 8px;font-weight:700">Comment c'est calculé</td></tr>
+    <tr><td style="padding:5px 8px">Poids ≥ poids cible</td><td style="padding:5px 8px">poids_actuel_moyen (dernière pesée) ≥ poidsCible (Config_App). Source : Pesees!C</td></tr>
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px">GMQ en plateau</td><td style="padding:5px 8px">Différence GMQ semaine N vs semaine N-1 &lt; 0,05 kg/j sur 2 semaines consécutives.</td></tr>
+    <tr><td style="padding:5px 8px">Prix ≥ objectif</td><td style="padding:5px 8px">Dernier prix moyen (Suivi_Marche col D) ≥ objectifPrix (Config_App).</td></tr>
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px">Fin cycle ≤ 2 sem</td><td style="padding:5px 8px">jours_restants = (dateDebut + dureeMois×30) − aujourd'hui &lt; 14</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>🌽 Prix aliments affichés (Marché > Prix aliments)</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700;width:30%">Source</td><td style="padding:5px 8px"><strong>Suivi_Aliments!A:D</strong> — col A = date, B = type, C = prix/kg, D = remarque</td></tr>
+    <tr><td style="padding:5px 8px;font-weight:700">Filtrage</td><td style="padding:5px 8px">Tous les relevés confondus (pas de filtre date de cycle). Historique visible au moins sur les 10 derniers.</td></tr>
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700">Impact</td><td style="padding:5px 8px">Le prix affiché dans ce tableau N'est PAS celui utilisé par le simulateur. C'est <em>prixAlim</em> (Config_App) qui compte pour le calcul — saisissable dans Livrables > Objectifs > Marché &amp; Ration.</td></tr>
+  </table>
 </div>
 </body>
 </html>

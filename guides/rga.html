@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -115,6 +115,78 @@
 <div class="footer">
   <span>BOAN — Guide RGA</span>
   <span>Généré depuis l'application BOAN.</span>
+</div>
+
+<!-- ═══ FORMULES DE CALCUL ═══════════════════════════════════════ -->
+<div style="page-break-before:always"></div>
+<h2>📐 Formules de calcul — Ce que vous lisez et comment c'est calculé</h2>
+<div style="font-size:11px;color:#556655;margin-bottom:14px;border-left:3px solid #2d6a2d;padding-left:10px">
+  Pour chaque indicateur du dashboard et de Livrables, voici la source Sheets et la formule exacte.
+  Utilisez cette section pour valider ou contester un chiffre.
+</div>
+
+<div class="card">
+  <h3>📈 GMQ — Gain Moyen Quotidien</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700;width:30%">Source Sheets</td><td style="padding:5px 8px"><strong>Pesees!A:C</strong> — date (A), ID bête (B), poids (C)</td></tr>
+    <tr><td style="padding:5px 8px;font-weight:700">Filtre</td><td style="padding:5px 8px">Lignes depuis CYCLE.dateDebut uniquement</td></tr>
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700">Formule</td><td style="padding:5px 8px">Par bête : <strong>(poids_n − poids_n-1) ÷ (date_n − date_n-1)</strong> en jours. GMQ = moyenne de tous les intervalles.</td></tr>
+    <tr><td style="padding:5px 8px;font-weight:700">Alerte</td><td style="padding:5px 8px">Si aucune pesée : valeur par défaut = gmqCible (1,1 kg/j). Pas fiable sans au moins 2 pesées.</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>☠️ Taux de mortalité</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700;width:30%">Source Sheets</td><td style="padding:5px 8px"><strong>Sante_Mortalite!A:G</strong> — col G = "OUI" → décès</td></tr>
+    <tr><td style="padding:5px 8px;font-weight:700">Formule</td><td style="padding:5px 8px"><strong>Taux = nb_décès_depuis_dateDebut ÷ nbBêtesDépart × 100</strong></td></tr>
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700">Seuil</td><td style="padding:5px 8px">max acceptable = tauxMortMax (défaut : 5%). Configurable dans Livrables > Objectifs.</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>💰 Coût de revient (FCFA / kg de gain)</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700;width:30%">Source</td><td style="padding:5px 8px">Config_Cycle : prixAlim (R), ration (E), nbBêtes (B), dateDebut (A). Pesées pour poids actuel.</td></tr>
+    <tr><td style="padding:5px 8px;font-weight:700">Formule</td><td style="padding:5px 8px">Charges alim = prixAlim × ration/j × nbBêtes × jours_cycle<br><strong>Coût revient = Charges alim ÷ kg_gain_total</strong><br>kg_gain = (poids_actuel_moyen − poidsDepart) × nbBêtes</td></tr>
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700">Piège</td><td style="padding:5px 8px">Si prixAlim = 0 (non saisi), le coût revient calculé sera faussement bas. Vérifier Config_App ligne "prixAlim".</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>📊 IC — Indice de Consommation</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700;width:30%">Formule</td><td style="padding:5px 8px"><strong>IC = kg_aliment_consommé ÷ kg_poids_gagné</strong></td></tr>
+    <tr><td style="padding:5px 8px;font-weight:700">Source</td><td style="padding:5px 8px">Stock_Nourriture (sorties cumulées) ÷ gain poids (Pesées)</td></tr>
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700">Interprétation</td><td style="padding:5px 8px">IC &lt; 8 = bonne efficacité · IC &gt; 12 = conversion médiocre pour des zébus. Référence race Djakoré : 8–10.</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>✅ Conformité SOP quotidienne (%)</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700;width:30%">Source</td><td style="padding:5px 8px"><strong>SOP_Check!A:H</strong> — 1 ligne = 1 jour de SOP complété</td></tr>
+    <tr><td style="padding:5px 8px;font-weight:700">Formule</td><td style="padding:5px 8px"><strong>Conformité % = nb_jours_SOP_soumis ÷ (semaine_en_cours × 7) × 100</strong></td></tr>
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700">Seuil</td><td style="padding:5px 8px">Vert ≥ 80% · Orange ≥ 50% · Rouge &lt; 50%</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>🧮 Simulateur prix foirail — Seuil de rentabilité</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700;width:30%">Formule</td><td style="padding:5px 8px"><strong>Prix_break_even = (Capital + Charges alim) ÷ (poids_moyen × nbBêtes)</strong></td></tr>
+    <tr><td style="padding:5px 8px;font-weight:700">Marge / tête</td><td style="padding:5px 8px">(prix_saisi × poids_moyen − coût_total/nbBêtes)</td></tr>
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700">Signal vente</td><td style="padding:5px 8px">Prix foirail actuel (Suivi_Marche, dernière ligne) ≥ objectifPrix ET poids ≥ poidsVenteMin</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>📅 SOP Vétérinaire — Calcul des dates d'actes</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700;width:30%">Source</td><td style="padding:5px 8px">Config_App clé "sopProtocol" (JSON) — liste des étapes J+N</td></tr>
+    <tr><td style="padding:5px 8px;font-weight:700">Formule</td><td style="padding:5px 8px"><strong>Date théorique = dateDebut + J jours</strong><br>Acte "Réalisé" si une saisie Santé ou Pesée existe dans ±7 jours de la date théorique.</td></tr>
+    <tr style="background:#f0f5f0"><td style="padding:5px 8px;font-weight:700">État</td><td style="padding:5px 8px">✅ Fait · ⚠️ En retard (date dépassée) · 🔔 Imminent (dans 7 jours) · 📅 Planifié</td></tr>
+  </table>
 </div>
 </body>
 </html>

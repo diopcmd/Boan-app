@@ -1309,7 +1309,7 @@ function loadLiveData() {
             HISTORY = []; lsSet('history', []);
             lsSet('last_fiche', null); // effacer le marqueur fiche du jour
             LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = []; LIVE.deceased = [];
-            lsSet('deceased', []);
+            lsSet('deceased', []); lsSet('deceased_debut', CYCLE.dateDebut);
             lsSet('alimPrix', []);
             CYCLE._lastFicheDate=''; CYCLE._lastSopDate=''; CYCLE._lastStockDate='';
             CYCLE._lastPeseeDate=''; CYCLE._lastIncDate=''; CYCLE._lastSanteDate='';
@@ -1364,7 +1364,7 @@ function loadLiveData() {
                 HISTORY = []; lsSet('history', []);
                 lsSet('last_fiche', null);
                 LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = []; LIVE.deceased = [];
-                lsSet('deceased', []);
+                lsSet('deceased', []); lsSet('deceased_debut', CYCLE.dateDebut);
                 lsSet('alimPrix', []);
                 CYCLE._lastFicheDate=''; CYCLE._lastSopDate=''; CYCLE._lastStockDate='';
                 CYCLE._lastPeseeDate=''; CYCLE._lastIncDate=''; CYCLE._lastSanteDate='';
@@ -1405,7 +1405,7 @@ function loadLiveData() {
           .filter(function(r){ return r[6] && r[6].toString().toUpperCase()==='OUI'; })
           .map(function(r){ return (r[1]||'').toString().trim(); })
           .filter(Boolean);
-        lsSet('deceased', LIVE.deceased);
+        lsSet('deceased', LIVE.deceased); lsSet('deceased_debut', CYCLE.dateDebut);
         var valBetes = Math.max(0, (CYCLE.nbBetes||4) - deces);
         if (!isNaN(valBetes)) {
           MOCK.betes = valBetes;
@@ -2172,7 +2172,7 @@ var SPARK = {
 var LIVE = {
   pesees:    [],
   beteIds:   [],
-  deceased:  lsGet('deceased') || [],  // IDs des bêtes décédées ce cycle (persisté)
+  deceased:  (function(){ var _d=lsGet('deceased')||[]; if(!_d.length) return _d; var _dd=lsGet('deceased_debut'); if(_dd && CYCLE.dateDebut && _dd!==CYCLE.dateDebut) return []; return _d; })(),  // IDs des bêtes décédées ce cycle (invalidé si cycle changé)
   alimPrix:  lsGet('alimPrix') || [],  // [{date, type, prix}] depuis Suivi_Aliments (persisté)
   prix:      [],  // [{date, foi, bas, moy, haut}] depuis Suivi_Marche
   incidents: [],  // { date, id, type, grav, desc, act, clos } — chargées depuis Vague 2
@@ -3859,7 +3859,7 @@ function saveCycle(){
   LIVE.pesees    = [];
   LIVE.beteIds   = [];
   LIVE.deceased  = [];
-  lsSet('deceased', []);
+  lsSet('deceased', []); lsSet('deceased_debut', CYCLE.dateDebut);
   lsSet('alimPrix', []); LIVE.alimPrix = [];
   LIVE.incidents = [];
   LIVE.loaded    = false;
@@ -5676,7 +5676,7 @@ function viewSaisie(){
     var _ndPd    = _nowDakar();
     var _pdToday = new Date(_ndPd.year, _ndPd.month-1, _ndPd.day);
     var _pdJour  = _pdDeb ? Math.floor((_pdToday - _pdDeb) / 86400000) : null;
-    var _pdCards = _pdProto.map(function(evt){
+    var _pdCards = _pdProto.map(function(evt, idx){
       var _td = null, _daysTo = null, _fait = false;
       if(_pdDeb){
         _td = new Date(_pdDeb.getTime()); _td.setDate(_td.getDate() + evt.j);
@@ -5703,13 +5703,16 @@ function viewSaisie(){
         var _ds = _td ? ('0'+_td.getDate()).slice(-2)+'/'+('0'+(_td.getMonth()+1)).slice(-2)+'/'+_td.getFullYear() : 'J+'+evt.j;
         _badge = '📅 '+_ds;
       }
-      return '<div style="background:'+_bg+';border:1px solid '+_bdr+';border-radius:8px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px">'
+      return '<div style="background:'+_bg+';border:1px solid '+_bdr+';border-radius:8px;padding:10px 12px;margin-bottom:8px">'
+        +'<div style="display:flex;align-items:center;gap:10px">'
         +'<div style="font-size:20px;width:28px;text-align:center;flex-shrink:0">'+evt.ico+'</div>'
         +'<div style="flex:1">'
         +'<div style="font-size:13px;color:#ccc;font-weight:700">'+evt.label+'</div>'
         +(evt.note?'<div style="font-size:10px;color:#556655;margin-top:1px">'+evt.note+'</div>':'')
         +'</div>'
         +'<div style="font-size:11px;font-weight:700;color:'+_col+';white-space:nowrap;text-align:right">'+_badge+'</div>'
+        +'</div>'
+        +(!_fait&&_pdDeb?'<button onclick="_sopValider('+idx+')" style="width:100%;margin-top:8px;background:#1a2e1a;border:1px solid #2d6a2d;border-radius:6px;color:#88ee88;font-size:11px;font-weight:700;padding:6px 8px;cursor:pointer">\u2705 Saisir l\'acte \u2014 '+(evt.type==='pesee'?'Peser les b\u00eates':'Santé')+'</button>':'')
         +'</div>';
     }).join('');
     var _pdDone = _pdDeb ? _pdProto.filter(function(evt){
@@ -5761,6 +5764,19 @@ function _sopReset(){
   CYCLE.sopProtocol = null;
   lsSet('cycle', CYCLE);
   S._sopEd = null; r();
+}
+function _sopValider(idx){
+  var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+  var evt = _proto[idx];
+  if(!evt) return;
+  var td = todayISO();
+  if(evt.type === 'pesee'){
+    S.sub = 'pesee';
+  } else {
+    S.fsa = {date:td, id:'', sym:evt.label, tra:evt.note||'Acte SOP vét.', cout:'', res:'Guéri', dec:'', bcs:'', muq:''};
+    S.sub = 'sante';
+  }
+  r();
 }
 function saveObjectifs(){
   var _sid=SID.fondateur||SID.fallou||SID.rga; if(!_sid){ alert('SID non configuré'); return; }
@@ -7461,6 +7477,7 @@ function viewGuide(){
       +'</div>';
   };
   var view = '';
+  view += '<button onclick="chTab(\'dashboard\')" style="display:block;width:100%;text-align:left;background:#0f1a0f;border:1px solid #1e3a1e;border-radius:8px;padding:10px 14px;color:#88aa88;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px">← Retour au tableau de bord</button>';
 
   // ── GÉRANT ──
   if(u==='gerant'){

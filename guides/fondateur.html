@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -130,6 +130,152 @@
 <div class="footer">
   <span>BOAN — Guide Fondateur / Direction</span>
   <span>Généré depuis l'application — Imprimer pour archiver ou partager.</span>
+</div>
+
+<!-- ═══ FORMULES DE CALCUL ═══════════════════════════════════════ -->
+<div style="page-break-before:always"></div>
+<h2>📐 Formules de calcul — Comment l'app calcule les chiffres</h2>
+<div style="font-size:11px;color:#556655;margin-bottom:14px;border-left:3px solid #2d6a2d;padding-left:10px">
+  Cette section explique précisément d'où vient chaque chiffre affiché dans l'application — 
+  quelle feuille Google Sheets est lue, quel calcul est appliqué.
+  Si une valeur vous semble incorrecte, vérifiez d'abord les données sources indiquées ici.
+</div>
+
+<div class="card">
+  <h3>🐄 Nombre de bêtes actives (Dashboard)</h3>
+  <div class="row"><div class="ico">📖</div><div>
+    <div class="label">Source</div>
+    <div class="desc"><strong>Config_Cycle!B1</strong> (nb départ) — <strong>Sante_Mortalite!A:G</strong> col G = "OUI" (décès)</div>
+  </div></div>
+  <div class="row"><div class="ico">🧮</div><div>
+    <div class="label">Formule</div>
+    <div class="desc"><strong>nbBétesActives = nbBétesDépart − nb_lignes_décès_depuis_dateDebut</strong><br>
+    Seules les entrées dont la date (col A, format JJ/MM/AAAA) est ≥ à la date de début de cycle sont comptées.<br>
+    Ex : 20 bêtes au départ − 2 décès depuis le 01/01 → 18 actives.</div>
+  </div></div>
+  <div class="row"><div class="ico">💾</div><div>
+    <div class="label">Persistance</div>
+    <div class="desc">Résultat mis en cache dans localStorage (clé <em>deceased</em>) pour affichage immédiat hors ligne. Recalculé à chaque sync Sheets. Invalidé automatiquement si un nouveau cycle est démarré.</div>
+  </div></div>
+</div>
+
+<div class="card">
+  <h3>📈 GMQ — Gain Moyen Quotidien (Dashboard + Livrables)</h3>
+  <div class="row"><div class="ico">📖</div><div>
+    <div class="label">Source</div>
+    <div class="desc"><strong>Pesees!A:H</strong> — col A = date, col B = ID bête, col C = poids (kg)</div>
+  </div></div>
+  <div class="row"><div class="ico">🧮</div><div>
+    <div class="label">Formule</div>
+    <div class="desc">
+      Pour chaque bête, on trie ses pesées par date.<br>
+      Pour chaque paire consécutive : <strong>Δpoids ÷ Δjours</strong><br>
+      <strong>GMQ affiché = moyenne de tous ces intervalles (pondérée par les jours)</strong><br>
+      Exemple : Bête B01, pesée 1 = 280 kg (J0), pesée 2 = 292 kg (J14) → GMQ = (292−280)/14 = 0,857 kg/j<br>
+      <em>⚠ Valeur par défaut si aucune pesée : 1,1 kg/j (= gmqCible) — badge orange "estimation".</em>
+    </div>
+  </div></div>
+  <div class="row"><div class="ico">🔴</div><div>
+    <div class="label">Badges couleur</div>
+    <div class="desc">Vert ≥ gmqCible · Orange ≥ gmqWarn · Rouge &lt; gmqWarn — configurables dans Livrables > Objectifs</div>
+  </div></div>
+</div>
+
+<div class="card">
+  <h3>💵 Trésorerie (Dashboard + Livrables)</h3>
+  <div class="row"><div class="ico">📖</div><div>
+    <div class="label">Source prioritaire</div>
+    <div class="desc"><strong>KPI_Mensuels!H</strong> — dernière valeur non vide = trésorerie réelle saisie manuellement chaque mois</div>
+  </div></div>
+  <div class="row"><div class="ico">📖</div><div>
+    <div class="label">Source de secours</div>
+    <div class="desc">Si KPI_Mensuels vide : capital initial (Config_Cycle!F) − Σ frais santé depuis dateDebut (Sante_Mortalite col F)</div>
+  </div></div>
+  <div class="row"><div class="ico">🧮</div><div>
+    <div class="label">Formule</div>
+    <div class="desc"><strong>Tréso affichée = valeur KPI_Mensuels la plus récente</strong><br>
+    <em>Pour qu'elle soit fiable, saisir la tréso réelle dans KPI_Mensuels col H chaque mois (ou après chaque sortie de cash importante).</em></div>
+  </div></div>
+</div>
+
+<div class="card">
+  <h3>📦 Stock restant en semaines (Dashboard)</h3>
+  <div class="row"><div class="ico">📖</div><div>
+    <div class="label">Source</div>
+    <div class="desc"><strong>Stock_Nourriture!A:I</strong> — col D = quantité (kg), col E = type mouvement (ajouter/consommer)</div>
+  </div></div>
+  <div class="row"><div class="ico">🧮</div><div>
+    <div class="label">Formule</div>
+    <div class="desc">
+      <strong>Σentrées − Σsorties = stock_net_kg</strong><br>
+      <strong>Semaines = stock_net_kg ÷ (ration_kg/j × nbBêtes × 7)</strong><br>
+      Exemple : 900 kg de son en stock, 30 bêtes × 12 kg/j = 360 kg/j = 2,5 semaines.
+    </div>
+  </div></div>
+</div>
+
+<div class="card">
+  <h3>💰 Coût de revient (Livrables > KPI)</h3>
+  <div class="row"><div class="ico">🧮</div><div>
+    <div class="label">Formule</div>
+    <div class="desc">
+      <strong>Coût revient (FCFA/kg gain) = Charges alim totales ÷ kg de poids gagné</strong><br>
+      Charges alim = prixAlim (FCFA/kg) × ration_kg/j × nbBêtes × jours_cycle<br>
+      Poids gagné = (poids_actuel_moyen − poidsDepart) × nbBêtes<br>
+      Exemple : 1 450 000 F dépensés en aliment ÷ 2 000 kg gagnés = 725 F/kg gain.<br>
+      <em>⚠ Si prixAlim non mis à jour dans Objectifs > Marché &amp; Ration, ce chiffre est sous-estimé.</em>
+    </div>
+  </div></div>
+</div>
+
+<div class="card">
+  <h3>📊 Score santé troupeau (Dashboard)</h3>
+  <div class="row"><div class="ico">🧮</div><div>
+    <div class="label">Formule</div>
+    <div class="desc">
+      <strong>Score = GMQ_pts (50) + Stock_pts (30) + Bêtes_pts (20) − malus_incidents</strong><br>
+      GMQ : 50 si ≥ gmqCible · 30 si ≥ gmqWarn · 10 si &lt; gmqWarn<br>
+      Stock : 30 si ≥ 4 sem · 15 si 2–4 sem · 5 si &lt; 2 sem<br>
+      Bêtes : 20 si mortalité ≤ 1% · 10 si ≤ 3% · 0 si &gt; 3%<br>
+      Malus : −5 pts × nombre d'incidents ouverts (non clôturés)
+    </div>
+  </div></div>
+</div>
+
+<div class="card">
+  <h3>🔮 Rentabilité projetée / CA estimé (Livrables > KPI)</h3>
+  <div class="row"><div class="ico">🧮</div><div>
+    <div class="label">Formule</div>
+    <div class="desc">
+      <strong>CA projeté = poids_fin_prévu × objectifPrix × nbBêtes_actives</strong><br>
+      poids_fin_prévu = poidsDepart + GMQ_actuel × jours_cycle_total<br>
+      Exemple : 270 kg + 1,1 kg/j × 240 j = 534 kg × 2 000 F/kg × 18 bêtes = 19 224 000 F<br><br>
+      <strong>Marge brute projetée = CA projeté − Capital investi − Charges alim estimées</strong><br>
+      Charges alim = prixAlim × ration × nbBêtes × jours_restants<br>
+      <em>Marge brute ne déduit PAS transport, commission, loyer — voir simulateur pour marge nette.</em>
+    </div>
+  </div></div>
+</div>
+
+<div class="card">
+  <h3>🧮 Simulateur Marché — Seuil de rentabilité</h3>
+  <div class="row"><div class="ico">🧮</div><div>
+    <div class="label">Formule seuil</div>
+    <div class="desc">
+      <strong>Prix_min (FCFA/kg vif) = (Capital + Charges alim totales) ÷ (poids_actuel_moyen × nbBêtes)</strong><br>
+      En dessous de ce prix, vous vendez à perte.<br>
+      Exemple : Capital 1 450 000 F + 800 000 F alim = 2 250 000 F ÷ (350 kg × 18 bêtes = 6 300 kg) = 357 F/kg.<br>
+      <em>Tout prix foirail &gt; 357 F/kg = bénéfice.</em>
+    </div>
+  </div></div>
+  <div class="row"><div class="ico">🧮</div><div>
+    <div class="label">Formule marge nette / tête</div>
+    <div class="desc">
+      <strong>Marge/tête = (prix_vente × poids_moyen − coût_revient_par_bête) − commission</strong><br>
+      coût_revient_par_bête = (Capital + Charges) ÷ nbBêtes<br>
+      Exemple : 2 000 F/kg × 350 kg = 700 000 F − (2 250 000 ÷ 18) = 700 000 − 125 000 = 575 000 F/tête brut.
+    </div>
+  </div></div>
 </div>
 </body>
 </html>
