@@ -2013,6 +2013,7 @@ function _submitActual(type) {
       if(type==='stock') S.fst={date:td,mvts:[],stockInput:'',stockKg:'',rat:''};
       if(type==='inc')   S.fin={date:td,id:'',type:'',grav:'1',desc:'',act:'',clos:''};
       if(type==='pesee') S.fp={date:td,id:'',race:'',raceCustom:'',poids:'',prev:'',datePrev:'',_autoFilled:false,_autoFilledId:''};
+      if(type==='pesee') { S._sopCtx = null; }
       if(type==='sante') S.fsa={date:td,id:'',sym:'',tra:'',cout:'',res:'',dec:''};
       if(type==='bilan') S.fb={sem:String(calcSemaine()),nb:'',nou:'',stk:'',inc:'',poi:'',msg:''};
       if(type==='marche')S.fm={date:td,foi:S.fm.foi||'Thiès',foiCustom:S.fm.foiCustom||'',bas:'',moy:'',haut:''}
@@ -5820,9 +5821,10 @@ function _sopInlineSave(idx){
   var evt = _proto[idx];
   if(!evt) return;
   var d = S._sopInlineData || {};
-  HISTORY.push({
+  var td = today();
+  var entry = {
     type: 'sante',
-    date: today(),
+    date: td,
     id: d.id || '',
     sym: evt.label,
     tra: evt.note || 'Acte SOP v\u00e9t.',
@@ -5831,10 +5833,22 @@ function _sopInlineSave(idx){
     dec: '',
     bcs: '',
     muq: ''
-  });
+  };
+  HISTORY.push(entry);
   lsSet('history', HISTORY);
   S._sopInlineIdx = null;
   S._sopInlineData = {};
+  // Sync vers Sheets (Sante_Mortalite) — même logique que doSubmit('sante')
+  var _validSids = [SID.gerant, SID.fondateur, SID.rga].filter(Boolean);
+  if(_validSids.length){
+    var _row = [td, entry.id, entry.sym, entry.tra, '', entry.res, '', '', ''];
+    Promise.all(_validSids.map(function(sid){ return appendRow(sid, 'Sante_Mortalite!A:I', _row); }))
+    .then(function(){
+      CYCLE._lastSanteDate = td;
+      lsSet('cycle', CYCLE);
+    })
+    .catch(function(e){ console.warn('_sopInlineSave Sheets write failed:', e); });
+  }
   r();
 }
 function saveObjectifs(){

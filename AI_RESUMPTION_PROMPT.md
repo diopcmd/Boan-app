@@ -12,7 +12,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 - **GitHub** : https://github.com/diopcmd/Boan-app (branche `main`)
 - **Dossier local** : `C:\Temp\Boan-app\`
 - **Langue** : Tout en français (code, UI, communications)
-- **Dernier commit** : `f14f74c` — fix: sopvet corrige replace backslash-quote cassant JS
+- **Dernier commit** : `8599ed6` — expert review complet + fix _sopInlineSave + docs maj
 - **Webhook Vercel** : cassé → redeploy manuel sur vercel.com (Deployments → Redeploy)
 
 ---
@@ -35,7 +35,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 
 ```
 Boan-app/
-├── index.html              SPA complète (~6282 lignes)
+├── index.html              SPA complète (~7 804 lignes)
 ├── vercel.json             Rewrites SPA (exclut /api/ et /manifest.json)
 ├── manifest.json           Web App Manifest (PWA — icône, nom, display:standalone)
 ├── api/
@@ -84,6 +84,8 @@ ANTHROPIC_API_KEY     (optionnel — fonctionnalité IA)
 
 ```js
 var MOCK  = {betes:4, gmq:1.1, stock:6, treso:680000, incidents:0, sem:1, _tresoFromSante:null};
+// MOCK.gmq = SOURCE CANONIQUE — toutes les formules inline (dashboard, PDF, guides) lisent MOCK.gmq
+// NE PAS recalculer le GMQ directement depuis LIVE.pesees dans les vues
 var CYCLE = lsGet('cycle') || {
   nbBetes:4, dateDebut:'', dureeMois:8, peseeFreq:30,
   gmqCible:1.0, gmqWarn:0.8, poidsCible:400, poidsVenteMin:340, tauxMortMax:3,
@@ -103,6 +105,11 @@ var LIVE = {
   source:    'cache'
 };
 var SPARK = { gmq:[], stk:[], treso:[], betes:[] };
+// ── State temporaire SOP Véto ──
+// S._sopCtx        : {label, j}|null — contexte pesée SOP (bannière form pesée, nettoyé après submit)
+// S._sopInlineIdx  : number|null — index acte SOP en saisie inline (onglet Protocole)
+// S._sopInlineData : {id, res} — données du mini-form inline
+
 var _lastSyncTS      = 0;
 var _lastFondVisitTS = lsGet('fondateur_last_visit') || 0;
 ```
@@ -298,12 +305,21 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 - Dernier prix par type affiché + historique + rapport mensuel partageable (📤)
 - Formulaire saisie : Date + Type (datalist) + Prix/kg → `doSubmit('alim')`
 
-### Calendrier SOP vétérinaire (fondateur / rga)
+### Calendrier SOP vétérinaire (fondateur / rga / gérant lecture)
 - Protocoles calculés depuis `CYCLE.dateDebut` — J15 vaccin, J30 déparasitage, J60 balnéation…
-- Statut ✅ fait / 🕐 à venir / ⚠️ en retard calculé automatiquement
-- **Entièrement personnalisable** : fondateur peut ajouter/supprimer/modifier étapes
+- Statut ✅ fait / 🔔 à venir / ⚠️ en retard calculé automatiquement
+- **Seuils** : ±7 j = à temps (✅ comptent dans conformité) ; 8–21j = hors délai (⚠️ bouton orange) ; >21j = bloqué
+- **Formulaire inline (santé)** : mini-form bête + résultat directement dans la carte, SANS changer de page
+  - Déclenché par `_sopValider(idx)` (sante) → `S._sopInlineIdx = idx`
+  - Validé par `_sopInlineSave(idx)` → écrit dans `HISTORY` ET dans `Sante_Mortalite!A:I` (tous SIDs)
+- **Pesée SOP** : `_sopValider(idx)` (pesee) → `S._sopCtx = {label, j}` + `S.sub = 'pesee'`
+  - Bannière contextuelle aff ichée dans le form pesée
+  - `S._sopCtx` nettoyé après soumission réussie (`_submitActual` > `if(type==='pesee') S._sopCtx = null`)
+- **Compteur double** : `✅ X · ⚠️ Y / total` (à temps vs tardifs) dans l'en-tête de l'onglet
+- Entier personnalisable : fondateur peut ajouter/supprimer/modifier étapes
 - Protocole personnalisé persisté dans `Config_App` JSON clé `sopProtocol`
 - `SOP_PROTOCOL_DEFAULT` = tableau de référence standard si pas de personnalisation
+- **L'éditeur de protocole est UNIQUEMENT dans Livrables > SOP Véto** (il a été retiré de Livrables > Objectifs car doublon)
 
 ### Objectifs configurables (fondateur / rga)
 - Carte dans Livrables → Objectifs
@@ -336,29 +352,16 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 
 | Commit | Description |
 |---|---|
-| `0e956ed` | fix: GMQ moyen KPI = LIVE.pesees (intervalles réels) + 1ère pesée / jours cycle vs /30 |
-| `94d6444` | fix: MOCK.gmq override dans loadPesees() — intervalles réels par bête |
-| `f3ce52b` | feat: trésorerie — dépenses depuis charges simulateur |
-| `64628df` | feat: trésorerie complète — prixAlim, transport, simCharges Sheets (col Q), tableau flux réel |
-| `c3b5102` | fix: GMQ bêtes/reco = moyenne p.gmq — cohérent avec MOCK.gmq et dashboard |
-| `d6c567a` | fix: 4 corrections — deceased filter, sidebar GMQ/pesées per-bête, semaine gauge, marché consolidation foirails |
-| `6eb8814` | fix: persist LIVE.deceased to localStorage — survit aux reconnexions |
-| `586077a` | feat: Suivi_Aliments — suivi prix aliments (fondateur/fallou/rga), onglet marché, Sheets |
-| `12d8e60` | fix: syntaxe — newlines dans strings JS (page blanche pré-login) |
-| `af5d4df` | feat: boutons rapport mensuel partageables — foirail et aliments (Web Share + clipboard) |
-| `09692dd` | feat: objectifs configurables — carte Livrables>Objectifs, saveObjectifs() vers Config_App |
-| `6205093` | fix: saveObjectifs (writeSheet→appendRow), alim (saveForm→doSubmit), remove mix ration card |
-| `647b19a` | feat: objectifs pilotage — 8 variables configurables fondateur (taux mort, poids vente, coût revient, marge, plancher tréso) |
-| `918296c` | feat: 4 experts — IC indice consommation, saisonnalité prix foirail, calendrier SOP vétérinaire, GMQ prédictif |
-| `c94fa36` | feat: SOP protocol configurable — fondateur ajuste dates/étapes, persiste Config_App, calendrier SOP suit |
-| `bc7cdcb` | refactor: audit UX/roles/bugs — seuils GMQ hardcodés corrigés, docs mis à jour complets |
-| `4cd5a95` | fix: SOP row layout — overflow hidden, boutons compacts, alignement texte |
-| `82a03d4` | fix: persist CYCLE vers localStorage immédiatement après sync Config_Cycle Sheets |
-| `5fffcc0` | fix: SOP edits persist localStorage + light mode dark bg overrides |
-| `eae090f` | feat: bloc rentabilité dashboard — marge projetée, ROI, seuil foirail, badge confiance |
-| `8396131` | fix: 5 bugs — alimPrix persist+reset, _nbBetes side effect, prix consolidé _livePrixMax(), hero marge/cout badges, light mode gradients |
-| `11a218e` | design: rehausser contrastes #445544/#556655→#7a9a7a, unifier warning #ffaa40→#ff9800 |
-| `61872bb` | fix: page verte — supprime CSS timer 1s splash, JS double rAF après r() |
-| `9cf60e9` | feat: onglets SOP Véto — protocole (Saisie gérant), sopvet+calendrier (Livrables fondateur/rga) |
-| `f14f74c` | fix: sopvet — corrige `.replace(/"/g,\'&quot;\')` backslash-quote cassant tout le JS |
+| `8599ed6` | feat: SOP veto inline form + seuil 21j + compteur double, retire SOP des Objectifs (doublon) |
+| `2d7eebe` | fix: cohérence GMQ — toutes formules inline unifiées vers MOCK.gmq (source canonique) |
+| `7acd693` | fix: SOP véto validation — 3 niveaux selon délai (OK / avertissement 8-14j / bloqué >14j) |
+| `85d7e9f` | fix: cohérence dashboard KPI vs sidebar — tréso seuil dynamique, score santé gmqCible |  
+| `75f1f1e` | feat: guide retour dashboard, fix C003 deceased cycle, SOP véto valider gérant, formules PDF |
+| `dd5c3c7` | fix: MOCK.betes seed depuis localStorage au démarrage + guides MAJ |
+| `14468d4` | feat: onglet Guide par rôle + 4 guides HTML imprimables en PDF |
+| `7db6560` | feat: Objectifs — card Marché & Ration (prixAlim + objectifPrix + mix ration lié + badge date) |
+| `5a0ca03` | feat: Historique_Cycles — snapshot avant reset + vue fondateur/rga |
+| `fa31f67` | fix: MOCK.betes=4 persistant — sync depuis CYCLE.nbBetes dès step1, decesV2 vague2 |
+| `8f676ef` | fix: cycle non démarré (dateDebut vide modale), GMQ diviseur peseeFreq, parseISO dates locales |
+| `79eb9a5` | refactor: suppression redondances SOP — calendrier fusionné dans sopvet (Livrables) |
 

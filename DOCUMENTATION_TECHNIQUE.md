@@ -1,7 +1,7 @@
 ﻿# DOCUMENTATION TECHNIQUE — BOAN App
 
 Référence développeur pour l'application de gestion d'élevage **BOAN**.  
-**Commit HEAD** : `dd5c3c7` — ~7 436 lignes — Avril 2026
+**Commit HEAD** : `8599ed6` — ~7 804 lignes — Avril 2026
 
 ---
 
@@ -10,7 +10,7 @@ Référence développeur pour l'application de gestion d'élevage **BOAN**.
 | Couche | Technologie | Détails |
 |---|---|---|
 | Frontend | Vanilla JS ES5 | `var` uniquement — pas de const/let/arrow functions |
-| SPA | Single `index.html` | HTML + CSS + JS inline, ~7 436 lignes |
+| SPA | Single `index.html` | HTML + CSS + JS inline, ~7 804 lignes |
 | Hosting | Vercel | Déploiement automatique depuis GitHub `main` |
 | Backend | Vercel Serverless Functions | `/api/*.js` — Node.js |
 | Base de données | Google Sheets API v4 | 4 spreadsheets (une par rôle) |
@@ -87,13 +87,15 @@ var USERS = {
 ```javascript
 var MOCK = {
   betes: 4,            // seedé depuis CYCLE.nbBetes localStorage au démarrage
-  gmq:  1.1,           // remplacé par calcul réel dès que pesées présentes
+  gmq:  1.1,           // remplacé par calcul réel dès que pesées présentes (MOCK.gmq = source canonique)
   stock: 6,            // recalculé depuis STOCK_MVTS localStorage
   treso: 680000,       // seedé depuis CYCLE.capital localStorage au démarrage
   sem:  1,             // calculé depuis CYCLE.dateDebut
   mois: 1,
   _tresoFromSante: null
 };
+// Règle : toutes les formules inline (dashboard, KPI, PDF, guides) utilisent MOCK.gmq comme
+// source canonique — NE PAS recalculer le GMQ directement depuis LIVE.pesees dans les vues.
 ```
 
 **Seed au démarrage** (après `var CYCLE = lsGet('cycle') || {...}`) :
@@ -128,6 +130,15 @@ var CYCLE = lsGet('cycle') || {
   sopProtocol: [...],     // tableau des étapes SOP vétérinaires J+N
   // ... autres champs
 };
+```
+
+### State temporaire SOP Véto (dans l'objet S global)
+
+| Clé | Type | Rôle |
+|---|---|---|
+| `S._sopCtx` | `{label, j}` ou `null` | Contexte pesée SOP — bannière dans le form pesée, nettoyé après submit |
+| `S._sopInlineIdx` | `number` ou `null` | Index acte SOP en cours de saisie inline (onglet Protocole) |
+| `S._sopInlineData` | `{id, res}` | Données du mini-form inline (bête + résultat) |
 ```
 
 ---
@@ -213,8 +224,28 @@ function _archiveCycle(snap) {
 }
 ```
 
-### viewGuide() *(nouveau — commit 14468d4)*
-Vue onglet ❓ Guide — contenu adapté par rôle (`window.ROLE`) :
+### _sopValider(idx) — déclenchement acte SOP
+Appelée depuis les boutons ✅ / ⚠️ de l'onglet Protocole :
+- **Pesée** → `S._sopCtx = {label, j}` + `S.sub = 'pesee'` (bannière affichée dans le formulaire de pesée)
+- **Santé** → `S._sopInlineIdx = idx` + `S._sopInlineData = {id:'', res:'Guéri'}` (mini-form inline dans la carte)
+- Guard : acte bloqué si >21 jours après la date planifiée
+
+### _sopInlineSave(idx) *(nouveau — commit 8599ed6)*
+Valide le formulaire inline d'un acte Santé SOP :
+- Pousse l'entrée dans `HISTORY` (format identique à `doSubmit('sante')`)
+- Écrit dans `Sante_Mortalite!A:I` via `appendRow` pour **tous les SIDs disponibles**
+- Met à jour `CYCLE._lastSanteDate` et `lsSet('cycle', CYCLE)`
+- NE redirige pas — reste sur l'onglet Protocole
+
+### _pdDone / _pdLate — compteurs SOP
+```javascript
+// _pdDone : actes réalisés dans les ±7 jours de la date théorique (comptent dans la conformité)
+// _pdLate : actes réalisés entre 8 et 21 jours APRÈS la date théorique (hors délai, ne comptent pas)
+// Affiché : "✅ _pdDone · ⚠️ _pdLate / total"
+```
+
+### viewGuide() *(commit 14468d4)*
+Vue onglet Guide — contenu adapté par rôle (`window.ROLE`) :
 - Fondateur : checklist cycle, pilotage hebdo, décision vente, limites
 - Gérant : rythme quotidien, urgences, lien vers `guides/gerant.html`
 - RGA : contrôle hebdo/mensuel, lexique, lien vers `guides/rga.html`
@@ -420,13 +451,41 @@ renderTab(tab)
 
 ---
 
-## 12. Audit MOCK variables (résultat final — commit dd5c3c7)
+## 12. Audit MOCK variables (résultat final — commit 8599ed6)
 
-| Variable | Defaut init | Seed local | Statut |
+| Variable | Défaut init | Seed local | Statut |
 |---|---|---|---|
 | `MOCK.betes` | 4 | `CYCLE.nbBetes` (localStorage) | Corrigé — seed au démarrage |
 | `MOCK.treso` | 680000 | `CYCLE.capital` (localStorage) | Corrigé — seed au démarrage |
-| `MOCK.gmq` | 1.1 | Aucun (recalculé dès 1ère pesée) | Acceptable — valeur = gmqCible (affichage vert) |
+| `MOCK.gmq` | 1.1 | Aucun (recalculé dès 1ère pesée) | Source canonique — toutes les formules inline utilisent MOCK.gmq |
 | `MOCK.stock` | 6 | `calcStockLocal()` via `STOCK_MVTS` localStorage | Auto-protégé |
 | `MOCK.sem` | 1 | `calcSemaine()` via `CYCLE.dateDebut` | Auto-calculé |
 | `MOCK.incidents` | 0 | `HISTORY` localStorage | Auto-calculé |
+
+---
+
+## 13. SOP Véto — détails d'implémentation (commit 8599ed6)
+
+### Flux complet d'un acte Santé
+1. Bouton ✅ ou ⚠️ dans la carte de la timeline → `_sopValider(idx)`
+2. Sante → `S._sopInlineIdx = idx`, `S._sopInlineData = {id:'', res:'Guéri'}` → `r()`
+3. Le re-render affiche un mini-form inline dans la carte (beteDropdown + select résultat)
+4. Clic "Valider" → `_sopInlineSave(idx)` :
+   - Pousse dans `HISTORY` (format sante)
+   - Appelle `appendRow` sur `Sante_Mortalite!A:I` pour chaque SID disponible
+   - Remet `S._sopInlineIdx = null`, `S._sopInlineData = {}`
+   - Reste sur l'onglet Protocole — pas de navigation
+
+### Flux complet d'une Pesée SOP
+1. Bouton ✅ ou ⚠️ → `_sopValider(idx)` (type=pesee)
+2. `S._sopCtx = {label, j}`, `S.sub = 'pesee'` → `r()`
+3. Le form pesée affiche une bannière verte "📋 Pesée SOP J+X — [label]"
+4. L'utilisateur remplit et soumet → `doSubmit('pesee')`
+5. Après succès : `S._sopCtx = null` (nettoyé dans `_submitActual`)
+
+### Seuils de délai (SOP)
+| Délai | Comportement |
+|---|---|
+| `_daysTo >= -7` (dans les 7j de chaque côté) | Bouton vert ✅ — compte dans `_pdDone` |
+| `-21 <= _daysTo < -7` (8 à 21j en retard) | Bouton orange ⚠️ avec `confirm()` — count dans `_pdLate` |
+| `_daysTo < -21` (>21j de retard) | 🔒 Bloqué — acte non réalisable via l'app |

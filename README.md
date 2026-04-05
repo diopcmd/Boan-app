@@ -5,7 +5,7 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
 
 **Production** → https://boan-app-ur3x.vercel.app  
 **Stack** : Vanilla JS ES5 · Vercel Serverless · Google Sheets API v4  
-**État** : commit `dd5c3c7` — ~7 436 lignes — Avril 2026
+**État** : commit `8599ed6` — ~7 804 lignes — Avril 2026
 
 ---
 
@@ -51,10 +51,15 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
   - Zootechniques : GMQ cible/alerte, poids cible, poids vente min, taux mortalité max
   - Financiers : coût revient max, marge min/bête, plancher tréso
   - **Marché & Ration** *(nouveau)* : prix aliment mid-cycle, prix vente visé, mix son/tourteau lié (total=100%), badge date de modification
-  - **Protocole SOP vétérinaire** : éditeur complet ajout/modification/suppression étapes J+N, types santé/pesée, réinitialisation standard
-  - Persistance → `Config_App` Google Sheets, propagation immédiate dans tous les KPI
-- **SOP Véto** — calendrier timeline des actes J+N calculés depuis `CYCLE.dateDebut`, statuts OK/alerte/retard/planifié, tolérance ±7 jours
-- **Cycles archivés** *(nouveau)* — historique de tous les cycles clôturés dans `Historique_Cycles` (snapshot automatique avant reset)
+  - **Protocole SOP vétérinaire** *(dans onglet Livrables > SOP Véto)* : éditeur complet ajout/modification/suppression étapes J+N, types santé/pesée, réinitialisation standard. Persisté via `saveObjectifs()`.
+- **SOP Véto** — calendrier timeline des actes J+N calculés depuis `CYCLE.dateDebut` :
+  - Statuts : ✅ réalisé / ⚠️ en retard / 🔔 dans 7j / 📅 planifié
+  - Tolérance ±7 jours (comptent dans la conformité) ; seuil 8–21j = orange "hors délai"
+  - Formulaire inline pour les actes Santé (pas de changement de page)
+  - Compteur double `✅ X · ⚠️ Y / total` dans l'en-tête
+  - Pesée SOP → formulaire pesée avec bannière contextuelle J+N
+  - Éditeur du protocole : ajout/modif/suppression étapes, persisté dans `Config_App`
+- **Cycles archivés** — historique de tous les cycles clôturés dans `Historique_Cycles` (snapshot automatique avant reset)
 
 ### Marché (fondateur / RGA / Commerciale)
 - **Prix foirail** — hero card prix max/min + tendance + vs objectif + courbe historique 10 derniers relevés
@@ -82,7 +87,7 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
 
 ```
 Boan-app/
-├── index.html              SPA complète (HTML + CSS + JS inline, ~7 436 lignes)
+├── index.html              SPA complète (HTML + CSS + JS inline, ~7 804 lignes)
 ├── vercel.json             Rewrites SPA (exclut /api/ et /manifest.json)
 ├── manifest.json           Web App Manifest (PWA — icône, nom, display:standalone)
 ├── api/
@@ -166,15 +171,19 @@ git push origin main
 
 | Commit | Description |
 |---|---|
+| `8599ed6` | feat: SOP veto inline form + seuil 21j + compteur double, retire SOP des Objectifs (doublon) |
+| `2d7eebe` | fix: cohérence GMQ — toutes les formules inline unifiées vers MOCK.gmq (source canonique) |
+| `7acd693` | fix: SOP véto validation — 3 niveaux selon délai (OK / avertissement 8-14j / bloqué >14j) |
+| `85d7e9f` | fix: cohérence dashboard KPI vs sidebar — tréso seuil dynamique, score santé gmqCible, cycle N° |
+| `75f1f1e` | feat: guide retour dashboard, fix C003 deceased cycle, SOP véto valider gérant, formules PDF |
+| `176d369` | docs: mise à jour avril 2026 — commit dd5c3c7, 7436 lignes |
 | `dd5c3c7` | fix: MOCK.betes seed depuis localStorage au démarrage + guides MAJ |
-| `14468d4` | feat: onglet Guide par rôle + 4 guides HTML imprimables PDF |
-| `7db6560` | feat: Objectifs — card Marché & Ration (prixAlim + objectifPrix + mix ration + badge date) |
+| `14468d4` | feat: onglet Guide par rôle + 4 guides HTML imprimables en PDF |
+| `7db6560` | feat: Objectifs — card Marché & Ration (prixAlim + objectifPrix + mix ration lié + badge date) |
 | `5a0ca03` | feat: Historique_Cycles — snapshot avant reset + vue fondateur/rga |
-| `fa31f67` | fix: MOCK.betes=4 persistant — sync CYCLE.nbBetes, decesV2, saveCycle cols Q+R |
+| `fa31f67` | fix: MOCK.betes=4 persistant — sync depuis CYCLE.nbBetes dès step1, decesV2 vague2 |
 | `8f676ef` | fix: cycle non démarré (dateDebut vide modale), GMQ diviseur peseeFreq, parseISO dates locales |
-| `feb37fe` | fix: thèmes sombre/clair — sélecteurs body.light, sidebar statuts, contraste, typo |
-| `0806fda` | fix: CORS auth.js — autoriser *.vercel.app et same-origin |
-| `79eb9a5` | refactor: SOP centralisé — calendrier fusionné dans sopvet (Livrables) |
+| `79eb9a5` | refactor: suppression redondances SOP — calendrier fusionné dans sopvet (Livrables) |
 | `c737d6c` | audit: 14 recommandations experts — sécurité, SOP, BCS, GMQ adaptatif, alertes prix |
 
 ---
