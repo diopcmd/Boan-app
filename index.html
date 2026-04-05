@@ -427,6 +427,7 @@ var CYCLE = lsGet('cycle') || {
   contactUrgence: 'Direction',
   betes: [],  // [{id, race, poidsEntree, dateIntro}]
   initialized: false,
+  numCycle: 1,   // numéro du cycle en cours (éditable par le fondateur)
   simCharges: {},  // charges simulateur persistantes
   _mktUpdated: '',  // date dernière modif paramètres marché (DD/MM/YYYY)
   gonogo: {contrats:false, infra:false, assurance:false, securite:false},
@@ -1295,6 +1296,7 @@ function loadLiveData() {
           if (row[15]) updates.dureeMois      = parseInt(row[15])  || CYCLE.dureeMois; // col P
           try { if (row[16]) updates.simCharges = JSON.parse(row[16]); } catch(e) {}  // col Q
           if (row[17]) updates.prixAlim        = parseFloat(row[17]) || CYCLE.prixAlim; // col R
+          if (row[18]) updates.numCycle         = parseInt(row[18])   || CYCLE.numCycle;  // col S
           // Détection changement de cycle — wipe immédiat sur l'appareil des autres acteurs
           var _prevDateDebut = CYCLE.dateDebut;
           Object.assign(CYCLE, updates);
@@ -1359,6 +1361,7 @@ function loadLiveData() {
               if (key === 'objectifPrix' && val && parseInt(val)   > 0) CYCLE.objectifPrix = parseInt(val);
               if (key === '_mktUpdated'  && val) CYCLE._mktUpdated = val;
               if (key === 'sopProtocol' && val && Array.isArray(val) && val.length) CYCLE.sopProtocol = val;
+              if (key === 'numCycle'    && val && parseInt(val) > 0) CYCLE.numCycle = parseInt(val);
               // cycleDebut dans Config_App = détection changement de cycle indépendante de Config_Cycle
               if (key === 'cycleDebut' && val && val.length && val !== CYCLE.dateDebut) {
                 HISTORY = []; lsSet('history', []);
@@ -2508,7 +2511,10 @@ function pageModal(){
   var body='';
   if(MODAL.step===1){
     body='<div style="font-size:13px;color:#88aa88;margin-bottom:14px">Ces données permettent le calcul automatique des semaines et des KPIs.</div>'
+      +'<div class="frow">'
       +'<div class="fg"><label>Date de début du cycle</label><input type="date" value="'+(MODAL.data.dateDebut||todayISO())+'" oninput="MODAL.data.dateDebut=this.value"></div>'
+      +'<div class="fg" style="flex:0 0 140px"><label>N° de cycle <span style="font-size:10px;color:#888">(ex: 2 pour tester)</span></label><input type="number" inputmode="decimal" min="1" value="'+(MODAL.data.numCycle||CYCLE.numCycle||1)+'" style="width:100%" oninput="MODAL.data.numCycle=isNaN(parseInt(this.value))?1:parseInt(this.value)"></div>'
+      +'</div>'
       +'<div class="frow">'
       +'<div class="fg"><label>Nb de bêtes</label><input type="number" inputmode="decimal" value="'+(MODAL.data.nbBetes||4)+'" oninput="MODAL.data.nbBetes=isNaN(parseInt(this.value))?MODAL.data.nbBetes:parseInt(this.value)"></div>'
       +'<div class="fg"><label>Poids départ (kg)</label><input type="number" inputmode="decimal" value="'+(MODAL.data.poidsDepart||270)+'" oninput="MODAL.data.poidsDepart=isNaN(parseInt(this.value))?MODAL.data.poidsDepart:parseInt(this.value)"></div>'
@@ -2557,7 +2563,7 @@ function pageModal(){
     if (MODAL.data.betes.length === 0 && MODAL.data.nbBetes) {
       for (var bi=0; bi<(MODAL.data.nbBetes||4); bi++) {
         var num = bi+1;
-        var cycleNum = 'C1';
+        var cycleNum = 'C'+(MODAL.data.numCycle||CYCLE.numCycle||1);
         MODAL.data.betes.push({
           id: cycleNum+'-'+(num<10?'00'+num:num<100?'0'+num:''+num),
           race: MODAL.data.race||'Djakoré',
@@ -3728,7 +3734,7 @@ function addBeteModal(){
   var last = MODAL.data.betes.length;
   var num = last + 1;
   // Préfixe cycle depuis CYCLE ou numéro 1 par défaut
-  var cycleNum = 'C1';
+  var cycleNum = 'C'+(CYCLE.numCycle||1);
   // Génère ID jusqu'à 9999 avec bon padding
   var id = cycleNum + '-' + (num < 10 ? '00'+num : num < 100 ? '0'+num : ''+num);
   MODAL.data.betes.push({
@@ -3771,9 +3777,10 @@ function _archiveCycle(snap) {
     snap.gmq,                   // K — GMQ moyen (kg/j)
     snap.capital,               // L — Capital investi (FCFA)
     snap.tresoFin,              // M — Tréso finale (FCFA)
-    margeParBete                // N — Marge brute / bête (FCFA)
+    margeParBete,               // N — Marge brute / bête (FCFA)
+    snap.numCycle || ''         // O — Numéro de cycle
   ];
-  appendRow(SID.fondateur, 'Historique_Cycles!A:N', row);
+  appendRow(SID.fondateur, 'Historique_Cycles!A:O', row);
 }
 
 function saveCycle(){
@@ -3801,7 +3808,8 @@ function saveCycle(){
     tresoFin:    MOCK.treso       || 0,
     race:        CYCLE.race       || '',
     dureeMois:   CYCLE.dureeMois  || 8,
-    foirail:     CYCLE.foirail    || ''
+    foirail:     CYCLE.foirail    || '',
+    numCycle:    CYCLE.numCycle   || 1
   } : null;
   CYCLE = Object.assign(CYCLE, MODAL.data, {initialized:true});
   // Réinitialiser les mouvements de stock au démarrage d'un nouveau cycle
@@ -3887,7 +3895,8 @@ function saveCycle(){
       JSON.stringify(CYCLE.stockLines||[]),
       CYCLE.dureeMois,                       // col P (index 15)
       JSON.stringify(CYCLE.simCharges||{}),  // col Q (index 16) — fix: aligné avec _syncCycle
-      CYCLE.prixAlim || 0                    // col R (index 17) — fix: aligné avec _syncCycle
+      CYCLE.prixAlim || 0,                   // col R (index 17) — fix: aligné avec _syncCycle
+      CYCLE.numCycle || 1                    // col S (index 18) — numéro de cycle
     ];
     var allSids = [SID.fondateur, SID.gerant, SID.rga, SID.fallou].filter(Boolean);
     allSids.forEach(function(sid){
@@ -5084,7 +5093,7 @@ function viewDash(){
       +'</div>';
   }
 
-  var _numCycle = (Array.isArray(LIVE._histCycles) && LIVE._histCycles.length > 0) ? LIVE._histCycles.length + 1 : 1;
+  var _numCycle = CYCLE.numCycle || ((Array.isArray(LIVE._histCycles) && LIVE._histCycles.length > 0) ? LIVE._histCycles.length + 1 : 1);
   var _heroRole = S.user==='gerant' ? 'Tableau de bord gerant' : S.user==='fondateur' ? 'Vue ensemble fondateur' : 'Tableau de bord';
   return '<div class="cnt">'
     +_rentaHtml
@@ -5918,6 +5927,7 @@ function saveObjectifs(){
     ['alerteSeuilTreso', CYCLE.alerteSeuilTreso || 100000]
   ];
   if(CYCLE.sopProtocol) keys.push(['sopProtocol', JSON.stringify(CYCLE.sopProtocol)]);
+  keys.push(['numCycle',     CYCLE.numCycle     || 1]);
   keys.push(['prixAlim',     CYCLE.prixAlim     || 0]);
   keys.push(['objectifPrix', CYCLE.objectifPrix || 2000]);
   keys.push(['mixSon',       CYCLE.mixSon       || 60]);
@@ -6447,7 +6457,19 @@ function viewLiv(){
     var _tresoSeuil=CYCLE.alerteSeuilTreso||100000;
     var _tresoBadge=MOCK.treso>=_tresoSeuil?'✅ '+Math.round(MOCK.treso/1000)+'k FCFA > plancher':'🔴 '+Math.round(MOCK.treso/1000)+'k FCFA — sous plancher';
     view='<div class="card">'
-      +'<div class="stitle">📈 Objectifs zootechniques</div>'
+      +'<div class="stitle">� Identification du cycle</div>'
+      +(function(){
+        var _nc = CYCLE.numCycle || 1;
+        if(S.user!=='fondateur') return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0"><div style="font-size:13px;color:#ccc">Numéro de cycle</div><span style="font-size:20px;font-weight:800;color:#C8A06A">Cycle '+_nc+'</span></div>';
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0">'
+          +'<div style="flex:1;padding-right:8px"><div style="font-size:13px;color:#ccc">Numéro de cycle</div><div style="font-size:10px;color:#7a9a7a;margin-top:2px">Utile pour les tests — modifiez avant d\'enregistrer</div></div>'
+          +'<span style="display:flex;align-items:center;gap:5px">'
+          +'<input type="number" inputmode="decimal" min="1" value="'+_nc+'" style="width:64px;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#C8A06A;font-size:16px;font-weight:800;padding:5px 7px;text-align:right" oninput="CYCLE.numCycle=isNaN(parseInt(this.value))?1:parseInt(this.value);r()">'
+          +'</span></div>';
+      })()
+      +'</div>'
+      +'<div class="card">'
+      +'<div class="stitle">�📈 Objectifs zootechniques</div>'
       +_objField('GMQ cible (seuil vert)',    'gmqCible',    1,    0.05, 'kg/j', _gmqBadge)
       +_objField('GMQ alerte (seuil orange)', 'gmqWarn',     0.8,  0.05, 'kg/j', 'En dessous → alerte automatique')
       +_objField('Poids cible fin de cycle',  'poidsCible',  400,  5,    'kg',   'Poids visé à la vente')
