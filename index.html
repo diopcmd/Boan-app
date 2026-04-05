@@ -4270,9 +4270,9 @@ function pageApp(){
     var g3 = avg(byWeek[wks[wks.length-1]]);
     return g3 < g2 * 0.85 && g2 < g1 * 0.85;
   })();
-  // Synchroniser MOCK.stock depuis STOCK_MVTS (toujours, même si = 0)
+  // Synchroniser MOCK.stock depuis STOCK_MVTS — même pendant le loading si on a des données locales
   var _stkSync = calcStockLocal();
-  if(LIVE.source !== 'loading') MOCK.stock = _stkSync;
+  if(_stkSync > 0) MOCK.stock = _stkSync;
   var _alertStockCrit = MOCK.stock < 4;
 
   // Badge ☰
@@ -4919,7 +4919,11 @@ function _calcPxSeuil() {
   var mdo = sc.smdo   !== undefined ? sc.smdo   : 0;
   var cm  = CYCLE.dureeMois || 8;
   var comm = CYCLE.commission || 2;
-  var cBase = nb * pv + al * cm + nb * vt + sec * cm + eau * cm + mdo * cm;
+  // Coût alim total sur cycle : utilise prixAlim×ration si salim non saisi manuellement
+  var alTotal = (sc.salim === undefined && (CYCLE.prixAlim||0) > 0 && (CYCLE.ration||0) > 0)
+    ? Math.round(CYCLE.prixAlim * (CYCLE.ration||12) * nb * 30.4 * cm)
+    : al * cm;
+  var cBase = nb * pv + alTotal + nb * vt + sec * cm + eau * cm + mdo * cm;
   var iMode = sc.simpMode || 'pct';
   var iPct  = sc.simpPct !== undefined ? sc.simpPct : 5;
   var iFix  = sc.simpFix !== undefined ? sc.simpFix : 100000;
@@ -4953,7 +4957,11 @@ function _calcDepSim() {
   var iPct = sc.simpPct !== undefined ? sc.simpPct : 5;
   var iFix = sc.simpFix !== undefined ? sc.simpFix : 100000;
   var cVeau   = nb * simV;
-  var cRec    = simA * cm + nb * simW + simG * cm + simE * cm + simM * cm;
+  // Coût alim total sur cycle : utilise prixAlim×ration si salim non saisi manuellement
+  var cAlimTotal = (sc.salim === undefined && (CYCLE.prixAlim||0) > 0 && (CYCLE.ration||0) > 0)
+    ? Math.round(CYCLE.prixAlim * (CYCLE.ration||12) * nb * 30.4 * cm)
+    : simA * cm;
+  var cRec    = cAlimTotal + nb * simW + simG * cm + simE * cm + simM * cm;
   var cBase   = cVeau + cRec;
   var cImprev = iMode === 'pct' ? Math.round(cBase * iPct / 100) : iFix;
   var cRecurr = cRec + cImprev;
