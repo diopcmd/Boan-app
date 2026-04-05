@@ -6722,7 +6722,7 @@ function viewLiv(){
       view+='<div style="color:#ff9800;font-size:12px">SID fondateur introuvable.</div>';
     } else if(!LIVE._histCycles){
       LIVE._histCycles='loading';
-      readSheet(SID.fondateur,'Historique_Cycles!A:N').then(function(rows){
+      readSheet(SID.fondateur,'Historique_Cycles!A:O').then(function(rows){
         // rows[0] = en-têtes éventuels (si présent) ou première ligne de données
         // On garde toutes les lignes non-vides
         LIVE._histCycles = (rows || []).filter(function(r){ return r && r[0] && r[0]!=='Début'; });
