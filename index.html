@@ -4354,7 +4354,7 @@ function buildSidebar(){
     var _incOuverts = (LIVE.incidents||[]).filter(function(i){ return i.clos !== 'OUI'; });
     var _malusInc = _incOuverts.reduce(function(s,i){ return s + (i.grav==='3'?8:i.grav==='2'?4:2); }, 0);
     var sante = Math.round(
-      Math.min(50, (MOCK.gmq/1.2)*50) +
+      Math.min(50, (MOCK.gmq/(CYCLE.gmqCible||1.1))*50) +
       (MOCK.stock>=6?30:MOCK.stock>=4?15:MOCK.stock>0?5:0) +
       _scoreBetes
     );
@@ -4647,7 +4647,7 @@ function buildSidebar(){
   } else if(u==='fondateur'){
     if(SB.tab==='today'){
       body='<div class="sb-card">'
-        +'<div class="sb-row"><span class="sb-lbl">Trésorerie</span><span class="sb-val '+(MOCK.treso>=600000?'kval-ok':'kval-crit')+'">'+Math.round(MOCK.treso/1000)+'k FCFA</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">Trésorerie</span><span class="sb-val '+(MOCK.treso>=Math.max(600000,(CYCLE.alerteSeuilTreso||100000)*3)?'kval-ok':MOCK.treso>(CYCLE.alerteSeuilTreso||100000)?'kval-warn':'kval-crit')+'">'+Math.round(MOCK.treso/1000)+'k FCFA</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Bêtes actives</span><span class="sb-val '+(MOCK.betes>=(CYCLE.nbBetes||4)?'kval-ok':MOCK.betes>0?'kval-warn':'kval-crit')+'">'+MOCK.betes+' / '+(CYCLE.nbBetes||4)+'</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">GMQ</span><span class="sb-val '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'kval-ok':MOCK.gmq>=(CYCLE.gmqWarn||0.8)?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
         +(function(){
@@ -4743,7 +4743,7 @@ function buildSidebar(){
           var src=_hasReal?' (réel)':' (sim.)';
           return '<div class="sb-row"><span class="sb-lbl">Dépenses cumulées<span style="font-size:10px;color:#7a9a7a">'+src+'</span></span><span style="font-size:12px;color:#f44336">-'+dep+'k FCFA</span></div>';
         })()
-        +'<div class="sb-row"><span class="sb-lbl">Solde actuel</span><span class="sb-val '+(MOCK.treso>=600000?'kval-ok':'kval-crit')+'">'+Math.round(MOCK.treso/1000)+'k FCFA</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">Solde actuel</span><span class="sb-val '+(MOCK.treso>=Math.max(600000,(CYCLE.alerteSeuilTreso||100000)*3)?'kval-ok':MOCK.treso>(CYCLE.alerteSeuilTreso||100000)?'kval-warn':'kval-crit')+'">'+Math.round(MOCK.treso/1000)+'k FCFA</span></div>'
         +(function(){ var gmqL=LIVE.loaded&&LIVE.pesees.length?Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.gmq||0);},0)/LIVE.pesees.length*100)/100:MOCK.gmq; var sem=calcSemaine(); var totalSem=Math.round((CYCLE.dureeMois||8)*4.33); var joursR=(totalSem-sem)*7; var poidsF=Math.round((CYCLE.poidsDepart||270)+gmqL*sem*7+gmqL*joursR); var caProj=Math.round((CYCLE.nbBetes||4)*poidsF*(CYCLE.objectifPrix||2000)/1000000*10)/10; return '<div class="sb-row"><span class="sb-lbl">Projection vente</span><span style="font-size:12px;color:#C8A06A">~'+caProj+'M FCFA</span></div>'; })()
         +(function(){
           var _ndM2=_nowDakar();
@@ -4798,7 +4798,7 @@ function buildSidebar(){
     } else {
       body='<div class="sb-card">'
         +'<div class="sb-row"><span class="sb-lbl">'+_gmqLabel()+'</span><span class="sb-val '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'kval-ok':MOCK.gmq>=(CYCLE.gmqWarn||0.8)?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
-        +(function(){ var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0; return '<div class="sb-row"><span class="sb-lbl">Mortalité</span><span class="sb-val '+(mort>8?'kval-crit':mort>0?'kval-warn':'kval-ok')+'">'+mort+'%</span></div>'; })()
+        +(function(){ var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0; var _tmRga=CYCLE.tauxMortMax||3; return '<div class="sb-row"><span class="sb-lbl">Mortalité</span><span class="sb-val '+(mort===0?'kval-ok':mort<=_tmRga?'kval-warn':'kval-crit')+'">'+mort+'%</span></div>'; })()
         +(function(){ var nbSop=HISTORY.filter(function(h){return h.type==='sop';}).length; var sem=calcSemaine(); var joursTotal=Math.max(sem*7,1); var pct=Math.min(100,Math.round(nbSop/joursTotal*100*7)); return '<div class="sb-row"><span class="sb-lbl">Conformité SOP</span><span class="sb-val '+(pct>=80?'kval-ok':pct>=50?'kval-warn':'kval-crit')+'">'+pct+'%</span></div>'; })()+(function(){ var freq=CYCLE.peseeFreq||30; var _dernP=0; var hp=HISTORY.filter(function(h){return h.type==='pesee';}); if(hp.length){var p=hp[0].date.split('/');if(p.length===3)_dernP=(function(){var _nd=_nowDakar();return Math.round((new Date(_nd.year,_nd.month-1,_nd.day)-new Date(p[2],p[1]-1,p[0]))/86400000);})();} var pesOk=_dernP<=freq; return '<div class="sb-row"><span class="sb-lbl">Dernière pesée</span><span class="sb-val '+(pesOk?'kval-ok':'kval-crit')+'">'+(_dernP===0?'Aucune':_dernP+' jours')+'</span></div>'; })()
     }
 
@@ -4988,10 +4988,11 @@ function viewDash(){
   var gmqC=_gmqDisplay>=_gc?'kval-ok':_gmqDisplay>=_gw?'kval-warn':'kval-crit';
   var stkC=MOCK.stock>=6?'kval-ok':MOCK.stock>=4?'kval-warn':'kval-crit';
   var _trSeuil=CYCLE.alerteSeuilTreso||100000;
-  var trC =MOCK.treso>=600000?'kval-ok':MOCK.treso>_trSeuil?'kval-warn':'kval-crit';
+  var _trSeuilHaut=Math.max(600000,_trSeuil*3);
+  var trC =MOCK.treso>=_trSeuilHaut?'kval-ok':MOCK.treso>_trSeuil?'kval-warn':'kval-crit';
   var gmqBg=_gmqDisplay>=_gc?'kcard-ok':_gmqDisplay>=_gw?'kcard-warn':'kcard-crit';
   var stkBg=MOCK.stock>=6?'kcard-ok':MOCK.stock>=4?'kcard-warn':'kcard-crit';
-  var trBg =MOCK.treso>=600000?'kcard-ok':MOCK.treso>_trSeuil?'kcard-warn':'kcard-crit';
+  var trBg =MOCK.treso>=_trSeuilHaut?'kcard-ok':MOCK.treso>_trSeuil?'kcard-warn':'kcard-crit';
   var _joursEcoules = Math.max(0, calcSemaine() * 7);
   var _tresoNette = Math.max(0, MOCK.treso);
   // Dépenses proratisées depuis les charges du simulateur (alim + gardien + vét + imprévus)
@@ -5095,13 +5096,14 @@ function viewDash(){
       +'</div>';
   }
 
+  var _numCycle = (Array.isArray(LIVE._histCycles) && LIVE._histCycles.length > 0) ? LIVE._histCycles.length + 1 : 1;
   var _heroRole = S.user==='gerant' ? 'Tableau de bord gerant' : S.user==='fondateur' ? 'Vue ensemble fondateur' : 'Tableau de bord';
   return '<div class="cnt">'
     +_rentaHtml
     +'<div style="background:linear-gradient(135deg,#142714,#0d1f0d);border-radius:14px;padding:16px 18px;margin-bottom:18px;border:1px solid #2a5a2a;position:relative;overflow:hidden">'
     +'<div style="position:absolute;right:-24px;top:-24px;width:100px;height:100px;border-radius:50%;background:rgba(45,106,45,0.12)"></div>'
     +'<div style="font-size:11px;color:#88aa88;letter-spacing:.05em;text-transform:uppercase;margin-bottom:5px">'+_heroRole+'</div>'
-    +'<div style="font-size:20px;font-weight:800;color:#fff;margin-bottom:12px">Cycle 1 &middot; Mois '+MOCK.mois+' <span style="font-size:13px;color:#88aa88;font-weight:400">/ '+(CYCLE.dureeMois||8)+'</span></div>'
+    +'<div style="font-size:20px;font-weight:800;color:#fff;margin-bottom:12px">Cycle '+_numCycle+' &middot; Mois '+MOCK.mois+' <span style="font-size:13px;color:#88aa88;font-weight:400">/ '+(CYCLE.dureeMois||8)+'</span></div>'
     +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
     +'<div style="background:rgba(76,175,80,0.15);border:1px solid rgba(76,175,80,0.3);border-radius:20px;padding:5px 13px;font-size:12px;color:#4caf50;font-weight:600">'+MOCK.betes+' betes</div>'
     +'<div style="background:rgba(200,160,106,0.12);border:1px solid rgba(200,160,106,0.3);border-radius:20px;padding:5px 13px;font-size:12px;color:#C8A06A;font-weight:600">Sem. '+semActuelle+' / '+totalSemCycle+'</div>'
@@ -5110,7 +5112,7 @@ function viewDash(){
     +'</div>'
     +'<div class="stitle">Indicateurs Cycle</div>'
     +'<div class="kgrid">'
-    +'<div class="kcard kcard-ok"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">Bêtes actives</div><div class="kval-ok" style="font-size:26px;font-weight:700" data-count="'+MOCK.betes+'">'+MOCK.betes+'</div>'+(function(){var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;var col=mort===0?'#4caf50':mort<=5?'#ff9800':'#f44336';var ico=mort===0?' ✓':mort<=5?' ⚠':' 🔴';return '<div style="font-size:11px;margin-top:4px;color:'+col+'">'+mort+'% mortalité'+ico+'</div><div class="sparkline-wrap">'+sparkline(SPARK.betes,col)+'</div></div>';})()
+    +'<div class="kcard kcard-ok"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">Bêtes actives</div><div class="kval-ok" style="font-size:26px;font-weight:700" data-count="'+MOCK.betes+'">'+MOCK.betes+'</div>'+(function(){var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;var _tmKcard=CYCLE.tauxMortMax||3;var col=mort===0?'#4caf50':mort<=_tmKcard?'#ff9800':'#f44336';var ico=mort===0?' ✓':mort<=_tmKcard?' ⚠':' 🔴';return '<div style="font-size:11px;margin-top:4px;color:'+col+'">'+mort+'% mortalité'+ico+'</div><div class="sparkline-wrap">'+sparkline(SPARK.betes,col)+'</div></div>';})()
     +'<div class="kcard '+gmqBg+'"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">GMQ moyen</div><div class="'+gmqC+'" style="font-size:26px;font-weight:700" data-count="'+_gmqDisplay+'">'+_gmqDisplay+'</div><div style="font-size:11px;margin-top:4px;color:'+gc('gmq',_gmqDisplay)+'">kg/j — Cible \u2265 '+(CYCLE.gmqCible||1)+(LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?' <span style="font-size:9px;color:#4caf50">🟢 live</span>':'')+'</div><div class="sparkline-wrap">'+sparkline(SPARK.gmq,gc('gmq',_gmqDisplay))+'</div></div>'
     +(function(){
     var stkDisplay = MOCK.stock > 0 ? MOCK.stock : calcStockLocal();
@@ -5125,7 +5127,7 @@ function viewDash(){
       +'</div>';
   })()
     +'<div class="kcard '+trBg+'"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">Trésorerie</div><div class="'+trC+'" style="font-size:26px;font-weight:700" data-count="'+Math.round(MOCK.treso/1000)+'">'+Math.round(MOCK.treso/1000)+'</div>'
-    +(_budgetJour!==null?'<div style="font-size:11px;margin-top:4px;color:'+(_budgetJour<=(_budgetJourCible||9999)?'#4caf50':'#f44336')+'">'+fmt(_budgetJour)+' FCFA/j'+(_budgetJourCible?' (cible '+fmt(_budgetJourCible)+'FCFA/j)':'')+'</div>':'<div style="font-size:11px;margin-top:4px;color:'+gc('tr',MOCK.treso)+'">k FCFA — Min. 600k</div>')
+    +(_budgetJour!==null?'<div style="font-size:11px;margin-top:4px;color:'+(_budgetJour<=(_budgetJourCible||9999)?'#4caf50':'#f44336')+'">'+fmt(_budgetJour)+' FCFA/j'+(_budgetJourCible?' (cible '+fmt(_budgetJourCible)+'FCFA/j)':'')+'</div>':'<div style="font-size:11px;margin-top:4px;color:'+gc('tr',MOCK.treso)+'">k FCFA — Min. '+Math.round(_trSeuilHaut/1000)+'k</div>')
     +'<div class="sparkline-wrap">'+sparkline(SPARK.treso.map(function(v){return v/1000;}),gc('tr',MOCK.treso))+'</div></div>'
     +'</div>'
     +'<div class="card">'
@@ -5206,7 +5208,7 @@ function viewDash(){
       if(stk>0)  return '<div class="al al-r">🔴 Stock critique '+stk+' sem. — commander maintenant</div>';
       return '<div class="al al-r">🔴 Stock inconnu — saisir les stocks dans l\'onglet Stock</div>';
     })()
-    +(MOCK.treso>=600000
+    +(MOCK.treso>=_trSeuilHaut
       ?'<div class="al al-g">Trésorerie '+Math.round(MOCK.treso/1000)+'k FCFA — OK'+(_budgetJour!==null&&_budgetJourCible?'  · '+fmt(_budgetJour)+' FCFA/j brûlés (cible : '+fmt(_budgetJourCible)+' FCFA/j)':'')+'</div>'
       :MOCK.treso>(CYCLE.alerteSeuilTreso||100000)
       ?'<div class="al al-o">⚠️ Trésorerie '+Math.round(MOCK.treso/1000)+'k — en baisse'+(_budgetJour!==null&&_budgetJourCible?' · '+fmt(_budgetJour)+' FCFA/j brûlés':'')+'</div>'
