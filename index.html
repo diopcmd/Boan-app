@@ -5667,22 +5667,49 @@ function viewSaisie(){
     var _ndPd    = _nowDakar();
     var _pdToday = new Date(_ndPd.year, _ndPd.month-1, _ndPd.day);
     var _pdJour  = _pdDeb ? Math.floor((_pdToday - _pdDeb) / 86400000) : null;
+    // Liste des bêtes actives pour le suivi SOP par bête (même logique que beteDropdown)
+    var _sopBeteIds = CYCLE.betes && CYCLE.betes.length
+      ? CYCLE.betes.map(function(b){ return b.id; })
+      : LIVE.beteIds && LIVE.beteIds.length
+        ? LIVE.beteIds
+        : (function(){
+            var _sbn = CYCLE.nbBetes || MOCK.betes || 4;
+            var _sbids = [];
+            for(var _sii = 1; _sii <= _sbn; _sii++) _sbids.push('B'+('0'+_sii).slice(-2));
+            return _sbids;
+          })();
+    var _pdDoneCount = 0, _pdPartialCount = 0;
     var _pdCards = _pdProto.map(function(evt, idx){
       var _td = null, _daysTo = null, _fait = false;
+      var _betesDonePd = [];
       if(_pdDeb){
         _td = new Date(_pdDeb.getTime()); _td.setDate(_td.getDate() + evt.j);
         _daysTo = Math.round((_td - _pdToday) / 86400000);
-        _fait = HISTORY.some(function(h){
-          if(h.type !== evt.type) return false;
-          var _p = h.date.split('/'); if(_p.length !== 3) return false;
+        HISTORY.forEach(function(h){
+          if(h.type !== evt.type) return;
+          var _p = h.date.split('/'); if(_p.length !== 3) return;
           var _hd = new Date(_p[2], _p[1]-1, _p[0]);
-          return Math.abs(_hd - _td) <= 7*86400000;
+          if(Math.abs(_hd - _td) <= 7*86400000){
+            if(h.id === '__tous__'){
+              _betesDonePd = _sopBeteIds.slice();
+            } else if(_betesDonePd.indexOf(h.id) === -1){
+              _betesDonePd.push(h.id);
+            }
+          }
         });
+        _fait = _sopBeteIds.length > 0 && _betesDonePd.length >= _sopBeteIds.length;
       }
+      var _nbBetesDone = _betesDonePd.length;
+      var _nbBetesTotal = _sopBeteIds.length || 1;
+      if(_fait) _pdDoneCount++;
+      else if(_nbBetesDone > 0) _pdPartialCount++;
       var _bg, _bdr, _col, _badge;
       if(_fait){
         _bg='#0f2a0f'; _bdr='#2d6a2d'; _col='#4caf50';
-        _badge = '✅ Réalisé';
+        _badge = '✅ '+_nbBetesTotal+'/'+_nbBetesTotal+' traitées';
+      } else if(_nbBetesDone > 0){
+        _bg='#1a2a10'; _bdr='#4a7a1a'; _col='#aadd44';
+        _badge = '🔄 '+_nbBetesDone+'/'+_nbBetesTotal+' traitées';
       } else if(_pdDeb && _daysTo < 0){
         _bg='#2e1010'; _bdr='#8a2020'; _col='#f44336';
         _badge = '⚠️ En retard ('+Math.abs(_daysTo)+'j)';
@@ -5705,26 +5732,33 @@ function viewSaisie(){
         +'</div>'
         +(function(){
           if(!_pdDeb||_fait) return '';
+          // Bêtes restantes à traiter pour cette étape
+          var _beteRem = _sopBeteIds.filter(function(bid){ return _betesDonePd.indexOf(bid) === -1; });
+          var _nbRem = _beteRem.length;
           // Inline sante form when active
           if(S._sopInlineIdx===idx){
             var _ifd = S._sopInlineData || {};
+            var _remOpts = '<option value="">\u2014 Choisir \u2014</option>'
+              + _beteRem.map(function(bid){ return '<option value="'+bid+'"'+(_ifd.id===bid?' selected':'')+'>'+bid+'</option>'; }).join('');
             return '<div style="margin-top:8px;background:#0a1e0a;border:1px solid #2d6a2d;border-radius:8px;padding:10px">'
-              +'<div style="font-size:11px;font-weight:700;color:#88ee88;margin-bottom:8px">\uD83E\uDE7A '+evt.label+' \u2014 saisie rapide</div>'
-              +beteDropdown(_ifd.id||'','S._sopInlineData.id','')
-              +'<div class="fg" style="margin-top:6px"><label>R\u00e9sultat</label>'
+              +'<div style="font-size:11px;font-weight:700;color:#88ee88;margin-bottom:6px">\uD83E\uDE7A '+evt.label+(_nbBetesDone>0?' (\u2705 '+_nbBetesDone+' faite(s) \u2014 '+_nbRem+' restante(s))':' \u2014 saisie rapide')+'</div>'
+              +'<button onclick="_sopInlineSave('+idx+',true)" style="width:100%;background:#1a3a1a;border:1px solid #2d6a2d;border-radius:6px;color:#88ee88;font-size:12px;font-weight:700;padding:7px;cursor:pointer;margin-bottom:8px">\uD83D\uDC04 Toutes les b\u00eates restantes ('+_nbRem+')</button>'
+              +'<div style="font-size:10px;color:#556655;text-align:center;margin-bottom:6px">\u2014 ou b\u00eate par b\u00eate \u2014</div>'
+              +'<div class="fg"><label>B\u00eate</label><select onchange="S._sopInlineData.id=this.value;r()" style="background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:5px 6px;width:100%">'+_remOpts+'</select></div>'
+              +'<div class="fg" style="margin-top:4px"><label>R\u00e9sultat</label>'
               +'<select onchange="S._sopInlineData.res=this.value;r()" style="background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:5px 6px;width:100%">'
               +'<option value="Gu\u00e9ri"'+(_ifd.res==='Gu\u00e9ri'||!_ifd.res?' selected':'')+'>Gu\u00e9ri</option>'
               +'<option value="En traitement"'+(_ifd.res==='En traitement'?' selected':'')+'>En traitement</option>'
               +'<option value="D\u00e9c\u00e8s"'+(_ifd.res==='D\u00e9c\u00e8s'?' selected':'')+'>D\u00e9c\u00e8s</option>'
               +'</select></div>'
               +'<div style="display:flex;gap:6px;margin-top:8px">'
-              +'<button onclick="_sopInlineSave('+idx+')" style="flex:1;background:#2d6a2d;color:#fff;border:none;border-radius:6px;padding:7px;font-size:12px;font-weight:700;cursor:pointer">\u2705 Valider</button>'
-              +'<button onclick="S._sopInlineIdx=null;r()" style="flex:1;background:#2a2a2a;color:#aaa;border:none;border-radius:6px;padding:7px;font-size:12px;cursor:pointer">\u2715 Annuler</button>'
+              +'<button onclick="_sopInlineSave('+idx+',false)" style="flex:1;background:#2d6a2d;color:#fff;border:none;border-radius:6px;padding:7px;font-size:12px;font-weight:700;cursor:pointer">\u2705 1 b\u00eate</button>'
+              +'<button onclick="S._sopInlineIdx=null;r()" style="flex:1;background:#2a2a2a;color:#aaa;border:none;border-radius:6px;padding:7px;font-size:12px;cursor:pointer">\u00d7 Fermer</button>'
               +'</div>'
               +'</div>';
           }
           var _absD = _daysTo!==null ? Math.abs(_daysTo) : 0;
-          var _actLbl = evt.type==='pesee'?'Peser les b\u00eates':'Sant\u00e9';
+          var _actLbl = evt.type==='pesee'?'Peser les b\u00eates':(_nbBetesDone>0?'Suite \u2014 '+_nbRem+' b\u00eate(s) restante(s)':'Sant\u00e9');
           if(_daysTo===null||_daysTo>=-7){
             return '<button onclick="_sopValider('+idx+')" style="width:100%;margin-top:8px;background:#1a2e1a;border:1px solid #2d6a2d;border-radius:6px;color:#88ee88;font-size:11px;font-weight:700;padding:6px 8px;cursor:pointer">\u2705 Saisir l\'acte \u2014 '+_actLbl+'</button>';
           }
@@ -5735,28 +5769,10 @@ function viewSaisie(){
         })()
         +'</div>';
     }).join('');
-    var _pdDone = _pdDeb ? _pdProto.filter(function(evt){
-      var _td2 = new Date(_pdDeb.getTime()); _td2.setDate(_td2.getDate() + evt.j);
-      return HISTORY.some(function(h){
-        if(h.type!==evt.type) return false;
-        var _p=h.date.split('/'); if(_p.length!==3) return false;
-        var _hd=new Date(_p[2],_p[1]-1,_p[0]); return Math.abs(_hd-_td2)<=7*86400000;
-      });
-    }).length : 0;
-    var _pdLate = _pdDeb ? _pdProto.filter(function(evt){
-      var _td2 = new Date(_pdDeb.getTime()); _td2.setDate(_td2.getDate() + evt.j);
-      return HISTORY.some(function(h){
-        if(h.type!==evt.type) return false;
-        var _p=h.date.split('/'); if(_p.length!==3) return false;
-        var _hd=new Date(_p[2],_p[1]-1,_p[0]);
-        var _diff = _hd - _td2;
-        return _diff > 7*86400000 && _diff <= 21*86400000;
-      });
-    }).length : 0;
     form = '<div class="card">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
       +'<div class="stitle" style="margin-bottom:0">📋 Protocole SOP vétérinaire</div>'
-      +'<div style="font-size:11px;color:#88aa88">\u2705 '+_pdDone+(_pdLate>0?' \u00b7 \u26a0\ufe0f '+_pdLate:'')+' / '+_pdProto.length+'</div>'
+      +'<div style="font-size:11px;color:#88aa88">\u2705 '+_pdDoneCount+(_pdPartialCount>0?' \u00b7 \uD83D\uDD04 '+_pdPartialCount:'')+' / '+_pdProto.length+'</div>'
       +'</div>'
       +(!_pdDeb
         ? '<div class="al al-o">Cycle non démarré — aucune date de référence</div>'
@@ -5816,38 +5832,76 @@ function _sopValider(idx){
   }
   r();
 }
-function _sopInlineSave(idx){
+function _sopInlineSave(idx, tous){
   var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
   var evt = _proto[idx];
   if(!evt) return;
+  if(evt.type !== 'sante') return; // pesée uses its own form
   var d = S._sopInlineData || {};
   var td = today();
-  var entry = {
-    type: 'sante',
-    date: td,
-    id: d.id || '',
-    sym: evt.label,
-    tra: evt.note || 'Acte SOP v\u00e9t.',
-    cout: '',
-    res: d.res || 'Gu\u00e9ri',
-    dec: '',
-    bcs: '',
-    muq: ''
-  };
-  HISTORY.push(entry);
+  // Liste des bêtes actives
+  var _allBetes = CYCLE.betes && CYCLE.betes.length
+    ? CYCLE.betes.map(function(b){ return b.id; })
+    : LIVE.beteIds && LIVE.beteIds.length
+      ? LIVE.beteIds
+      : (function(){
+          var _n2 = CYCLE.nbBetes || MOCK.betes || 4;
+          var _fb = [];
+          for(var _fi = 1; _fi <= _n2; _fi++) _fb.push('B'+('0'+_fi).slice(-2));
+          return _fb;
+        })();
+  // Bêtes déjà traitées pour cette étape (dans ±7j de la date théorique)
+  var _doneBetes = [];
+  var _tdTgt = null;
+  if(CYCLE.dateDebut){
+    var _sdParse = parseISO(CYCLE.dateDebut);
+    if(_sdParse){ _tdTgt = new Date(_sdParse.getTime()); _tdTgt.setDate(_tdTgt.getDate() + evt.j); }
+  }
+  if(_tdTgt){
+    HISTORY.forEach(function(h){
+      if(h.type !== evt.type) return;
+      var _p = h.date.split('/'); if(_p.length!==3) return;
+      var _hd = new Date(_p[2],_p[1]-1,_p[0]);
+      if(Math.abs(_hd - _tdTgt) <= 7*86400000){
+        if(h.id === '__tous__') _doneBetes = _allBetes.slice();
+        else if(_doneBetes.indexOf(h.id)===-1) _doneBetes.push(h.id);
+      }
+    });
+  }
+  // Bêtes restantes à traiter
+  var _remBetes = _allBetes.filter(function(bid){ return _doneBetes.indexOf(bid)===-1; });
+  // Construire les entrées à sauvegarder
+  var _entries = [];
+  if(tous){
+    if(_remBetes.length === 0){ S._sopInlineIdx = null; r(); return; }
+    _remBetes.forEach(function(bid){
+      _entries.push({type:'sante',date:td,id:bid,sym:evt.label,tra:evt.note||'Acte SOP v\u00e9t.',cout:'',res:d.res||'Gu\u00e9ri',dec:'',bcs:'',muq:''});
+    });
+  } else {
+    if(!d.id){ S.msg='err:Choisir une b\u00eate'; r(); return; }
+    _entries.push({type:'sante',date:td,id:d.id,sym:evt.label,tra:evt.note||'Acte SOP v\u00e9t.',cout:'',res:d.res||'Gu\u00e9ri',dec:'',bcs:'',muq:''});
+  }
+  // Sauvegarder dans HISTORY
+  _entries.forEach(function(e){ HISTORY.push(e); });
   lsSet('history', HISTORY);
-  S._sopInlineIdx = null;
-  S._sopInlineData = {};
+  // Fermer le form si toutes les bêtes traitées ou mode "tous"
+  var _nowDoneIds = _doneBetes.concat(_entries.map(function(e){ return e.id; }));
+  var _stillRem = _allBetes.filter(function(bid){ return _nowDoneIds.indexOf(bid)===-1; });
+  if(tous || _stillRem.length === 0){
+    S._sopInlineIdx = null;
+  }
+  S._sopInlineData = {id:'', res:'Gu\u00e9ri'};
   // Sync vers Sheets (Sante_Mortalite) — même logique que doSubmit('sante')
   var _validSids = [SID.gerant, SID.fondateur, SID.rga].filter(Boolean);
   if(_validSids.length){
-    var _row = [td, entry.id, entry.sym, entry.tra, '', entry.res, '', '', ''];
-    Promise.all(_validSids.map(function(sid){ return appendRow(sid, 'Sante_Mortalite!A:I', _row); }))
-    .then(function(){
-      CYCLE._lastSanteDate = td;
-      lsSet('cycle', CYCLE);
-    })
-    .catch(function(e){ console.warn('_sopInlineSave Sheets write failed:', e); });
+    var _writePs = [];
+    _entries.forEach(function(e){
+      var _row = [td, e.id, e.sym, e.tra, '', e.res, '', '', ''];
+      _validSids.forEach(function(sid){ _writePs.push(appendRow(sid, 'Sante_Mortalite!A:I', _row)); });
+    });
+    Promise.all(_writePs).then(function(){
+      CYCLE._lastSanteDate = td; lsSet('cycle', CYCLE);
+    }).catch(function(e){ console.warn('_sopInlineSave Sheets:', e); });
   }
   r();
 }
@@ -6457,6 +6511,84 @@ function viewLiv(){
           +'</div>';
       })()
       +'</div>'
+      +(function(){
+        // Protocole SOP — visible par fondateur (éditable) et rga (lecture seule)
+        if(S.user!=='fondateur'&&S.user!=='rga') return '';
+        var _roSop = S.user !== 'fondateur';
+        var _protoSop = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+        var _sedSop = _roSop ? null : (S._sopEd || null);
+        var _isCustomSop = !!CYCLE.sopProtocol;
+        var _rowsSop = '';
+        _protoSop.forEach(function(step, i){
+          if(_sedSop && _sedSop.idx === i){
+            _rowsSop += '<div style="background:#0a1e0a;border:1px solid #2d6a2d;border-radius:8px;padding:10px;margin-bottom:6px">'
+              +'<div style="display:flex;gap:6px;margin-bottom:6px">'
+              +'<div style="flex:0 0 80px"><label style="font-size:10px;color:#88aa88">J+ (jour)</label>'
+              +'<input type="number" min="1" max="365" value="'+_sedSop.j+'" style="width:72px;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#C8A06A;font-size:13px;font-weight:700;padding:4px 6px" oninput="S._sopEd.j=parseInt(this.value)||1"></div>'
+              +'<div style="flex:1"><label style="font-size:10px;color:#88aa88">Type</label>'
+              +'<select style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:5px 6px" onchange="S._sopEd.type=this.value">'
+              +'<option value="sante"'+(_sedSop.type==='sante'?' selected':'')+'>🩺 Saisie Santé</option>'
+              +'<option value="pesee"'+(_sedSop.type==='pesee'?' selected':'')+'>⚖️ Pesée</option>'
+              +'</select></div>'
+              +'</div>'
+              +'<div style="margin-bottom:6px"><label style="font-size:10px;color:#88aa88">Libellé</label>'
+              +'<input type="text" value="'+(_sedSop.label||'').replace(/"/g,'&quot;')+'" placeholder="Ex: Déparasitage interne" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:4px 6px" oninput="S._sopEd.label=this.value"></div>'
+              +'<div style="margin-bottom:8px"><label style="font-size:10px;color:#88aa88">Note protocole (optionnel)</label>'
+              +'<input type="text" value="'+(_sedSop.note||'').replace(/"/g,'&quot;')+'" placeholder="Ex: Ivermectine PO" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#7a9a7a;font-size:11px;padding:4px 6px" oninput="S._sopEd.note=this.value"></div>'
+              +'<div style="display:flex;gap:6px">'
+              +'<button onclick="_sopSave(false)" style="flex:1;background:#2d6a2d;color:#fff;border:none;border-radius:6px;padding:7px;font-size:12px;font-weight:700;cursor:pointer">✓ Valider</button>'
+              +'<button onclick="S._sopEd=null;r()" style="flex:1;background:#2a2a2a;color:#aaa;border:none;border-radius:6px;padding:7px;font-size:12px;cursor:pointer">✗ Annuler</button>'
+              +'</div>'
+              +'</div>';
+          } else {
+            _rowsSop += '<div style="display:flex;align-items:flex-start;gap:6px;padding:8px 0;border-bottom:1px solid #0f1f0f;overflow:hidden">'
+              +'<div style="font-size:10px;font-weight:800;color:#C8A06A;min-width:32px;flex-shrink:0;padding-top:2px;line-height:1.3">J+'+step.j+'</div>'
+              +'<div style="font-size:14px;width:18px;flex-shrink:0;padding-top:1px;text-align:center">'+step.ico+'</div>'
+              +'<div style="flex:1;min-width:0;overflow:hidden">'
+              +'<div style="font-size:12px;color:#ccc;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+step.label+'</div>'
+              +(step.note?'<div style="font-size:10px;color:#7a9a7a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+step.note+'</div>':'')
+              +'</div>'
+              +(!_roSop
+                ?'<div style="display:flex;gap:4px;flex-shrink:0;padding-top:1px">'
+                    +'<button onclick="_sopEdit('+i+')" style="background:none;border:1px solid #2a4a2a;border-radius:4px;color:#88aa88;font-size:11px;padding:2px 5px;cursor:pointer;line-height:1">✏️</button>'
+                    +'<button onclick="_sopDel('+i+')" style="background:none;border:1px solid #3a1010;border-radius:4px;color:#aa4444;font-size:11px;padding:2px 5px;cursor:pointer;line-height:1">🗑</button>'
+                    +'</div>':'')
+              +'</div>';
+          }
+        });
+        if(!_roSop){
+          if(_sedSop && _sedSop.idx === -1){
+            _rowsSop += '<div style="background:#0a1e0a;border:1px solid #2d6a2d;border-radius:8px;padding:10px;margin-top:6px">'
+              +'<div style="font-size:11px;color:#88aa88;margin-bottom:8px;font-weight:700">➕ Nouvelle étape</div>'
+              +'<div style="display:flex;gap:6px;margin-bottom:6px">'
+              +'<div style="flex:0 0 80px"><label style="font-size:10px;color:#88aa88">J+ (jour)</label>'
+              +'<input type="number" min="1" max="365" value="'+(_sedSop.j||1)+'" style="width:72px;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#C8A06A;font-size:13px;font-weight:700;padding:4px 6px" oninput="S._sopEd.j=parseInt(this.value)||1"></div>'
+              +'<div style="flex:1"><label style="font-size:10px;color:#88aa88">Type</label>'
+              +'<select style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:5px 6px" onchange="S._sopEd.type=this.value">'
+              +'<option value="sante">🩺 Saisie Santé</option>'
+              +'<option value="pesee">⚖️ Pesée</option>'
+              +'</select></div>'
+              +'</div>'
+              +'<div style="margin-bottom:6px"><label style="font-size:10px;color:#88aa88">Libellé</label>'
+              +'<input type="text" placeholder="Ex: Déparasitage interne" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:4px 6px" oninput="S._sopEd.label=this.value"></div>'
+              +'<div style="margin-bottom:8px"><label style="font-size:10px;color:#88aa88">Note protocole (optionnel)</label>'
+              +'<input type="text" placeholder="Ex: Ivermectine PO" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#7a9a7a;font-size:11px;padding:4px 6px" oninput="S._sopEd.note=this.value"></div>'
+              +'<div style="display:flex;gap:6px">'
+              +'<button onclick="_sopSave(true)" style="flex:1;background:#2d6a2d;color:#fff;border:none;border-radius:6px;padding:7px;font-size:12px;font-weight:700;cursor:pointer">✓ Ajouter</button>'
+              +'<button onclick="S._sopEd=null;r()" style="flex:1;background:#2a2a2a;color:#aaa;border:none;border-radius:6px;padding:7px;font-size:12px;cursor:pointer">✗ Annuler</button>'
+              +'</div>'
+              +'</div>';
+          } else {
+            _rowsSop += '<button onclick="S._sopEd={idx:-1,j:30,type:\'sante\',label:\'\',note:\'\'}; r()" style="width:100%;background:none;border:1px dashed #2a4a2a;border-radius:6px;color:#557755;font-size:12px;padding:7px;cursor:pointer;margin-top:6px">+ Ajouter une étape</button>';
+          }
+          _rowsSop += (_isCustomSop?'<button onclick="_sopReset()" style="width:100%;background:none;border:none;color:#554444;font-size:10px;margin-top:6px;cursor:pointer">↺ Réinitialiser au protocole standard</button>':'');
+        }
+        return '<div class="card" style="margin-top:4px">'
+          +'<div class="stitle">📅 Protocole SOP vétérinaire'+(_isCustomSop?' <span style="font-size:9px;background:#1a2e1a;color:#88aa88;padding:2px 6px;border-radius:8px;margin-left:4px">Personnalisé</span>':' <span style="font-size:9px;background:#1a1a2a;color:#6688aa;padding:2px 6px;border-radius:8px;margin-left:4px">Standard</span>')+(_roSop?' <span style="font-size:9px;background:#1a1a1a;color:#888;padding:2px 6px;border-radius:8px;margin-left:4px">Lecture seule</span>':'')+'</div>'
+          +'<div style="font-size:10px;color:#7a9a7a;margin-bottom:10px">Protocole appliqu\u00e9 dans SOP V\u00e9to. '+(_roSop?'Modification r\u00e9serv\u00e9e au fondateur.':'Modifiez selon votre contexte terrain.')+'</div>'
+          +_rowsSop
+          +'</div>';
+      })()
       +(S.msg?'<div class="msg '+(S.msg.startsWith('ok')?'ok':'err')+'">'+S.msg.slice(3)+'</div>':'')
       +(!_ro?'<button class="btn" style="width:100%;margin-top:4px" onclick="saveObjectifs()">💾 Enregistrer les objectifs</button>':'')
       +'<div style="font-size:10px;color:#7a9a7a;text-align:center;margin-top:6px">Persist\u00e9s dans Config_App \u2014 appliqu\u00e9s imm\u00e9diatement partout.</div>';
