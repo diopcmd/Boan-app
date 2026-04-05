@@ -5714,7 +5714,18 @@ function viewSaisie(){
         +'</div>'
         +'<div style="font-size:11px;font-weight:700;color:'+_col+';white-space:nowrap;text-align:right">'+_badge+'</div>'
         +'</div>'
-        +(!_fait&&_pdDeb?'<button onclick="_sopValider('+idx+')" style="width:100%;margin-top:8px;background:#1a2e1a;border:1px solid #2d6a2d;border-radius:6px;color:#88ee88;font-size:11px;font-weight:700;padding:6px 8px;cursor:pointer">\u2705 Saisir l\'acte \u2014 '+(evt.type==='pesee'?'Peser les b\u00eates':'Santé')+'</button>':'')
+        +(function(){
+          if(!_pdDeb||_fait) return '';
+          var _absD = _daysTo!==null ? Math.abs(_daysTo) : 0;
+          var _actLbl = evt.type==='pesee'?'Peser les b\u00eates':'Sant\u00e9';
+          if(_daysTo===null||_daysTo>=-7){
+            return '<button onclick="_sopValider('+idx+')" style="width:100%;margin-top:8px;background:#1a2e1a;border:1px solid #2d6a2d;border-radius:6px;color:#88ee88;font-size:11px;font-weight:700;padding:6px 8px;cursor:pointer">\u2705 Saisir l\'acte \u2014 '+_actLbl+'</button>';
+          }
+          if(_daysTo>=-14){
+            return '<button onclick="if(confirm(\'Cet acte \u00e9tait pr\u00e9vu il y a '+_absD+' jours.\\nIl sera enregistr\u00e9 mais ne comptera plus dans la conformit\u00e9 SOP.\\nContinuer quand m\u00eame ?\'))_sopValider('+idx+')" style="width:100%;margin-top:8px;background:#2e1a00;border:1px solid #8a4a00;border-radius:6px;color:#ffaa44;font-size:11px;font-weight:700;padding:6px 8px;cursor:pointer">\u26a0\ufe0f Saisir hors d\u00e9lai ('+_absD+'j) \u2014 ne comptera pas</button>';
+          }
+          return '<div style="margin-top:8px;padding:6px 8px;border-radius:6px;background:#1a0f0f;border:1px solid #4a1a1a;color:#664444;font-size:11px;text-align:center">\uD83D\uDD12 D\u00e9lai expir\u00e9 ('+_absD+'j) \u2014 acte non r\u00e9alisable</div>';
+        })()
         +'</div>';
     }).join('');
     var _pdDone = _pdDeb ? _pdProto.filter(function(evt){
@@ -5771,6 +5782,14 @@ function _sopValider(idx){
   var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
   var evt = _proto[idx];
   if(!evt) return;
+  // Guard: block if >14 days past scheduled date
+  var _sdeb = parseISO(CYCLE.dateDebut);
+  if(_sdeb){
+    var _snv = _nowDakar();
+    var _stv = new Date(_snv.year, _snv.month-1, _snv.day);
+    var _stgt = new Date(_sdeb.getTime()); _stgt.setDate(_stgt.getDate() + evt.j);
+    if((_stv - _stgt) > 14*86400000) return;
+  }
   var td = todayISO();
   if(evt.type === 'pesee'){
     S.sub = 'pesee';
