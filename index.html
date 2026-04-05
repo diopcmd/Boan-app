@@ -5706,6 +5706,8 @@ function viewSaisie(){
         _daysTo = Math.round((_td - _pdToday) / 86400000);
         HISTORY.forEach(function(h){
           if(h.type !== evt.type) return;
+          // Si l'entrée porte un label SOP, ne l'associer qu'à cette étape précise
+          if(h.sopLabel !== undefined && h.sopLabel !== null && h.sopLabel !== evt.label) return;
           var _p = h.date.split('/'); if(_p.length !== 3) return;
           var _hd = new Date(_p[2], _p[1]-1, _p[0]);
           if(Math.abs(_hd - _td) <= 7*86400000){
@@ -5879,6 +5881,8 @@ function _sopInlineSave(idx, tous){
   if(_tdTgt){
     HISTORY.forEach(function(h){
       if(h.type !== evt.type) return;
+      // Si l'entrée porte un label SOP, ne compter que pour cette étape précise
+      if(h.sopLabel !== undefined && h.sopLabel !== null && h.sopLabel !== evt.label) return;
       var _p = h.date.split('/'); if(_p.length!==3) return;
       var _hd = new Date(_p[2],_p[1]-1,_p[0]);
       if(Math.abs(_hd - _tdTgt) <= 7*86400000){
@@ -5894,11 +5898,11 @@ function _sopInlineSave(idx, tous){
   if(tous){
     if(_remBetes.length === 0){ S._sopInlineIdx = null; r(); return; }
     _remBetes.forEach(function(bid){
-      _entries.push({type:'sante',date:td,id:bid,sym:evt.label,tra:evt.note||'Acte SOP v\u00e9t.',cout:'',res:d.res||'Gu\u00e9ri',dec:'',bcs:'',muq:''});
+      _entries.push({type:'sante',date:td,id:bid,sopLabel:evt.label,sym:evt.label,tra:evt.note||'Acte SOP v\u00e9t.',cout:'',res:d.res||'Gu\u00e9ri',dec:'',bcs:'',muq:''});
     });
   } else {
     if(!d.id){ S.msg='err:Choisir une b\u00eate'; r(); return; }
-    _entries.push({type:'sante',date:td,id:d.id,sym:evt.label,tra:evt.note||'Acte SOP v\u00e9t.',cout:'',res:d.res||'Gu\u00e9ri',dec:'',bcs:'',muq:''});
+    _entries.push({type:'sante',date:td,id:d.id,sopLabel:evt.label,sym:evt.label,tra:evt.note||'Acte SOP v\u00e9t.',cout:'',res:d.res||'Gu\u00e9ri',dec:'',bcs:'',muq:''});
   }
   // Sauvegarder dans HISTORY
   _entries.forEach(function(e){ HISTORY.push(e); });
