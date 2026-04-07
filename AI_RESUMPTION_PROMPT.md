@@ -314,6 +314,84 @@ var arr = [1, 2,, 3];        // ❌ fatal
 // Toujours vérifier après génération automatique de code.
 ```
 
+### Flux de démarrage — ordre exact
+
+```
+doLogin() → loadLiveData()
+  ÉTAPE 1 (bloquante) : Config_Cycle!A1:R1 + Config_App!A:B
+    → CYCLE.* synchronisé, MOCK.betes/treso seedés, wipe si nouveau cycle
+  VAGUE 1 (parallèle) : Pesees + Stock_Nourriture + KPI_Mensuels + Sante_Mortalite
+    → MOCK.gmq, MOCK.stock, MOCK.treso, MOCK.betes, LIVE.deceased
+    → r() — 1er rendu avec données réelles
+  VAGUE 2 (parallèle) : 7 onglets → buildHistoryFromSheets() → HISTORY[]
+    → LIVE.incidents, MOCK.betes recalculé
+    → r() — 2ème rendu complet
+
+Après loadLiveData() : setTimeout(loadPesees, 300)
+```
+
+### Index lignes clés — `index.html` (commit `a8705a8`)
+
+```
+L352   var USERS          L361   var MOCK           L419  var CYCLE
+L484   var HISTORY        L488   var STOCK_MVTS     L895  var ONLINE / OFFLINE_QUEUE
+L1148  var TABLE_RANGES   L2186  var LIVE
+
+L368   _nowDakar()        L400   today()            L404  todayISO()
+L412   parseISO()         L471   calcSemaine()      L584  calcStockLocal()
+L663   addHistory()       L689   peseeDejaFaite()   L698  joursSince()
+L751   ficheDejaSoumise() L865   bilanDejaFaitCetteSemaine()
+L902   flushQueue()       L1009  r()
+L1062  doLogin()          L1121  getTok()
+L1163  appendRow()        L1228  readSheet()
+L1247  loadLiveData()     L1585  buildHistoryFromSheets()
+L1776  doSubmit()         L1871  _submitActual()
+L2048  _syncConfigApp()   L2097  _syncCycle()       L2197 loadPesees()
+L3766  _archiveCycle()    L3798  saveCycle()        L4349 buildSidebar()
+L4957  _joursDepuisDebut() L5014 viewDash()         L5305 viewSaisie()
+L6013  viewLiv()          L6776  viewMarche()
+```
+
+### Pièges Google Sheets API — gotchas critiques
+
+```js
+// 1. TOUJOURS valueRenderOption=UNFORMATTED_VALUE dans readSheet()
+//    Sans ça : parseFloat("2 000") = 2 → prix/stocks/poids faux
+
+// 2. encodeURIComponent sur le NOM DE FEUILLE UNIQUEMENT
+//    encodeURIComponent('Stock_Nourriture!A4:F200') → '%3A' rejette la plage
+
+// 3. JAMAIS INSERT_ROWS dans les onglets formatés
+//    appendRow() = READ colonne A → compter lignes → PUT ligne vide exacte
+
+// 4. Pas d'appendRow() parallèles sur le même onglet/SID
+//    → tous lisent row_count=N → s'écrasent à la ligne N+1
+//    → utiliser writeAll() ou batch PUT
+
+// 5. Début de données par onglet (TABLE_RANGES L1148) :
+//    ligne 4 : Fiche_Quotidienne, SOP_Check, Pesees, Hebdomadaire, Suivi_Marche/Aliments
+//    ligne 5 : Stock_Nourriture, Incidents, Sante_Mortalite
+//    ligne 2 : Historique_Cycles
+```
+
+### Mécanisme hors-ligne
+
+```js
+// OFFLINE_QUEUE : persistée localStorage, max 30 items
+// flushQueue() : dépile au retour réseau (window 'online' + setTimeout 500ms)
+// Ne pas modifier appendRow(sid, range, vals) sans vérifier flushQueue()
+// — ils partagent la même signature
+```
+
+### Erreurs silencieuses — à connaître
+
+| Situation | Symptôme | Cause |
+|---|---|---|
+| SID non configuré | "✅ Envoyé" mais rien dans Sheets | `writeAll` ok si au moins 1 SID réussit |
+| Token Google > 1h | Données non rechargées | `getTok()` échoue → Vague 1/2 ignorée |
+| Double virgule `,,` | Page blanche | Erreur JS fatale non catchée |
+| `CYCLE.dateDebut` vide | `calcSemaine()` = 1 | Cycle non initialisé — toujours tester avant les calculs date |
+
 ---
 
 ## Conventions strictes

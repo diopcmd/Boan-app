@@ -86,6 +86,133 @@ var obj = { a: 1,, b: 2 };  // fatal
 var arr = [1, 2,, 3];        // fatal
 ```
 
+### Flux de démarrage — ordre d'appel exact
+
+```
+doLogin()
+  └─► getTok() → POST /api/auth → {ok, role, name, tabs, sid}
+        └─► S.user = role, SID = sid
+              └─► loadLiveData()                           ← déclenché une seule fois au login
+                    │
+                    ├─ ÉTAPE 1 (bloquante ~500ms)
+                    │   readSheet(fondateur, 'Config_Cycle!A1:R1')
+                    │   readSheet(fondateur, 'Config_App!A:B')
+                    │   → synchronise CYCLE.* depuis Sheets
+                    │   → MOCK.betes = CYCLE.nbBetes (fix flash "4 bêtes")
+                    │   → détection changement de cycle → wipe HISTORY/LIVE/STOCK_MVTS
+                    │
+                    └─ step1.then()
+                          │
+                          ├─ VAGUE 1 (parallèle ~1s) ← Promise.all
+                          │   Pesees!A4:G200           → MOCK.gmq, SPARK.gmq
+                          │   Stock_Nourriture!A4:F200 → MOCK.stock, STOCK_MVTS, SPARK.stk
+                          │   KPI_Mensuels!A4:K50      → MOCK.treso, SPARK.treso
+                          │   Sante_Mortalite!A4:G200  → MOCK.betes, LIVE.deceased, SPARK.betes
+                          │   → LIVE.source = 'live'
+                          │   → r()  ← 1er rendu avec données réelles
+                          │
+                          └─ VAGUE 2 (parallèle ~1-2s) ← Promise.all (7 onglets)
+                              Fiche_Quotidienne, SOP_Check, Stock_Nourriture (full),
+                              Incidents, Pesees (full), Sante_Mortalite (full), Hebdomadaire
+                              → buildHistoryFromSheets() → HISTORY[]
+                              → LIVE.incidents = [...]
+                              → MOCK.betes recalculé depuis décès Vague 2
+                              → _lastSyncTS = Date.now()
+                              → r()  ← 2ème rendu complet
+
+                    Après loadLiveData() :
+                    setTimeout(loadPesees, 300)   ← GMQ réel inter-pesées par bête
+                    // Si type==='marche' :
+                    setTimeout(loadPrix, 400)
+                    setTimeout(loadAlimPrix, 500)
+```
+
+> **Source des données par onglet** : `sidDataSource = SID.gerant || SID.fondateur`  
+> Le gérant écrit via `writeAll([SID.gerant, SID.fondateur])` → données toujours dans les deux sheets.
+
+### Pièges Google Sheets API — gotchas critiques
+
+#### 1. `valueRenderOption=UNFORMATTED_VALUE` — OBLIGATOIRE dans `readSheet()`
+```js
+// Sans ce paramètre, l'API retourne les valeurs formatées selon la locale du sheet :
+// "2 000" au lieu de "2000" → parseFloat("2 000") = 2 → prix faux, stock faux
+// "01/04/2026" peut devenir un numéro de série (46013) si le format de cellule est Date
+// → TOUJOURS utiliser ?valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING
+```
+
+#### 2. `encodeURIComponent` sur le nom de feuille UNIQUEMENT — jamais sur la plage
+```js
+// ✅ CORRECT :
+var enc = encodeURIComponent('Stock_Nourriture');  // "Stock_Nourriture"
+var url = '.../values/' + enc + '!A4:F200?...';
+
+// ❌ FAUX — encodeURIComponent(':') = '%3A' → l'API Sheets rejette la plage
+var url = '.../values/' + encodeURIComponent('Stock_Nourriture!A4:F200');
+```
+
+#### 3. Pattern read-then-PUT — JAMAIS `INSERT_ROWS` dans les onglets formatés
+```js
+// Les onglets ont des en-têtes et un formatage conditionnel.
+// INSERT_ROWS décale les lignes et casse le formatage.
+// appendRow() fait : READ colonne A → compter lignes non vides → PUT à la 1ère ligne vide
+//
+// TABLE_RANGES (L1148) définit start/end par onglet :
+//   Fiche_Quotidienne : start=4, end=500   ← données à partir de la ligne 4
+//   Stock_Nourriture  : start=5, end=500   ← ligne 4 protégée (sous-titres)
+//   Incidents         : start=5, end=200   ← idem
+//   Historique_Cycles : start=2, end=200   ← ligne 1 = en-têtes seulement
+```
+
+#### 4. Création automatique d'onglet
+```js
+// appendRow() tente de créer l'onglet automatiquement si l'API retourne
+// "Unable to parse range" ou "not found" — via batchUpdate addSheet
+// puis réessaie l'écriture une seule fois
+// Si l'onglet n'existe toujours pas → {ok:false, err:'Impossible de créer...'}
+```
+
+#### 5. Écriture batch vs appendRow parallèles
+```js
+// ❌ DANGEREUX — plusieurs appendRow() simultanés sur le même onglet :
+// Chacun lit row_count=N au même instant → tous écrivent à la ligne N+1 → écrasement
+// ✅ CORRECT — écriture batch unique (voir saveCycle() stockLines L3967)
+// Pour les writes multirôles : writeAll([SID.gerant, SID.fondateur], range, vals)
+// → Promise.all sur les SIDs, pas plusieurs appendRow() parallèles sur le même SID
+```
+
+### Mécanisme hors-ligne — `OFFLINE_QUEUE`
+
+```js
+// Déclaration (L895-L920) :
+var ONLINE = navigator.onLine;
+var OFFLINE_QUEUE = lsGet('offline_queue') || [];  // persisté localStorage
+
+// Quand une soumission échoue hors connexion :
+function saveToQueue(type, vals) { /* push + lsSet */ }  // appelé dans _submitActual si !ONLINE
+
+// Reprise automatique au retour réseau :
+window.addEventListener('online', function(){ ONLINE=true; r(); setTimeout(flushQueue, 500); });
+
+// flushQueue() (L902) : dépile OFFLINE_QUEUE un par un (300ms entre chaque)
+// → appendRow(SID.gerant, item.range, item.vals)
+// Si echec → remise en tête de queue
+// Capacité max : 30 items (OFFLINE_QUEUE.slice(-30))
+```
+
+> **Ne pas modifier `appendRow()`** sans vérifier que `flushQueue()` fonctionne toujours —  
+> ils partagent la même signature `(sid, range, vals)`.
+
+### Erreurs silencieuses — cas à connaître
+
+| Situation | Symptôme apparent | Cause réelle |
+|---|---|---|
+| SID non configuré dans Vercel | "Envoyé ✅" mais rien dans Sheets | `appendRow()` retourne `{ok:false}` si `!sid` — mais l'UI affiche `ok:` si au moins un SID réussit dans `writeAll` |
+| Onglet inexistant dans le sheet | Formulaire semble envoyer | `appendRow()` tente de créer l'onglet — si permissions insuffisantes, retourne `{ok:false}` |
+| Token Google expiré (>1h) | Données non rechargées | `getTok()` échoue silencieusement → `readSheet()` retourne `null` → Vague 1/2 ignorée |
+| Double virgule `,,` dans index.html | Page blanche, aucune erreur console | Erreur de syntaxe JS fatale non catchée |
+| `CYCLE.dateDebut` vide | Calculs `calcSemaine()` = 1, stock = 0 | Cycle non initialisé — toujours tester `if (CYCLE.dateDebut)` avant les calculs basés sur les dates |
+| `writeAll` avec aucun SID valide | Console warning uniquement | `validSids.filter(Boolean)` retourne `[]` → `{ok:false, err:'SID non configuré'}` — l'utilisateur voit le message d'erreur |
+
 ---
 
 ## 1. Stack technique
@@ -573,7 +700,117 @@ renderTab(tab)
 
 ---
 
-## 12. Audit MOCK variables (résultat final — commit 8599ed6 + audits passe 1-3)
+## 12. Index des numéros de ligne — `index.html`
+
+> Référence rapide pour naviguer dans le fichier (~8 000 lignes). Vérifier après chaque commit car les lignes peuvent décaler.
+> **Dernière mise à jour : commit `a8705a8` (7 avril 2026)**
+
+### Variables globales
+
+| Variable | Ligne | Notes |
+|---|---|---|
+| `var USERS` | L352 | Définition des rôles et onglets par rôle |
+| `var SID` | L360 | Peuplé dynamiquement après auth |
+| `var MOCK` | L361 | Valeurs KPI affichées — source canonique |
+| `var CYCLE` | L419 | Objet cycle complet — persisté localStorage |
+| `var HISTORY` | L484 | Saisies fusionnées local + Sheets — trié desc |
+| `var STOCK_MVTS` | L488 | Mouvements stock — persisté localStorage |
+| `var ONLINE` | L895 | `navigator.onLine` — mis à jour par events |
+| `var OFFLINE_QUEUE` | L896 | Queue hors-ligne — persistée localStorage |
+| `var METEO` | L927 | Météo Thiès — chargée à la demande sidebar |
+| `var LIVE` | L2186 | Données live : pesées, prix, incidents, deceased |
+| `var TABLE_RANGES` | L1148 | `{start, end}` par onglet Sheets — utilisé par `appendRow()` |
+
+### Fonctions utilitaires dates
+
+| Fonction | Ligne | Notes |
+|---|---|---|
+| `_nowDakar()` | L368 | Source de vérité heure/date — UTC+0 Dakar |
+| `today()` | L400 | DD/MM/YYYY format FR |
+| `todayISO()` | L404 | YYYY-MM-DD format ISO |
+| `isoToFr(iso)` | L410 | YYYY-MM-DD → DD/MM/YYYY |
+| `parseISO(iso)` | L412 | YYYY-MM-DD → Date locale (sans décalage UTC) |
+| `nowHeure()` | L408 | Heure courante Dakar (0-23) |
+| `nowJour()` | L409 | Jour semaine Dakar (0=dim, 5=ven) |
+| `calcSemaine()` | L471 | Semaine courante du cycle — utilise `Date.UTC` |
+| `_joursDepuisDebut()` | L4957 | Jours écoulés depuis `CYCLE.dateDebut` — utilise `Date.UTC` |
+
+### Fonctions stock
+
+| Fonction | Ligne | Notes |
+|---|---|---|
+| `calcStockLocal()` | L584 | Semaines de stock restantes depuis `STOCK_MVTS` — pure |
+| `calcStockParAliment()` | L605 | `{type: kgNet}` — pure |
+| `stockSyntheseHtml()` | L618 | HTML tableau synthèse stock — compact ou complet |
+| `saveMvts()` | L498 | `lsSet('stock_mvts', STOCK_MVTS)` — persiste localStorage |
+
+### Anti-doublons et historique
+
+| Fonction | Ligne | Notes |
+|---|---|---|
+| `addHistory()` | L663 | Pousse dans `HISTORY` + `lsSet` — appelée après chaque soumission réussie |
+| `ficheDejaSoumise()` | L751 | localStorage + HISTORY + `CYCLE._lastFicheDate` |
+| `joursSince(type)` | L698 | HISTORY + fallback `CYCLE._last*Date` (Config_App step1) |
+| `peseeDejaFaite(id)` | L689 | `LIVE.pesees` — semaine ISO courante |
+| `bilanDejaFaitCetteSemaine()` | L865 | HISTORY `_sem` + `CYCLE._lastBilanSem` |
+
+### Auth et Sheets
+
+| Fonction | Ligne | Notes |
+|---|---|---|
+| `doLogin()` | L1062 | POST /api/auth → peuple `SID`, `S.user`, déclenche `loadLiveData()` |
+| `getTok()` | L1121 | GET /api/token → access_token Google OAuth2 (mis en cache côté client 55min) |
+| `appendRow(sid, range, vals)` | L1163 | Pattern read-then-PUT — voir TABLE_RANGES L1148 |
+| `readSheet(sid, range)` | L1228 | GET Sheets avec `UNFORMATTED_VALUE` |
+
+### Chargement des données
+
+| Fonction | Ligne | Notes |
+|---|---|---|
+| `loadLiveData()` | L1247 | Étape 1 bloquante + Vague 1 + Vague 2 (voir flux démarrage §0) |
+| `buildHistoryFromSheets()` | L1585 | Fusion 7 onglets → HISTORY — appelée fin Vague 2 |
+| `loadPesees()` | L2197 | GMQ réel inter-pesées par bête — `setTimeout(loadPesees, 300)` après loadLiveData |
+| `loadPrix()` | L2290 | Suivi_Marche — appelée si onglet `marche` ou après submit |
+| `loadAlimPrix()` | L2332 | Suivi_Aliments — appelée si onglet `marche` ou après submit |
+
+### Synchronisation Sheets
+
+| Fonction | Ligne | Notes |
+|---|---|---|
+| `_syncCycle()` | L2097 | Réécrit `Config_Cycle!A1:R1` dans les 4 sheets |
+| `_syncConfigApp()` | L2048 | Réécrit `Config_App!A:B` dans sheet fondateur (23 clés) |
+| `flushQueue()` | L902 | Dépile `OFFLINE_QUEUE` — auto-déclenché au retour réseau |
+
+### Soumission
+
+| Fonction | Ligne | Notes |
+|---|---|---|
+| `doSubmit(type)` | L1776 | Validation + anti-doublons + confirmations sécurité |
+| `_submitActual(type)` | L1871 | Écriture Sheets effective — `writeAll()` + `kpiAppend()` |
+
+### Cycle et archivage
+
+| Fonction | Ligne | Notes |
+|---|---|---|
+| `saveCycle()` | L3798 | Sauvegarde cycle + reset complet + archivage + écriture Sheets |
+| `_archiveCycle(snap)` | L3766 | Écrit snapshot dans `Historique_Cycles!A:O` |
+| `_syncCycle()` | L2097 | Écrit `Config_Cycle!A1` sur les 4 sheets |
+
+### Vues (rendu HTML)
+
+| Fonction | Ligne | Notes |
+|---|---|---|
+| `r()` | L1009 | Re-rendu global — reconstruit tout le DOM |
+| `viewDash()` | L5014 | Dashboard KPI + alertes + rentabilité |
+| `viewSaisie()` | L5305 | Formulaires saisie (fiche/sop/stock/inc/pesée/santé/bilan) |
+| `viewLiv()` | L6013 | Livrables (tréso/KPI/bêtes/objectifs/sopvet/calendrier) |
+| `viewMarche()` | L6776 | Marché prix + simulateur + aliments |
+| `buildSidebar()` | L4349 | Sidebar (today/week/month/cycle selon rôle) |
+| `pageApp()` | L~4210 | Shell principal — header + tabs + content + sidebar |
+
+---
+
+## 13. Audit MOCK variables (résultat final — commit 8599ed6 + audits passe 1-3)
 
 | Variable | Défaut init | Seed local | Statut |
 |---|---|---|---|
@@ -586,7 +823,7 @@ renderTab(tab)
 
 ---
 
-## 13. Bugs corrigés — audits multi-passes (commits `51f5fee` → `a8705a8`)
+## 14. Bugs corrigés — audits multi-passes (commits `51f5fee` → `a8705a8`)
 
 ### Passe 1 — 7 corrections (`51f5fee`)
 | # | Localisation | Bug | Fix |
@@ -617,7 +854,7 @@ renderTab(tab)
 
 ---
 
-## 14. SOP Véto — détails d'implémentation (commit 8599ed6)
+## 15. SOP Véto — détails d'implémentation (commit 8599ed6)
 
 ### Flux complet d'un acte Santé
 1. Bouton ✅ ou ⚠️ dans la carte de la timeline → `_sopValider(idx)`
