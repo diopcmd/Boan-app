@@ -1,7 +1,7 @@
 ﻿# DOCUMENTATION TECHNIQUE — BOAN App
 
 Référence développeur pour l'application de gestion d'élevage **BOAN**.  
-**Commit HEAD** : `8599ed6` — ~7 804 lignes — Avril 2026
+**Commit HEAD** : `a8705a8` — ~8 000 lignes — 7 Avril 2026
 
 ---
 
@@ -197,30 +197,41 @@ function readSheet(sid, range) {
 - dureeMois, sopProtocol (JSON)
 
 ### saveCycle() — persistance Config_Cycle
-Écrit dans `Config_Cycle!A1:R1` (colonnes A–N standard + P=dureeMois + Q=simCharges + R=prixAlim).  
+Écrit dans `Config_Cycle!A1:S1` (colonnes A–N standard + P=dureeMois + Q=simCharges + R=prixAlim + **S=numCycle**).  
 **Avant la mise à jour** : appelle `_archiveCycle()` si le cycle est terminé.
 
-### _archiveCycle(snap) *(nouveau — commit 5a0ca03)*
-Archive un snapshot du cycle terminé dans `Historique_Cycles!A:N` :
+**Reset à l'init cycle** — variables remises à zéro dans `saveCycle()` (audit Avril 2026) :
+```javascript
+// Après Object.assign(CYCLE, MODAL.data) :
+CYCLE.gonogo     = {contrats:false, infra:false, assurance:false, securite:false};
+CYCLE.simCharges = {};       // charges simulateur spécifiques au cycle sortant
+CYCLE._mktUpdated = '';      // date modif marché — repart de zéro
+S._sopEd = null; S._sopInlineIdx = null; S._sopCtx = null; S._sopInlineData = {};
+LIVE._histCycles = null;     // cache férimé — forcé à recharger depuis Sheets
+```
+
+### _archiveCycle(snap) *(commit 5a0ca03, mis à jour 6fb1b19)*
+Archive un snapshot du cycle terminé dans `Historique_Cycles!A:O` :
 ```javascript
 function _archiveCycle(snap) {
   var row = [
-    snap.dateDebut,           // A — Début (ISO YYYY-MM-DD)
-    isoToFr(snap.dateFin),    // B — Fin (DD/MM/YYYY)
-    snap.duree,               // C — Durée (jours)
-    snap.race,                // D — Race
-    snap.foirail,             // E — Foirail/lieu de vente
-    snap.nbBetesDep,          // F — NbBêtesDépart
-    snap.nbBetesFin,          // G — NbBêtesFin (actives au moment clôture)
-    snap.deces,               // H — Décès (total)
-    snap.poidsDep,            // I — PoidsDépart moyen (kg)
-    snap.poidsFin,            // J — PoidsFin moyen (kg)
-    snap.gmq,                 // K — GMQ réalisé (kg/j)
-    snap.capital,             // L — Capital investi (FCFA)
-    snap.tresoFin,            // M — TrésoFin (FCFA)
-    snap.margeParTete         // N — Marge/tête (FCFA)
+    snap.dateDebut,         // A — Début (ISO YYYY-MM-DD)
+    isoToFr(snap.dateFin),  // B — Fin (DD/MM/YYYY)
+    snap.duree,             // C — Durée (jours)
+    snap.race,              // D — Race
+    snap.foirail,           // E — Foirail/lieu de vente
+    snap.nbBetes,           // F — NbBêtesDépart
+    snap.nbBetesFin,        // G — NbBêtesFin
+    snap.deces,             // H — Décès
+    snap.poidsDepart,       // I — PoidsDépart moyen (kg)
+    snap.poidsFin,          // J — PoidsFin moyen (kg)
+    snap.gmq,               // K — GMQ réalisé (kg/j)
+    snap.capital,           // L — Capital investi (FCFA)
+    snap.tresoFin,          // M — TrésoFin (FCFA)
+    margeParBete,           // N — Marge brute / bête (FCFA)
+    snap.numCycle || ''     // O — Numéro de cycle
   ];
-  return appendRow(SID, 'Historique_Cycles!A:N', row);
+  appendRow(SID.fondateur, 'Historique_Cycles!A:O', row);
 }
 ```
 
@@ -230,18 +241,43 @@ Appelée depuis les boutons ✅ / ⚠️ de l'onglet Protocole :
 - **Santé** → `S._sopInlineIdx = idx` + `S._sopInlineData = {id:'', res:'Guéri'}` (mini-form inline dans la carte)
 - Guard : acte bloqué si >21 jours après la date planifiée
 
-### _sopInlineSave(idx) *(nouveau — commit 8599ed6)*
-Valide le formulaire inline d'un acte Santé SOP :
-- Pousse l'entrée dans `HISTORY` (format identique à `doSubmit('sante')`)
-- Écrit dans `Sante_Mortalite!A:I` via `appendRow` pour **tous les SIDs disponibles**
-- Met à jour `CYCLE._lastSanteDate` et `lsSet('cycle', CYCLE)`
-- NE redirige pas — reste sur l'onglet Protocole
+### _sopInlineSave(idx, tous) *(refonte complète — commits 32c081e + 61fc2c0)*
 
-### _pdDone / _pdLate — compteurs SOP
+Valide le formulaire inline d'un acte Santé SOP avec suivi **par bête** :
+
+| Paramètre | Valeur | Comportement |
+|---|---|---|
+| `tous=true` | Bouton "🐄 Toutes les bêtes restantes" | Crée une entrée par bête restante — ferme le form |
+| `tous=false` | Bouton "✅ 1 bête" | Crée une entrée pour la bête sélectionnée — form reste ouvert si d'autres restent |
+
+**Champ `sopLabel`** (commit 61fc2c0) : chaque entrée créée par `_sopInlineSave` porte `sopLabel: evt.label`. La détection `_fait` l'utilise pour isoler les étapes de même type proches dans le temps :
 ```javascript
-// _pdDone : actes réalisés dans les ±7 jours de la date théorique (comptent dans la conformité)
-// _pdLate : actes réalisés entre 8 et 21 jours APRÈS la date théorique (hors délai, ne comptent pas)
-// Affiché : "✅ _pdDone · ⚠️ _pdLate / total"
+// Avant fix : Vitamine AD3E (J+1) et Déparasitage (J+7) — écart 6j < fenêtre ±7j
+//   => une validation en déclenchait une autre
+// Après fix : si h.sopLabel existe && h.sopLabel !== evt.label => ignoré
+if(h.sopLabel !== undefined && h.sopLabel !== null && h.sopLabel !== evt.label) return;
+// Entrées manuelles santé (sans sopLabel) : comportement inchangé (date-based)
+```
+
+**Format de l'entrée** :
+```javascript
+{ type:'sante', date:td, id:bid, sopLabel:evt.label, sym:evt.label,
+  tra:evt.note||'Acte SOP vét.', cout:'', res:d.res||'Guéri', dec:'', bcs:'', muq:'' }
+```
+
+- Pousse dans `HISTORY` + `lsSet('history', HISTORY)`
+- Écrit dans `Sante_Mortalite!A:I` via `appendRow` pour **tous les SIDs disponibles**
+- Met à jour `CYCLE._lastSanteDate`
+- Ne redirige pas — reste sur l'onglet Protocole
+
+### _pdDone / _pdPartial — compteurs SOP (refonte 32c081e)
+```javascript
+// _pdDoneCount  : étapes où TOUTES les bêtes ont été traitées (✅ N/N)
+// _pdPartialCount : étapes où CERTAINES bêtes ont été traitées (🔄 X/N)
+// Affiché : "✅ X · 🔄 Y / total" dans l'en-tête
+//
+// _fait = TOUTES les bêtes actives traitées (plus 1 bête != tout le troupeau)
+// La liste _sopBeteIds est calculée une fois avant la map (même logique que beteDropdown)
 ```
 
 ### viewGuide() *(commit 14468d4)*
@@ -292,6 +328,7 @@ O  stockLines      JSON [{type, qte, prixUnit}]
 P  dureeMois       mois prévus pour le cycle
 Q  simCharges      JSON {loyer, salaire, transport, autres}
 R  prixAlim        FCFA/kg aliment
+S  numCycle        numéro du cycle en cours (entier, éditable par le fondateur)
 ```
 
 ### Config_App — A:B (clé-valeur)
@@ -309,27 +346,29 @@ mixTourteau        % tourteau — ex. 40
 prixAlim           FCFA/kg — ex. 280
 objectifPrix       FCFA/kg poids vif — ex. 2000
 _mktUpdated        DD/MM/YYYY — date modif paramètres marché
-sopProtocol        JSON — tableau étapes vétérinaires
+sopProtocol        JSON — tableau étapes vétérinaires (fondateur uniquement)
 dureeMois          mois — durée prévue cycle
 cycleDebut         ISO YYYY-MM-DD — dupliqué pour accès rapide
+numCycle           entier — numéro du cycle courant (utile pour tests — préfixe IDs bêtes)
 ```
 
-### Historique_Cycles — A:N *(nouveau — à créer manuellement dans le sheet Fondateur)*
+### Historique_Cycles — A:O *(créer manuellement dans le sheet Fondateur)*
 ```
-A  Debut      ISO YYYY-MM-DD
-B  Fin        DD/MM/YYYY
-C  Duree      jours
-D  Race       texte
-E  Foirail    lieu de vente
-F  NbBetesDep entier — bêtes au départ
-G  NbBetesFin entier — bêtes en vie à la clôture
-H  Deces      entier — total décès sur le cycle
-I  PoidsDep   kg — poids moyen départ
-J  PoidsFin   kg — poids moyen fin
-K  GMQ        kg/j — GMQ réalisé
-L  Capital    FCFA — capital investi
-M  TresoFin   FCFA — trésorerie à la clôture
+A  Debut       ISO YYYY-MM-DD
+B  Fin         DD/MM/YYYY
+C  Duree       jours
+D  Race        texte
+E  Foirail     lieu de vente
+F  NbBetesDep  entier — bêtes au départ
+G  NbBetesFin  entier — bêtes en vie à la clôture
+H  Deces       entier — total décès sur le cycle
+I  PoidsDep    kg — poids moyen départ
+J  PoidsFin    kg — poids moyen fin
+K  GMQ         kg/j — GMQ réalisé
+L  Capital     FCFA — capital investi
+M  TresoFin    FCFA — trésorerie à la clôture
 N  MargeParTete FCFA — marge nette par bête vendue
+O  NumCycle    entier — numéro du cycle
 ```
 
 ---
@@ -451,7 +490,7 @@ renderTab(tab)
 
 ---
 
-## 12. Audit MOCK variables (résultat final — commit 8599ed6)
+## 12. Audit MOCK variables (résultat final — commit 8599ed6 + audits passe 1-3)
 
 | Variable | Défaut init | Seed local | Statut |
 |---|---|---|---|
@@ -464,7 +503,38 @@ renderTab(tab)
 
 ---
 
-## 13. SOP Véto — détails d'implémentation (commit 8599ed6)
+## 13. Bugs corrigés — audits multi-passes (commits `51f5fee` → `a8705a8`)
+
+### Passe 1 — 7 corrections (`51f5fee`)
+| # | Localisation | Bug | Fix |
+|---|---|---|---|
+| 1 | Go/No-Go | Score `/7` mais compteur affichait `/8` | Suppression du critère redondant |
+| 2 | `viewDash()` KPI | `objGMQ` utilisait `CYCLE.gmqWarn` au lieu de `CYCLE.gmqCible` | Corrigé en `gmqCible` |
+| 3 | `_calcDepSim()` | `cVetPeriode` proratisé sur le mauvais diviseur | Prorata sur `je/tj` |
+| 4 | `doSubmit('bilan')` | `f.sem` écrasait `S.fb.sem` après re-render | `lire S.fb.sem` avant écriture |
+| 5 | `_syncConfigApp()` | `Object.values()` non dispo en ES5 → crash mobile | Remplacé par `Object.keys()` + boucle |
+| 6 | Alerte GMQ chute | `Date` sans `UTC` → décalage DST possible | `new Date(Date.UTC(...))` |
+| 7 | `doSubmit('sante')` | Décès enregistré dans `Incidents` au lieu de `Sante_Mortalite` | Correction du routage |
+
+### Passe 2 — 3 corrections (`0580668`)
+| # | Localisation | Bug | Fix |
+|---|---|---|---|
+| 1 | `_joursDepuisDebut()` | Helper manquant — crash lors du calcul des charges proratisées | Création du helper avec `Date.UTC` |
+| 2 | `_alertGmqChute` (dashboard + sidebar) | `new Date(local)` → risque DST | `new Date(Date.UTC(...))` dans les 2 occurrences |
+| 3 | Bouton PDF KPI | Accessible à tous les rôles | Role-gated fondateur/rga uniquement |
+
+### Passe 3 — 5 corrections (`a8705a8`)
+| # | Localisation | Bug | Fix |
+|---|---|---|---|
+| 1 | `pageApp()` `_jourDepuis()` | `_now` est `{year,month,...}` pas un `Date` → `_now - d = NaN` → bannières alerte stock/pesée/bilan jamais déclenchées | `new Date(Date.UTC(_now.year,...))` dans les 2 termes |
+| 2 | `buildHistoryFromSheets()` | `_betesV2 > 0` empêche `MOCK.betes = 0` si 100% mortalité | `>= 0` |
+| 3 | `loadLiveData()` Vague 2 | `kgRow === 0` ajoute un mouvement `{kg:0}` inutile dans `STOCK_MVTS` | `if (kgRow === null \|\| kgRow === 0) return` |
+| 4 | `joursSince()` | `new Date(local)` pour les deux termes — incohérent avec le standard `Date.UTC` | `new Date(Date.UTC(...))` pour les deux |
+| 5 | `_joursDepuisDebut()` fallback | `return Math.max(1, calcSemaine() * 7)` retourne 7 quand `!CYCLE.dateDebut` | `return 1` |
+
+---
+
+## 14. SOP Véto — détails d'implémentation (commit 8599ed6)
 
 ### Flux complet d'un acte Santé
 1. Bouton ✅ ou ⚠️ dans la carte de la timeline → `_sopValider(idx)`

@@ -12,7 +12,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 - **GitHub** : https://github.com/diopcmd/Boan-app (branche `main`)
 - **Dossier local** : `C:\Temp\Boan-app\`
 - **Langue** : Tout en français (code, UI, communications)
-- **Dernier commit** : `8599ed6` — expert review complet + fix _sopInlineSave + docs maj
+- **Dernier commit** : `a8705a8` — audit passe 3 : 5 bugs corrigés (7 avril 2026)
 - **Webhook Vercel** : cassé → redeploy manuel sur vercel.com (Deployments → Redeploy)
 
 ---
@@ -21,7 +21,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 
 | Couche | Technologie |
 |---|---|
-| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~7437 lignes) |
+| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~8 000 lignes) |
 | Backend | Vercel Serverless Functions (ES Module `export default async function handler`) |
 | Auth | Session token custom HMAC-SHA256 (`base64(payload).hmac_hex`), 8h |
 | Données | Google Sheets API v4 via Service Account RS256 JWT |
@@ -35,7 +35,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 
 ```
 Boan-app/
-├── index.html              SPA complète (~7 804 lignes)
+├── index.html              SPA complète (~8 000 lignes)
 ├── vercel.json             Rewrites SPA (exclut /api/ et /manifest.json)
 ├── manifest.json           Web App Manifest (PWA — icône, nom, display:standalone)
 ├── api/
@@ -352,10 +352,14 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 
 | Commit | Description |
 |---|---|
+| `a8705a8` | **audit passe 3** : 5 bugs — `_jourDepuis` NaN alertes (Date.UTC), `_betesV2 >= 0`, STOCK_MVTS kg=0, `joursSince` Date.UTC, `_joursDepuisDebut` fallback retournait 7 |
+| `0580668` | **audit passe 2** : 3 bugs — `_joursDepuisDebut` helper, `_alertGmqChute` Date.UTC (2 occurrences), bouton PDF role-gated fondateur/rga |
+| `51f5fee` | **audit passe 1** : 7 bugs — Go/No-Go /8, KPI `objGMQ`, `cVetPeriode` prorata, `f.sem` bilan, `Object.values` ES5, GMQ alert DST, santé décès → incident G3 |
+| `55e01a2` | fix: semaine bloquée à 1 — `calcSemaine()` utilise `Date.UTC` |
 | `8599ed6` | feat: SOP veto inline form + seuil 21j + compteur double, retire SOP des Objectifs (doublon) |
 | `2d7eebe` | fix: cohérence GMQ — toutes formules inline unifiées vers MOCK.gmq (source canonique) |
 | `7acd693` | fix: SOP véto validation — 3 niveaux selon délai (OK / avertissement 8-14j / bloqué >14j) |
-| `85d7e9f` | fix: cohérence dashboard KPI vs sidebar — tréso seuil dynamique, score santé gmqCible |  
+| `85d7e9f` | fix: cohérence dashboard KPI vs sidebar — tréso seuil dynamique, score santé gmqCible |
 | `75f1f1e` | feat: guide retour dashboard, fix C003 deceased cycle, SOP véto valider gérant, formules PDF |
 | `dd5c3c7` | fix: MOCK.betes seed depuis localStorage au démarrage + guides MAJ |
 | `14468d4` | feat: onglet Guide par rôle + 4 guides HTML imprimables en PDF |
