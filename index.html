@@ -3661,8 +3661,8 @@ function exportSynthesePDF(){
   });
 
   // Total
-  var totalA = Object.values(ajouts).reduce(function(s,v){return s+v;},0);
-  var totalC = Object.values(consos).reduce(function(s,v){return s+v;},0);
+  var totalA = Object.keys(ajouts).reduce(function(s,k){return s+ajouts[k];},0);
+  var totalC = Object.keys(consos).reduce(function(s,k){return s+consos[k];},0);
   doc.setFillColor(15,26,15);
   doc.rect(14,y,182,8,'F');
   doc.setTextColor(200,160,106);
@@ -3708,8 +3708,8 @@ function partagerSyntheseWhatsApp(){
     lines.push('• '+t+' : +'+(a||0)+' kg / -'+(c||0)+' kg / Net: '+netStr);
   });
 
-  var totalA = Object.values(ajouts).reduce(function(s,v){return s+v;},0);
-  var totalC = Object.values(consos).reduce(function(s,v){return s+v;},0);
+  var totalA = Object.keys(ajouts).reduce(function(s,k){return s+ajouts[k];},0);
+  var totalC = Object.keys(consos).reduce(function(s,k){return s+consos[k];},0);
   var totalNet = totalA - totalC;
   lines.push('─────────────────────');
   lines.push('*TOTAL : +'+(totalA)+' kg ajouté / -'+totalC+' kg consommé / Net: '+(totalNet>=0?'+':'')+totalNet+' kg*');
@@ -4988,7 +4988,7 @@ function _calcDepSim() {
     cAlimPeriode = tj > 0 ? Math.round(simA * cm * je / tj) : 0;
   }
   var cGardPeriode   = tj > 0 ? Math.round(simG * cm * je / tj) : 0;
-  var cVetPeriode    = nb * simW;
+  var cVetPeriode    = tj > 0 ? Math.round(nb * simW * je / tj) : 0;
   var cImprevPeriode = tj > 0 ? Math.round(cImprev * je / tj) : 0;
   var dep = cVeau + simT + cAlimPeriode + cGardPeriode + cVetPeriode + cImprevPeriode;
   return {
@@ -5203,11 +5203,15 @@ function viewDash(){
       // Alerte GMQ prédictive depuis données réelles
       if (LIVE.loaded && LIVE.pesees.length >= 4) {
         // Calculer GMQ par semaine (regrouper par semaine)
+        var _debPesee = parseISO(CYCLE.dateDebut);
         var byWeek = {};
         LIVE.pesees.forEach(function(p){
           if (!p.date || !p.gain) return;
-          var d = new Date(p.date.replace(/\//g,'-'));
-          var wk = Math.floor((d - new Date(CYCLE.dateDebut||p.date)) / (7*24*3600*1000));
+          var _pp = p.date.split('/');
+          if (_pp.length !== 3) return;
+          var d = new Date(Date.UTC(parseInt(_pp[2]), parseInt(_pp[1])-1, parseInt(_pp[0])));
+          var _ref = _debPesee || d;
+          var wk = Math.floor((d - _ref) / (7*24*3600*1000));
           if (!byWeek[wk]) byWeek[wk] = [];
           byWeek[wk].push(p.gmq||0);
         });
@@ -5443,8 +5447,8 @@ function viewSaisie(){
                 +'<td style="padding:7px 8px;text-align:right;color:'+(net>=0?'#C8A06A':'#f44336')+';font-weight:700">'+(net>=0?'+':'')+net+' kg</td>'
                 +'</tr>';
             }).join('');
-        var totalA = Object.values(ajouts).reduce(function(s,v){return s+v;},0);
-        var totalC = Object.values(consos).reduce(function(s,v){return s+v;},0);
+        var totalA = Object.keys(ajouts).reduce(function(s,k){return s+ajouts[k];},0);
+        var totalC = Object.keys(consos).reduce(function(s,k){return s+consos[k];},0);
         var totalNet = totalA - totalC;
         var totalRow = allTypes.length>0
           ? '<tr style="background:#0a150a">'
@@ -5643,12 +5647,20 @@ function viewSaisie(){
       +'<div class="fg"><label>Résultat</label><select onchange="S.fsa.res=this.value"><option'+((!f.res||f.res==="Guéri")?" selected":"")+'>Guéri</option><option'+(f.res==="En cours"?" selected":"")+'>En cours</option><option'+(f.res==="Non gueri"?" selected":"")+'>Non gueri</option></select></div>'
       +'</div>'
       +'<div class="fg"><label>Décès ?</label>'+yn(f.dec,'dec','fsa')+'</div>'
-      +(f.dec==='OUI'?'<div class="al al-r">Signaler immédiatement à la direction</div>':'')
+      +(f.dec==='OUI'
+        ?'<div class="al al-r" style="font-size:12px">☠️ Décès — enregistrez la santé puis créez un incident Gravité 3.</div>'
+         +'<button type="button" onclick="chSub(\'inc\');S.fin={grav:\'3\',type:\'Décès bête\',id:S.fsa.id||\'\'};r()" style="width:100%;background:#2a0a0a;border:1px solid #8a2020;border-radius:8px;color:#ff8888;font-weight:700;font-size:12px;padding:8px;cursor:pointer;margin-bottom:6px">→ Créer un incident G3 (décès)</button>'
+        :'')
       +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'sante\')">Enregistrer</button>'+msgHtml()+'</div>';
   } else if(S.sub==='bilan'){
     var f=S.fb;
-    // Synchroniser semaine courante
-    f.sem = String(calcSemaine()); S.fb.sem = f.sem;
+    // Synchroniser semaine courante — seulement si l'utilisateur n'a pas modifié manuellement
+    var _semAuto = String(calcSemaine());
+    if (!f.sem || f.sem === (S.fb._semAutoVal || '')) {
+      f.sem = _semAuto;
+      S.fb.sem = f.sem;
+      S.fb._semAutoVal = _semAuto;
+    }
     // Pré-remplir depuis données réelles si champs vides
     if (!f.nb && MOCK.betes) { f.nb = String(MOCK.betes); S.fb.nb = f.nb; }
     if (!f.stk) {
@@ -6064,7 +6076,7 @@ function viewLiv(){
       })()
   } else if(S.sub==='kpi'){
     var objPoids   = CYCLE.objectifPrix || 2000;
-    var objGMQ     = 1.0;
+    var objGMQ     = CYCLE.gmqCible || 1.0;
     var objStock   = 6;
     var objBetes   = CYCLE.nbBetes || 4;
     var actStock   = MOCK.stock;
@@ -6441,10 +6453,10 @@ function viewLiv(){
 
     view='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
       +'<div class="stitle" style="margin-bottom:0">Go/No-Go — Cycle suivant</div>'
-      +'<span style="font-size:12px;color:#88aa88">'+score+' / 7</span>'
+      +'<span style="font-size:12px;color:#88aa88">'+score+' / 8</span>'
       +'</div>'
       +'<div style="height:6px;background:#1a2a1a;border-radius:3px;margin-bottom:14px">'
-      +'<div style="height:6px;background:'+vCol+';border-radius:3px;width:'+Math.round(score/7*100)+'%"></div>'
+      +'<div style="height:6px;background:'+vCol+';border-radius:3px;width:'+Math.round(score/8*100)+'%"></div>'
       +'</div>'
       +'<div class="card">'
       +'<div class="stitle">⚙️ Automatique</div>'
