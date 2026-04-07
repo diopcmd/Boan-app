@@ -1674,7 +1674,8 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   var _cycleStart = parseISO(CYCLE.dateDebut);
   var localOnly = (HISTORY || []).filter(function(h) {
     if (h._src === 'sheets') return false; // déjà issu de Sheets
-    if (_emptyInSheets[h.type]) return false; // Sheets vide pour ce type → orphelin invalide
+    // Sheets vide → orphelin invalide, SAUF si soumis aujourd'hui (race condition : Sheets n'a pas encore confirmé)
+    if (_emptyInSheets[h.type] && h.date !== today()) return false;
     // Exclure les entrées d'un cycle précédent survivant en localStorage
     if (_cycleStart && h.date) {
       var _p = h.date.split('/');
@@ -1730,15 +1731,18 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   lsSet('history', HISTORY);
 
   // Effacer les marqueurs locaux pour les types absents des Sheets (source de vérité)
+  // Guard : ne pas effacer si le marqueur CYCLE._last* confirme une saisie aujourd'hui
+  // (race condition : le submit vient d'avoir lieu, Sheets n'a pas encore confirmé)
   var _cycleChanged = false;
-  if (_emptyInSheets['fiche'])  { lsSet('last_fiche', null); CYCLE._lastFicheDate = ''; _cycleChanged = true; }
-  if (_emptyInSheets['sop'])    { CYCLE._lastSopDate   = ''; _cycleChanged = true; }
+  var _todayFr = today();
+  if (_emptyInSheets['fiche']  && CYCLE._lastFicheDate  !== _todayFr)  { lsSet('last_fiche', null); CYCLE._lastFicheDate = ''; _cycleChanged = true; }
+  if (_emptyInSheets['sop']    && CYCLE._lastSopDate    !== _todayFr)  { CYCLE._lastSopDate   = ''; _cycleChanged = true; }
   // Note : _lastBilanSem n'est pas effacé ici — saveCycle() s'en charge au reset cycle.
   // Le fallback sidFondateur sur Hebdomadaire évite les faux _emptyInSheets['bilan'].
-  if (_emptyInSheets['pesee'])  { CYCLE._lastPeseeDate = ''; _cycleChanged = true; }
-  if (_emptyInSheets['stock'])  { CYCLE._lastStockDate = ''; _cycleChanged = true; }
-  if (_emptyInSheets['inc'])    { CYCLE._lastIncDate   = ''; _cycleChanged = true; }
-  if (_emptyInSheets['sante'])  { CYCLE._lastSanteDate = ''; _cycleChanged = true; }
+  if (_emptyInSheets['pesee']  && CYCLE._lastPeseeDate  !== _todayFr)  { CYCLE._lastPeseeDate = ''; _cycleChanged = true; }
+  if (_emptyInSheets['stock']  && CYCLE._lastStockDate  !== _todayFr)  { CYCLE._lastStockDate = ''; _cycleChanged = true; }
+  if (_emptyInSheets['inc']    && CYCLE._lastIncDate    !== _todayFr)  { CYCLE._lastIncDate   = ''; _cycleChanged = true; }
+  if (_emptyInSheets['sante']  && CYCLE._lastSanteDate  !== _todayFr)  { CYCLE._lastSanteDate = ''; _cycleChanged = true; }
   if (_cycleChanged) lsSet('cycle', CYCLE);
 
   // fix: mettre à jour MOCK.betes depuis santés (décès) — Vague 2
@@ -4504,19 +4508,17 @@ function buildSidebar(){
         +'<div class="sb-section-title">Stock aliments</div>'
         +(function(){var stkDisplay=MOCK.stock>0?MOCK.stock:calcStockLocal();var stkCl=stkDisplay>=6?'sb-ok':stkDisplay>=4?'sb-warn':'sb-ko';var jours=Math.round(stkDisplay*7);return '<div class="sb-row"><span class="sb-lbl">Semaines restantes</span>'+'<span class="sb-val '+stkCl+'">'+stkDisplay+' sem.</span></div>'+'<div class="sb-row"><span class="sb-lbl">Rupture estimée</span>'+'<span style="font-size:12px;color:'+(stkDisplay>=6?'#4caf50':stkDisplay>=4?'#ff9800':'#f44336')+'">~'+jours+' jours</span></div>'+(STOCK_MVTS&&STOCK_MVTS.length?'<div style="margin-top:6px;padding:6px;background:'+(_sbLt?'#e8f0e8':'#0a150a')+';border-radius:6px">'+'<div style="font-size:10px;color:'+_sbSub+';margin-bottom:4px;text-transform:uppercase">Mouvements cycle</div>'+stockSyntheseHtml(true)+'</div>':'');})()
         +'</div>'
-        +'<div class="sb-shortcut" onclick="chTab(\'saisie\');chSub(\'fiche\');closeSB()">'
-        +'<div class="sb-shortcut-ico" style="background:#1a3a1a">📋</div>'
-        +'<div><div style="font-size:13px;font-weight:600">Fiche du jour</div><div style="font-size:11px;color:#88aa88">Saisie rapide</div></div>'
+        +'<div style="display:flex;gap:6px;margin-top:10px">'
+        +'<div onclick="chTab(\'saisie\');chSub(\'fiche\');closeSB()" style="flex:1;padding:8px 4px;text-align:center;background:#1a3a1a;border:1px solid '+(fichOk2?'#2d6a2d':'#8a2020')+';border-radius:8px;cursor:pointer;-webkit-tap-highlight-color:rgba(76,175,80,0.2)">'
+        +'<div style="font-size:18px">📋</div><div style="font-size:10px;color:#88aa88;margin-top:2px">Fiche</div>'
         +'</div>'
-        +'<div class="sb-shortcut" onclick="chTab(\'saisie\');chSub(\'sop\');closeSB()">'
-        +'<div class="sb-shortcut-ico" style="background:#1a3a1a">✅</div>'
-        +'<div><div style="font-size:13px;font-weight:600">Checklist SOP</div><div style="font-size:11px;color:#88aa88">Validation quotidienne</div></div>'
+        +'<div onclick="chTab(\'saisie\');chSub(\'sop\');closeSB()" style="flex:1;padding:8px 4px;text-align:center;background:#1a3a1a;border:1px solid #2d6a2d;border-radius:8px;cursor:pointer;-webkit-tap-highlight-color:rgba(76,175,80,0.2)">'
+        +'<div style="font-size:18px">✅</div><div style="font-size:10px;color:#88aa88;margin-top:2px">SOP</div>'
         +'</div>'
-        +'<div class="sb-shortcut" onclick="chTab(\'saisie\');chSub(\'pesee\');closeSB()">'
-        +'<div class="sb-shortcut-ico" style="background:#1a2a3a">⚖️</div>'
-        +'<div><div style="font-size:13px;font-weight:600">Pesée</div><div style="font-size:11px;color:#88aa88">Enregistrer le poids</div></div>'
+        +'<div onclick="chTab(\'saisie\');chSub(\'pesee\');closeSB()" style="flex:1;padding:8px 4px;text-align:center;background:#1a2a3a;border:1px solid #2a4a5a;border-radius:8px;cursor:pointer;-webkit-tap-highlight-color:rgba(76,175,80,0.2)">'
+        +'<div style="font-size:18px">⚖️</div><div style="font-size:10px;color:#88aa88;margin-top:2px">Pesée</div>'
         +'</div>'
-        +'<button onclick="S.page=\'login\';S.user=null;SB.open=false;r()" style="background:#2e1010;color:#ff7070;border:1px solid #8a0000;font-size:13px;padding:10px;margin-top:8px">Déconnexion</button>';
+        +'</div>';
     } else if(SB.tab==='week'){
       // ── Calendrier semaine dynamique (fuseau Dakar) ──
       var _calSub  = _sbSub;
