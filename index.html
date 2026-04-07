@@ -1613,8 +1613,9 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   (santes || []).forEach(function(r) {
     if (!r[0]) return;
     var id = r[1] || '—'; var sym = r[2] || '—';
+    // id ET _id : _id pour la déduplication Sheets, id pour la reconnaissance SOP
     entries.push({ type:'sante', label:id+' \u2014 '+sym, icon:icons.sante,
-      date:r[0], time:'—', _id:id, _sym:sym, _src:'sheets' });
+      date:r[0], time:'—', id:id, _id:id, _sym:sym, _src:'sheets' });
   });
 
   // Hebdomadaire [sem, nb, nou, stk, inc, poi, al, msg]
@@ -1630,8 +1631,9 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   (pesees || []).forEach(function(r) {
     if (!r[0]) return;
     var id = r[1] || '\u2014'; var poids = r[3] || '\u2014';
+    // id ET _id pour cohérence avec les entrées locales (SOP pesée)
     entries.push({ type:'pesee', label:id+' \u2014 '+poids+'kg', icon:icons.pesee,
-      date:r[0], time:'\u2014', _id:id, _src:'sheets' });
+      date:r[0], time:'\u2014', id:id, _id:id, _src:'sheets' });
   });
 
   // SOP_Check [date, net, des, rat, eau, stk, san, prob]
@@ -2682,8 +2684,9 @@ function confirmResetWithPwd() {
 // Helper : champ ID bête avec autocomplete robuste
 function beteSelect(val, stateKey, extra) {
   // Sources d'IDs : CYCLE.betes > LIVE.beteIds > fallback B01..BNN
+  // LIVE.beteIds est déjà filtré des décès par loadPesees()
   var beteIds = CYCLE.betes&&CYCLE.betes.length
-    ? CYCLE.betes.map(function(b){return b.id;})
+    ? CYCLE.betes.filter(function(b){ return (LIVE.deceased||[]).indexOf(b.id)===-1; }).map(function(b){return b.id;})
     : LIVE.beteIds&&LIVE.beteIds.length
       ? LIVE.beteIds
       : (function(){
@@ -2735,8 +2738,9 @@ function beteSelect(val, stateKey, extra) {
 }
 
 function beteDropdown(val, stateKey, extra) {
+  // LIVE.beteIds est déjà filtré des décès par loadPesees()
   var beteIds = CYCLE.betes && CYCLE.betes.length
-    ? CYCLE.betes.map(function(b){ return b.id; })
+    ? CYCLE.betes.filter(function(b){ return (LIVE.deceased||[]).indexOf(b.id)===-1; }).map(function(b){ return b.id; })
     : LIVE.beteIds && LIVE.beteIds.length
       ? LIVE.beteIds
       : (function(){
@@ -5699,7 +5703,7 @@ function viewSaisie(){
     var _pdJour  = _pdDeb ? Math.floor((_pdToday - _pdDeb) / 86400000) : null;
     // Liste des bêtes actives pour le suivi SOP par bête (même logique que beteDropdown)
     var _sopBeteIds = CYCLE.betes && CYCLE.betes.length
-      ? CYCLE.betes.map(function(b){ return b.id; })
+      ? CYCLE.betes.filter(function(b){ return (LIVE.deceased||[]).indexOf(b.id)===-1; }).map(function(b){ return b.id; })
       : LIVE.beteIds && LIVE.beteIds.length
         ? LIVE.beteIds
         : (function(){
@@ -5871,9 +5875,9 @@ function _sopInlineSave(idx, tous){
   if(evt.type !== 'sante') return; // pesée uses its own form
   var d = S._sopInlineData || {};
   var td = today();
-  // Liste des bêtes actives
+  // Liste des bêtes actives (décès exclus)
   var _allBetes = CYCLE.betes && CYCLE.betes.length
-    ? CYCLE.betes.map(function(b){ return b.id; })
+    ? CYCLE.betes.filter(function(b){ return (LIVE.deceased||[]).indexOf(b.id)===-1; }).map(function(b){ return b.id; })
     : LIVE.beteIds && LIVE.beteIds.length
       ? LIVE.beteIds
       : (function(){
