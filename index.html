@@ -470,9 +470,12 @@ function _gmqLabel() {
 }
 function calcSemaine() {
   if (!CYCLE.dateDebut) return MOCK.sem;
-  var debut = parseISO(CYCLE.dateDebut);
+  // Utiliser Date.UTC pour éviter les décalages DST (changement d'heure device)
+  // Les deux bornes sont à minuit UTC → différence toujours multiple exact de 86400000 ms
+  var p = CYCLE.dateDebut.split('-');
+  var debut = new Date(Date.UTC(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])));
   var _nd3  = _nowDakar();
-  var now   = new Date(_nd3.year, _nd3.month-1, _nd3.day);
+  var now   = new Date(Date.UTC(_nd3.year, _nd3.month-1, _nd3.day));
   var diff  = Math.floor((now - debut) / (7 * 24 * 3600 * 1000)) + 1;
   return Math.max(1, Math.min(diff, Math.round((CYCLE.dureeMois||8)*4.33)));
 }
