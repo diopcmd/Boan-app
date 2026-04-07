@@ -4262,13 +4262,14 @@ function pageApp(){
   // Alerte GMQ en chute 2 semaines consécutives
   var _alertGmqChute = (function(){
     if (!LIVE.loaded || LIVE.pesees.length < 4) return false;
+    var _debAlt = (function(){ if (!CYCLE.dateDebut) return null; var _q=CYCLE.dateDebut.split('-'); return new Date(Date.UTC(parseInt(_q[0]),parseInt(_q[1])-1,parseInt(_q[2]))); })();
     var byWeek = {};
     LIVE.pesees.forEach(function(p){
       if (!p.date || !p.gmq) return;
       var _dp = p.date.split('/');
       if (_dp.length !== 3) return;
-      var _d = new Date(_dp[2],_dp[1]-1,_dp[0]);
-      var _ref = parseISO(CYCLE.dateDebut) || _d;
+      var _d = new Date(Date.UTC(parseInt(_dp[2]),parseInt(_dp[1])-1,parseInt(_dp[0])));
+      var _ref = _debAlt || _d;
       var wk = Math.floor((_d - _ref) / (7*24*3600*1000));
       if (!byWeek[wk]) byWeek[wk] = [];
       byWeek[wk].push(p.gmq||0);
@@ -4950,6 +4951,17 @@ function _simSet(key, val) {
   _syncCycle(); // persiste dans Config_Cycle col Q → tous les appareils
   r();
 }
+// Retourne les jours réels écoulés depuis le début du cycle (incluant aujourd'hui, min 1)
+// Utilise Date.UTC comme calcSemaine() — pas de risque DST
+function _joursDepuisDebut() {
+  if (!CYCLE.dateDebut) return Math.max(1, calcSemaine() * 7);
+  var _p = CYCLE.dateDebut.split('-');
+  var _deb = new Date(Date.UTC(parseInt(_p[0]), parseInt(_p[1])-1, parseInt(_p[2])));
+  var _nd  = _nowDakar();
+  var _now = new Date(Date.UTC(_nd.year, _nd.month-1, _nd.day));
+  return Math.max(1, Math.floor((_now - _deb) / 86400000) + 1);
+}
+
 // Calcule les dépenses proratisées à date depuis les charges du simulateur
 function _calcDepSim() {
   var sc  = CYCLE.simCharges || {};
@@ -4976,7 +4988,7 @@ function _calcDepSim() {
   var cRecurr = cRec + cImprev;
   var cTotal  = cVeau + cRecurr + simT;
   var tj = Math.round(cm * 30.4);
-  var je = Math.max(0, calcSemaine() * 7);
+  var je = _joursDepuisDebut();
   // Alimentation réelle si prixAlim configuré (kg consommés × prix/kg)
   var useRealAlim = (CYCLE.prixAlim || 0) > 0;
   var cAlimPeriode;
@@ -5018,7 +5030,7 @@ function viewDash(){
   var gmqBg=_gmqDisplay>=_gc?'kcard-ok':_gmqDisplay>=_gw?'kcard-warn':'kcard-crit';
   var stkBg=MOCK.stock>=6?'kcard-ok':MOCK.stock>=4?'kcard-warn':'kcard-crit';
   var trBg =MOCK.treso>=_trSeuilHaut?'kcard-ok':MOCK.treso>_trSeuil?'kcard-warn':'kcard-crit';
-  var _joursEcoules = Math.max(0, calcSemaine() * 7);
+  var _joursEcoules = _joursDepuisDebut();
   var _tresoNette = Math.max(0, MOCK.treso);
   // Dépenses proratisées depuis les charges du simulateur (alim + gardien + vét + imprévus)
   var _simDep = _calcDepSim();
@@ -5033,13 +5045,14 @@ function viewDash(){
   var _alertMeteo = METEO.loaded && !METEO.error && METEO.temp >= 38;
   var _alertGmqChute = (function(){
     if (!LIVE.loaded || !LIVE.pesees || LIVE.pesees.length < 4) return false;
+    var _debAlt2 = (function(){ if (!CYCLE.dateDebut) return null; var _q=CYCLE.dateDebut.split('-'); return new Date(Date.UTC(parseInt(_q[0]),parseInt(_q[1])-1,parseInt(_q[2]))); })();
     var byWeek = {};
     LIVE.pesees.forEach(function(p){
       if (!p.date || !p.gmq) return;
       var _dp = p.date.split('/');
       if (_dp.length !== 3) return;
-      var _d = new Date(_dp[2],_dp[1]-1,_dp[0]);
-      var _ref = parseISO(CYCLE.dateDebut) || _d;
+      var _d = new Date(Date.UTC(parseInt(_dp[2]),parseInt(_dp[1])-1,parseInt(_dp[0])));
+      var _ref = _debAlt2 || _d;
       var wk = Math.floor((_d - _ref) / (7*24*3600*1000));
       if (!byWeek[wk]) byWeek[wk] = [];
       byWeek[wk].push(p.gmq||0);
@@ -5162,7 +5175,9 @@ function viewDash(){
     +'<div style="display:flex;align-items:center"><div class="prog-bar"><div class="prog-fill" style="width:'+pct+'%;background:linear-gradient(90deg,#2d6a2d,#C8A06A)"></div></div><span style="font-size:12px;color:#C8A06A;font-weight:600;margin-left:4px">'+pct+'%</span></div>'
     +'<div style="margin-top:6px;font-size:11px;color:#665540">Semaine '+semActuelle+' / '+totalSemCycle+'</div>'
     +'</div>'
-    +'<button type="button" onclick="exportKpiPDF()" style="width:100%;padding:10px;border-radius:8px;background:#1a3a6a;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer;margin-bottom:8px">📄 Télécharger le rapport KPI en PDF</button>'
+    +((S.user==='fondateur'||S.user==='rga')
+      ?'<button type="button" onclick="exportKpiPDF()" style="width:100%;padding:10px;border-radius:8px;background:#1a3a6a;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer;margin-bottom:8px">📄 Télécharger le rapport KPI en PDF</button>'
+      :'')
     +(S.user==='gerant'
       ?'<button type="button" onclick="S._guideOpen=true;r();if(Date.now()-_lastAutoRefresh>60000){loadLiveData();}" '
         +'style="width:100%;padding:13px 16px;border-radius:12px;margin-bottom:8px;cursor:pointer;'
@@ -6017,7 +6032,7 @@ function viewLiv(){
         var _sd  = _calcDepSim();
         var _sc  = CYCLE.simCharges || {};
         var _nb  = CYCLE.nbBetes || 4;
-        var _je  = Math.max(0, calcSemaine() * 7);
+        var _je  = _joursDepuisDebut();
         var _pveau = _sc.sveau !== undefined ? _sc.sveau : Math.round((CYCLE.capital||1450000)/(_nb||4));
         var _depReal = (CYCLE.capital > 0 && MOCK.treso < CYCLE.capital * 0.98) ? (CYCLE.capital - MOCK.treso) : null;
         var _dep = _depReal !== null ? _depReal : _sd.dep;
