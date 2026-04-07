@@ -505,6 +505,10 @@ function rebuildBeteList() {
   if(!dl){ dl=document.createElement('datalist'); dl.id='bete-dl-global'; document.body.appendChild(dl); }
   dl.innerHTML = beteIds.map(function(id){ return '<option value="'+id+'">'; }).join('');
 }
+// Échappe les caractères HTML dangereux pour sécuriser l'injection dans innerHTML
+function _escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 // Affecte en toute sécurité une valeur à un chemin d'état de la forme "S.fsa.id"
 // sans passer inp.value dans eval (protection XSS client)
 function _setPath(path, val) {
@@ -518,11 +522,27 @@ function _setPath(path, val) {
     if (obj != null) obj[parts[parts.length - 1]] = val;
   } catch(e) {}
 }
+// Exécute un template d'extra de la forme "path=value" sans eval
+// ex: "S.fp._autoFilled=false"  →  _setPath('S.fp._autoFilled', false)
+function _applyExtra(extra) {
+  if (!extra) return;
+  var eq = extra.indexOf('=');
+  if (eq < 1) return;
+  var path = extra.slice(0, eq).trim();
+  var raw  = extra.slice(eq + 1).trim();
+  var val;
+  if (raw === 'true')       val = true;
+  else if (raw === 'false') val = false;
+  else if (raw === 'null')  val = null;
+  else if (!isNaN(Number(raw)) && raw !== '') val = Number(raw);
+  else val = raw.replace(/^['"]|['"]$/g, ''); // strip quotes si string
+  _setPath(path, val);
+}
 function beteInputHandler(inp) {
   var key    = inp.getAttribute('data-statekey');
   var dropId = inp.getAttribute('data-dropid');
   var extra  = inp.getAttribute('data-extra')||'';
-  if (extra) { try { eval(extra); } catch(e) {} }  // extra = code template développeur
+  _applyExtra(extra);                                 // safe — remplace eval() par parser path=value
   _setPath(key, inp.value);                         // safe — inp.value jamais dans eval
   rebuildBeteList();
   var drop = document.getElementById(dropId);
@@ -556,7 +576,7 @@ function selectBeteId(el) {
   var extra = el.getAttribute('data-extra') || '';
   var inp   = document.getElementById(inpId);
   if(inp) inp.value = id;
-  if (extra) { try { eval(extra); } catch(e) {} }  // extra = code template développeur
+  _applyExtra(extra);                                 // safe — remplace eval() par parser path=value
   _setPath(key, id);                                // safe — id jamais dans eval
   var drop  = document.getElementById(dropId);
   if(drop) drop.style.display = 'none';
@@ -894,8 +914,8 @@ setInterval(function() {
 // Statut connexion
 var ONLINE = navigator.onLine;
 var OFFLINE_QUEUE = lsGet('offline_queue') || [];
-function saveToQueue(type, vals) {
-  OFFLINE_QUEUE.push({type:type, vals:vals, ts:Date.now()});
+function saveToQueue(range, vals) {
+  OFFLINE_QUEUE.push({range:range, vals:vals, ts:Date.now()});
   if (OFFLINE_QUEUE.length > 30) OFFLINE_QUEUE = OFFLINE_QUEUE.slice(-30);
   lsSet('offline_queue', OFFLINE_QUEUE);
 }
@@ -1244,8 +1264,11 @@ function readSheet(sid, range) {
 
 // ── Chargement des KPIs réels depuis Sheets ──
 // Appelé au login — remplace MOCK{} par données réelles
+var _LIVE_LOADING = false; // guard anti-concurrence : bloque les appels parallèles
 function loadLiveData() {
   if (!S.user) return;
+  if (_LIVE_LOADING) return; // évite 2 chargements Sheets simultanés (auto-refresh + submit)
+  _LIVE_LOADING = true;
   LIVE.source = 'loading';
 
   // Helper : filtrer les lignes depuis CYCLE.dateDebut
@@ -1562,19 +1585,23 @@ function loadLiveData() {
         }
         buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops, stocks);
         _lastSyncTS = Date.now(); // ✓ marquer le moment de la synchro réussie
+        _LIVE_LOADING = false;
         r(); // → sidebar et alertes se mettent à jour
       }).catch(function() {
         // Vague 2 échouée — Vague 1 déjà affichée, pas critique
+        _LIVE_LOADING = false;
       });
 
     }).catch(function() {
       // Sheets inaccessible (Vague 1) → ne pas écraser localStorage
       LIVE.source = 'cache';
+      _LIVE_LOADING = false;
       r(); // → badge Cache affiché
     });
 
   }).catch(function() {
     LIVE.source = 'cache';
+    _LIVE_LOADING = false;
     r();
   });
 }
@@ -2448,8 +2475,8 @@ function ynPick(cid, obj, k, val) {
 function msgHtml(){
   if(!S.msg)return'';
   if(S.msg==='load')return'<div class="msg-load">'+(S._sendSheet?'📤 Envoi vers '+S._sendCount+' sheet(s) ('+S._sendSheet+')...':'📤 Envoi en cours...')+'</div>';
-  if(S.msg.indexOf('ok:')===0)return'<div class="msg-ok">'+S.msg.replace('ok:','')+'</div>';
-  return'<div class="msg-err">Erreur : '+S.msg.replace('err:','')+'</div>';
+  if(S.msg.indexOf('ok:')===0)return'<div class="msg-ok">'+_escHtml(S.msg.replace('ok:',''))+'</div>';
+  return'<div class="msg-err">Erreur : '+_escHtml(S.msg.replace('err:',''))+'</div>';
 }
 
 function pageResetPwd(){
@@ -4163,7 +4190,7 @@ function exportPDF() {
       window.open(waUrl, '_blank');
     }
   } catch(e) {
-    S.msg = {type:'err', text:'Erreur export PDF : '+e.message}; r();
+    S.msg = 'err:Erreur export PDF : ' + (e.message || 'inconnue'); r();
   }
 }
 
@@ -4180,7 +4207,7 @@ function pageLogin(){
     +'</div>'
     +'<div class="fg"><label>Identifiant</label><input type="text" placeholder="ex: gerant" value="'+S.lid+'" oninput="S.lid=this.value" autocomplete="username"></div>'
     +'<div class="fg"><label>Mot de passe</label><input type="password" value="'+S.lpw+'" oninput="S.lpw=this.value" onkeydown="if(event.key===\'Enter\')doLogin()" autocomplete="current-password"></div>'
-    +(S.lerr?'<div class="msg-err">'+S.lerr+'</div>':'')
+    +(S.lerr?'<div class="msg-err">'+_escHtml(S.lerr)+'</div>':'')
     +'<button style="margin-top:6px" onclick="doLogin()">Se connecter</button>'
     +'<div style="margin-top:14px;font-size:11px;color:#7a9a7a;text-align:center">Direction · Gérant terrain · RGA · Commerciale</div>'
     +'</div></div>';
