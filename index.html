@@ -715,7 +715,7 @@ function joursSince(type) {
   var p = lastDate.split('/');
   if (p.length !== 3) return 999;
   var _nd2 = _nowDakar();
-  return Math.round((new Date(_nd2.year, _nd2.month-1, _nd2.day) - new Date(p[2], p[1]-1, p[0])) / 86400000);
+  return Math.round((new Date(Date.UTC(_nd2.year, _nd2.month-1, _nd2.day)) - new Date(Date.UTC(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0])))) / 86400000);
 }
 
 // Vrai si un type de saisie a été fait aujourd'hui
@@ -1465,7 +1465,7 @@ function loadLiveData() {
               rowsStock.forEach(function(row) {
                 if (!row[0] || !row[1]) return;
                 var kgRow = safeNum(row[2]);
-                if (kgRow === null) return;
+                if (kgRow === null || kgRow === 0) return;
                 STOCK_MVTS.push({
                   date: row[0],
                   type: row[1],
@@ -1752,7 +1752,7 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   // Vague 1 le fait aussi mais seulement s'il y a des lignes santé non vides
   var _decesV2 = (santes||[]).filter(function(r){ return apresDebut(r[0]) && r[6] && r[6].toString().toUpperCase()==='OUI'; }).length;
   var _betesV2 = Math.max(0, (CYCLE.nbBetes||MOCK.betes) - _decesV2);
-  if (!isNaN(_betesV2) && _betesV2 > 0) MOCK.betes = _betesV2;
+  if (!isNaN(_betesV2) && _betesV2 >= 0) MOCK.betes = _betesV2;
 
   // 7. Mettre à jour MOCK.incidents — incidents de la semaine courante (lun→dim, fuseau Dakar)
   var _n = _nowDakar();
@@ -4234,8 +4234,9 @@ function pageApp(){
     if (!dateStr) return 999;
     var parts = dateStr.split('/');
     if (parts.length !== 3) return 999;
-    var d = new Date(parts[2], parts[1]-1, parts[0]);
-    return Math.round((_now - d) / 86400000);
+    var d = new Date(Date.UTC(parseInt(parts[2]), parseInt(parts[1])-1, parseInt(parts[0])));
+    var _nowUTC = new Date(Date.UTC(_now.year, _now.month-1, _now.day));
+    return Math.round((_nowUTC - d) / 86400000);
   }
 
   var _fichOk   = ficheDejaSoumise();
@@ -4954,7 +4955,7 @@ function _simSet(key, val) {
 // Retourne les jours réels écoulés depuis le début du cycle (incluant aujourd'hui, min 1)
 // Utilise Date.UTC comme calcSemaine() — pas de risque DST
 function _joursDepuisDebut() {
-  if (!CYCLE.dateDebut) return Math.max(1, calcSemaine() * 7);
+  if (!CYCLE.dateDebut) return 1;
   var _p = CYCLE.dateDebut.split('-');
   var _deb = new Date(Date.UTC(parseInt(_p[0]), parseInt(_p[1])-1, parseInt(_p[2])));
   var _nd  = _nowDakar();
