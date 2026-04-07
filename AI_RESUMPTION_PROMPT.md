@@ -220,6 +220,102 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 
 ---
 
+## ⚠️ AVANT DE TOUCHER AU CODE — Architecture et zones de risque
+
+> **Lire impérativement avant toute modification.** Ce projet a un couplage global élevé : une modification mal ciblée peut casser silencieusement plusieurs parties sans erreur JS visible.
+
+### Modèle de rendu
+
+`r()` est la fonction de re-rendu global. Elle reconstruit **tout le DOM** à chaque appel. Il n'y a aucun VDOM, aucun diff : tout est recalculé. Conséquence : **toute variable globale modifiée est immédiatement visible partout** — y compris dans les vues qui ne sont pas l'objet de la modification.
+
+```js
+// r() = function r(){ document.getElementById('app').innerHTML = pageApp(); }
+// pageApp() appelle viewDash() | viewSaisie() | viewLiv() | viewMarche() | viewGuide()
+// Chaque vue lit directement MOCK.*, CYCLE.*, LIVE.*, HISTORY, STOCK_MVTS
+```
+
+### Globaux mutables — carte des dépendances
+
+| Variable | Écrite par | Lue par | Risque |
+|---|---|---|---|
+| `MOCK.gmq` | `loadPesees()`, `loadLiveData()` Vague 1 | dashboard KPI, sidebar, PDF, IA, alertes, simulateur | **CRITIQUE** — source canonique unique, ne jamais recalculer inline dans les vues |
+| `MOCK.betes` | `loadLiveData()` Vague 1+2, `buildHistoryFromSheets()` | dashboard, sidebar, Go/No-Go, PDF, simulateur, WhatsApp | **CRITIQUE** — seedé depuis `CYCLE.nbBetes` au démarrage |
+| `MOCK.stock` | `calcStockLocal()`, `loadLiveData()` | dashboard, sidebar, PDF, alertes, IA | **HAUTE** — recalculé depuis `STOCK_MVTS` |
+| `MOCK.treso` | `loadLiveData()` Vague 1, `_submitActual` | dashboard, sidebar, PDF, simulateur, Go/No-Go | **HAUTE** |
+| `CYCLE.*` | `saveCycle()`, `_syncCycle()`, `lsSet('cycle')`, `loadLiveData()` step1 | partout — pratiquement chaque fonction | **TRÈS HAUTE** — objet central, toute modification doit être suivie de `lsSet('cycle', CYCLE)` |
+| `STOCK_MVTS` | `_submitActual('stock')`, `loadLiveData()` Vague 2, `saveCycle()` | `calcStockLocal()`, `calcStockParAliment()`, `stockSyntheseHtml()`, PDF, IA | **HAUTE** — persisté localStorage + Sheets |
+| `HISTORY` | `addHistory()`, `buildHistoryFromSheets()`, `saveCycle()` | anti-doublons (`ficheDejaSoumise`, `bilanDejaFaitCetteSemaine`, `joursSince`...), dashboard, sidebar, WhatsApp | **HAUTE** — trié desc par date |
+| `LIVE.pesees` | `loadPesees()` | dashboard (GMQ live), section Bêtes, SOP véto pesée, `peseeDejaFaite()` | **MOYENNE** |
+| `LIVE.incidents` | `buildHistoryFromSheets()` | dashboard alertes, sidebar score santé, closeIncident | **MOYENNE** |
+| `LIVE.deceased` | `loadLiveData()` Vague 1, `saveCycle()` | `beteSelect()`, `beteDropdown()`, `loadPesees()` | **MOYENNE** |
+| `S` (state UI) | partout | partout | **NORMALE** — temporaire, re-render only |
+
+### Fonctions à fort impact — ne modifier qu'avec précaution
+
+| Fonction | Impact si modifiée incorrectement |
+|---|---|
+| `r()` | Tout le rendu cesse |
+| `loadLiveData()` | Données Sheets non chargées — app en mode cache |
+| `buildHistoryFromSheets()` | Anti-doublons cassés, HISTORY incohérent |
+| `_submitActual()` | Soumissions silencieusement perdues |
+| `calcSemaine()` | Semaine fausse dans PDF, bilan, KPI, alerte vendredi |
+| `calcStockLocal()` | Stock affiché faux sur dashboard + sidebar + alertes |
+| `appendRow()` / `readSheet()` | Toutes les lectures/écritures Sheets |
+| `doLogin()` / `getTok()` | Auth impossible — app inutilisable |
+| `saveCycle()` | Reset cycle corrompu — données cycle perdues |
+
+### Patterns sûrs à suivre
+
+```js
+// ✅ BIEN — fonction pure, entrées explicites, pas de mutation globale
+function calcStockLocal() {
+  var net = {};
+  (STOCK_MVTS||[]).forEach(function(m){ ... });
+  return Math.round(totalNet / (rationJour * 7) * 10) / 10;
+}
+
+// ✅ BIEN — lecture globale en début de fonction, une seule mutation à la fin
+function loadPesees() {
+  readSheet(...).then(function(rows) {
+    var raw = rows.filter(...).map(...);
+    // ... calculs ...
+    LIVE.pesees = raw;   // une seule mutation à la fin
+    MOCK.gmq = _gmqReel; // idem
+    r();
+  });
+}
+
+// ❌ DANGEREUX — mutation globale inline dans une vue
+function viewDash() {
+  MOCK.gmq = LIVE.pesees.reduce(...); // NE PAS FAIRE — casse les autres vues
+  return '<div>...';
+}
+
+// ❌ DANGEREUX — modifier CYCLE sans persister
+CYCLE.ration = 15; // NE PAS FAIRE sans lsSet('cycle', CYCLE) + _syncCycle()
+```
+
+### Règle des mutations CYCLE
+
+Toute écriture dans `CYCLE` doit être suivie de :
+```js
+lsSet('cycle', CYCLE);      // persiste localStorage
+_syncCycle();               // écrit Config_Cycle!A1 dans les 4 sheets
+// OU pour les champs Config_App seulement :
+_syncConfigApp();           // écrit Config_App!A:B dans sheet fondateur
+```
+
+### Signal d'alarme — double virgule `,,`
+
+```js
+// Cette erreur provoque une PAGE BLANCHE silencieuse côté mobile :
+var obj = { a: 1,, b: 2 };  // ❌ fatal
+var arr = [1, 2,, 3];        // ❌ fatal
+// Toujours vérifier après génération automatique de code.
+```
+
+---
+
 ## Conventions strictes
 
 1. **`var` uniquement** — Pas de `let`/`const` dans `index.html`
