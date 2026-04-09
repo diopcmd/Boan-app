@@ -1449,7 +1449,7 @@ function loadLiveData() {
         }
       }
 
-      // Pesées → MOCK.gmq + SPARK.gmq (filtré par début de cycle)
+      // Pesées → MOCK.gmq + SPARK.gmq + LIVE.pesees (mis à jour à chaque refresh)
       if (rowsPesees && rowsPesees.length) {
         var peseesCycle = rowsPesees.filter(function(r){ return r[0] && apresDebut(r[0]); });
         var gains = peseesCycle.map(function(r){ return safeNum(r[5]); }).filter(function(v){ return v !== null && v > 0; });
@@ -1462,6 +1462,28 @@ function loadLiveData() {
             SPARK.gmq = gains.slice(-7).map(function(g){ return Math.round((g/7)*100)/100; });
           }
         }
+        // Construire LIVE.pesees avec GMQ réel par bête (disponible dès Vague 1)
+        var _rawPv1 = rowsPesees.filter(function(r){ return r[0]&&r[1]; })
+          .map(function(r){
+            return {date:r[0]||'', id:r[1]||'', race:r[2]||'',
+              poids:parseFloat(r[3])||0, prev:parseFloat(r[4])||0,
+              gain:parseFloat(r[5])||0, gmq:0};
+          });
+        _applyGmqToPesees(_rawPv1);
+        LIVE.pesees = _rawPv1;
+        // Reconstruire LIVE.beteIds depuis les pesées + CYCLE.betes
+        var _idsV1 = {};
+        if (CYCLE.betes && CYCLE.betes.length) {
+          CYCLE.betes.forEach(function(b){ if(b.id) _idsV1[b.id]=true; });
+        } else {
+          var _nBv1 = CYCLE.nbBetes || 4;
+          for (var _biv1=1; _biv1<=_nBv1; _biv1++) _idsV1['B'+('0'+_biv1).slice(-2)]=true;
+        }
+        _rawPv1.forEach(function(p){ if(p.id) _idsV1[p.id]=true; });
+        LIVE.beteIds = Object.keys(_idsV1).sort().filter(function(id){
+          return (LIVE.deceased||[]).indexOf(id) === -1;
+        });
+        LIVE.loaded = true;
       }
 
       // Stock_Nourriture → MOCK.stock + SPARK.stk (filtré par début de cycle)
@@ -2220,6 +2242,42 @@ var LIVE = {
   loaded:    false,
   source:    'cache'  // 'live' | 'cache' | 'loading'
 };
+// Calcule le GMQ réel par bête (modifie raw[] en place).
+// Fallback : si col F (gain) est vide dans Sheets, déduit le gain depuis les poids mesurés.
+function _applyGmqToPesees(raw) {
+  function _parseFR(str) {
+    if (!str) return null;
+    var p = String(str).split('/');
+    return p.length === 3 ? new Date(p[2], p[1]-1, p[0]) : null;
+  }
+  var _byB = {};
+  raw.forEach(function(p){ if(!_byB[p.id]) _byB[p.id]=[]; _byB[p.id].push(p); });
+  Object.keys(_byB).forEach(function(id){
+    var pesees = _byB[id];
+    pesees.sort(function(a,b){
+      var da=_parseFR(a.date), db=_parseFR(b.date);
+      return (da&&db) ? da-db : 0;
+    });
+    pesees.forEach(function(p, i){
+      var dCurr = _parseFR(p.date);
+      if (i === 0) {
+        // Premiere pesee : gain depuis poidsDepart si col F vide
+        var g0 = p.gain || Math.max(0, p.poids - (CYCLE.poidsDepart || 270));
+        var dRef = parseISO(CYCLE.dateDebut);
+        var j0 = (dCurr && dRef) ? Math.round((dCurr - dRef) / 86400000) : 30;
+        p.gmq = (g0 > 0 && j0 > 0) ? Math.round((g0 / j0) * 100) / 100 : 0;
+      } else {
+        var prev = pesees[i-1];
+        // Gain entre deux pesées : priorité col F, fallback poids-poids
+        var g1 = p.gain || Math.max(0, p.poids - prev.poids);
+        var dPrev = _parseFR(prev.date);
+        var j1 = (dCurr && dPrev) ? Math.round((dCurr - dPrev) / 86400000) : 30;
+        p.gmq = (g1 > 0 && j1 > 0) ? Math.round((g1 / j1) * 100) / 100 : 0;
+      }
+    });
+  });
+}
+
 // Charge les pesées depuis Sheets pour les courbes de croissance
 function loadPesees() {
   if (!S.user) return;
@@ -2247,41 +2305,8 @@ function loadPesees() {
         };
       });
 
-    // Calculer GMQ réel entre pesées consécutives par bête
-    // Trier par bête puis par date
-    var byBete = {};
-    raw.forEach(function(p){
-      if (!byBete[p.id]) byBete[p.id] = [];
-      byBete[p.id].push(p);
-    });
-
-    Object.keys(byBete).forEach(function(id){
-      var pesees = byBete[id];
-      // Trier chronologiquement
-      pesees.sort(function(a,b){
-        var da=parseDate(a.date), db=parseDate(b.date);
-        return da&&db ? da-db : 0;
-      });
-      pesees.forEach(function(p, i){
-        if (i === 0 || !p.prev || !p.gain) {
-          // Première pesée : utiliser jours réels depuis début du cycle, sinon 30j
-          var _dP0 = parseDate(p.date);
-          var _dRef0 = parseISO(CYCLE.dateDebut);
-          var _jP0 = (_dP0 && _dRef0) ? Math.round((_dP0 - _dRef0) / 86400000) : 30;
-          p.gmq = (p.gain && _jP0 > 0) ? Math.round((p.gain / _jP0) * 100) / 100 : 0;
-        } else {
-          var prev = pesees[i-1];
-          var dCurr = parseDate(p.date);
-          var dPrev = parseDate(prev.date);
-          if (dCurr && dPrev) {
-            var jours = Math.round((dCurr - dPrev) / 86400000);
-            p.gmq = jours > 0 ? Math.round((p.gain/jours)*100)/100 : 0;
-          } else {
-            p.gmq = p.gain ? Math.round((p.gain/30)*100)/100 : 0;
-          }
-        }
-      });
-    });
+    // Calculer GMQ réel par bête avec fallback gain-depuis-poids
+    _applyGmqToPesees(raw);
 
     LIVE.pesees = raw;
 
