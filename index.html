@@ -1580,6 +1580,7 @@ function loadLiveData() {
           var valTreso = safeNum(rowsKpi[i][7]);
           if (valTreso !== null && valTreso >= 0) {
             MOCK.treso = valTreso;
+            MOCK.kpiDate = rowsKpi[i][0] || null; // col A = date de la ligne KPI
             SPARK.treso = rowsKpi.slice(-7).map(function(r){ return safeNum(r[7])||0; });
             MOCK._tresoFromSante = null; // KPI a priorité sur l'estimation santé
             break;
@@ -6101,6 +6102,35 @@ function viewLiv(){
   var stabs=subs.map(function(s){return'<div class="stab '+(S.sub===s[0]?'on':'')+'" onclick="chSub(\''+s[0]+'\')">'+s[1]+'</div>';}).join('');
   var view='';
   if(S.sub==='treso'){
+    // Badge de fraîcheur — critique pour le rôle comptable du RGA
+    var _tresIsReal   = (CYCLE.capital > 0 && MOCK.treso < CYCLE.capital * 0.98) || !!MOCK.kpiDate;
+    var _kpiDate      = MOCK.kpiDate || null;
+    var _kpiAgeDays   = (function(){
+      if (!_kpiDate) return null;
+      var p = _kpiDate.split('/');
+      if (p.length !== 3) return null;
+      var d = new Date(p[2], p[1]-1, p[0]);
+      var nd = _nowDakar();
+      return Math.round((new Date(nd.year,nd.month-1,nd.day) - d) / 86400000);
+    })();
+    var _freshBadge = (function(){
+      if (!_tresIsReal) {
+        return '<div style="margin-top:6px;padding:7px 12px;border-radius:8px;background:#2e1a00;border:1px solid #8a5a00;font-size:11px;color:#ff9800">'
+          +'⚡ Solde estimé (simulation) — KPI_Mensuels non renseigné dans Sheets.'
+          +(S.user==='rga'?' Le fondateur doit saisir la trésorerie réelle pour votre contrôle comptable.':' Saisir via Dashboard > KPI.')
+          +'</div>';
+      }
+      if (_kpiAgeDays === null) return '';
+      var _ageCol = _kpiAgeDays <= 7 ? '#4caf50' : _kpiAgeDays <= 30 ? '#ff9800' : '#f44336';
+      var _ageLabel = _kpiAgeDays === 0 ? 'Aujourd\'hui' : 'Il y a '+_kpiAgeDays+' jour'+(_kpiAgeDays>1?'s':'');
+      var _stale = _kpiAgeDays > 30;
+      return '<div style="margin-top:6px;padding:7px 12px;border-radius:8px;background:#0f1f0f;border:1px solid '+_ageCol+';font-size:11px">'
+        +'<span style="color:'+_ageCol+'">● Solde réel (KPI)</span>'
+        +' <span style="color:#88aa88">— Mis à jour le '+_kpiDate+' ('+_ageLabel+')</span>'
+        +(_stale ? '<div style="color:#f44336;margin-top:3px">⚠️ Données de plus de 30 jours — mettre à jour KPI_Mensuels pour contrôle fiable</div>' : '')
+        +'</div>';
+    })();
+
     view='<div class="card" style="text-align:center">'
       +'<div style="font-size:12px;color:#88bb88;margin-bottom:4px">Solde actuel</div>'
       +(function(){
@@ -6110,6 +6140,7 @@ function viewLiv(){
         return '<div style="font-size:34px;font-weight:bold;color:'+col+'">'+fmt(t)+' FCFA</div>'
           +'<div style="font-size:11px;color:'+col+';margin-top:4px">'+statut+'</div>';
       })()
+      +_freshBadge
       +'</div>'
       +(function(){
         if (!CYCLE.capital) return '<div style="color:#88aa88;font-size:12px;padding:12px 0">Initialisez le cycle pour voir les flux.</div>';
