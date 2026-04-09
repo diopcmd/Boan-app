@@ -1042,7 +1042,8 @@ var S = {
   _pwdMgrCurrent:'', _pwdMgrRole:'', _pwdMgrNew:'', _pwdMgrConfirm:'', _pwdMgrNewLogin:'',
   _guideOpen: false,
   _aiOpen:false, _aiLoading:false, _aiResult:'', _aiError:'', _aiQuestion:'',
-  selectedBete: null
+  selectedBete: null,
+  _donePesee:[], _doneSante:[], _doneInc:[]
 };
 
 function fmt(n) { return new Intl.NumberFormat('fr-FR').format(Math.round(n)); }
@@ -2087,6 +2088,8 @@ function _submitActual(type) {
       if(type==='inc')   _meta = {_id: S.fin.id, _typeInc: S.fin.type};
       if(type==='sante') _meta = {_id: S.fsa.id, _sym: S.fsa.sym};
       if(type==='bilan') _meta._sem = String(calcSemaine()); // pour bilanDejaFaitCetteSemaine() via h._sem
+      // Capturer ID bête avant reset formulaire (pour tracker les bêtes déjà traitées)
+      var _beteIdSubmit = type==='pesee' ? S.fp.id : type==='sante' ? S.fsa.id : type==='inc' ? S.fin.id : '';
       var _label = type==='fiche'  ? 'Fiche du '+isoToFr(S.fi.date||todayISO())
                  : type==='marche' ? 'Marché '+(S.fm.foi==='Autre'&&S.fm.foiCustom ? S.fm.foiCustom : (S.fm.foi||''))
                  : type;
@@ -2116,6 +2119,25 @@ function _submitActual(type) {
       if(type==='marche')S.fm={date:td,foi:S.fm.foi||'Thiès',foiCustom:S.fm.foiCustom||'',bas:'',moy:'',haut:''}
       if(type==='alim')  S.falim={date:td,type:S.falim.type||'',prix:''};
       if(type==='alim')  setTimeout(loadAlimPrix, 400);
+      // Tracker bêtes traitées — exclusion dropdown jusqu'à ce que toutes soient faites
+      if (_beteIdSubmit) {
+        var _allBeteIds = CYCLE.betes && CYCLE.betes.length
+          ? CYCLE.betes.filter(function(b){return (LIVE.deceased||[]).indexOf(b.id)===-1;}).map(function(b){return b.id;})
+          : LIVE.beteIds && LIVE.beteIds.length ? LIVE.beteIds
+          : (function(){var n=CYCLE.nbBetes||MOCK.betes||4;var _fb=[];for(var i=1;i<=n;i++)_fb.push('B'+('0'+i).slice(-2));return _fb;})();
+        if (type==='pesee') {
+          if (S._donePesee.indexOf(_beteIdSubmit)===-1) S._donePesee.push(_beteIdSubmit);
+          if (_allBeteIds.length > 0 && S._donePesee.length >= _allBeteIds.length) S._donePesee = [];
+        }
+        if (type==='sante') {
+          if (S._doneSante.indexOf(_beteIdSubmit)===-1) S._doneSante.push(_beteIdSubmit);
+          if (_allBeteIds.length > 0 && S._doneSante.length >= _allBeteIds.length) S._doneSante = [];
+        }
+        if (type==='inc') {
+          if (S._doneInc.indexOf(_beteIdSubmit)===-1) S._doneInc.push(_beteIdSubmit);
+          if (_allBeteIds.length > 0 && S._doneInc.length >= _allBeteIds.length) S._doneInc = [];
+        }
+      }
     } else {
       S.msg='err:'+(res&&res.err?res.err:'Erreur');
       haptic('error');
@@ -2831,7 +2853,7 @@ function beteSelect(val, stateKey, extra) {
   return '<div class="fl'+(hasVal?' has-val':'')+'">'+inputHtml+'<label>'+lbl+'</label></div>';
 }
 
-function beteDropdown(val, stateKey, extra) {
+function beteDropdown(val, stateKey, extra, excludeIds) {
   // LIVE.beteIds est déjà filtré des décès par loadPesees()
   var beteIds = CYCLE.betes && CYCLE.betes.length
     ? CYCLE.betes.filter(function(b){ return (LIVE.deceased||[]).indexOf(b.id)===-1; }).map(function(b){ return b.id; })
@@ -2843,12 +2865,23 @@ function beteDropdown(val, stateKey, extra) {
           for (var i = 1; i <= n; i++) fb.push('B' + ('0'+i).slice(-2));
           return fb;
         })();
+  var excl = Array.isArray(excludeIds) ? excludeIds : [];
+  var allDone = excl.length > 0 && excl.length >= beteIds.length;
+  var filtered = allDone ? beteIds : beteIds.filter(function(id){ return excl.indexOf(id) === -1; });
+  var badge = excl.length > 0
+    ? '<div style="font-size:11px;color:#4caf50;margin-bottom:4px">'
+      +(allDone ? '✅ Toutes les bêtes traitées — liste réinitialisée' : '✅ '+excl.length+'/'+beteIds.length+' traitées')
+      +'</div>'
+    : '';
   var extraJs = extra ? extra + ';' : '';
+  var lbl = filtered.length < beteIds.length && !allDone
+    ? 'Bête ('+filtered.length+' restantes)'
+    : 'Bête ('+beteIds.length+')';
   var opts = '<option value="">\u2014 Choisir une b\u00eate \u2014</option>'
-    + beteIds.map(function(id){
+    + filtered.map(function(id){
         return '<option value="' + id + '"' + (val === id ? ' selected' : '') + '>' + id + '</option>';
       }).join('');
-  return '<div class="fg"><label>B\u00eate (' + beteIds.length + ')</label>'
+  return badge + '<div class="fg"><label>' + lbl + '</label>'
     + '<select onchange="' + extraJs + stateKey + '=this.value;r()">' + opts + '</select></div>';
 }
 
@@ -5590,7 +5623,7 @@ function viewSaisie(){
       +(_incCount>0?'<div class="al al-o" style="margin-bottom:8px">'+_incCount+' incident(s) saisi(s) aujourd\'hui — vous pouvez en ajouter un autre</div>':'')
       +'<div class="frow">'
       +fl('Date','<input type="date" value="'+f.date+'" oninput="S.fin.date=this.value">',f.date)
-      +beteDropdown(f.id, 'S.fin.id', '')
+      +beteDropdown(f.id, 'S.fin.id', '', S._doneInc)
       +'</div>'
       +fl('Type incident','<input placeholder=" " value="'+f.type+'" oninput="S.fin.type=this.value">',f.type)
       +'<div class="fg"><label>Gravité</label><div class="rg">'
@@ -5684,7 +5717,7 @@ function viewSaisie(){
       +(S._sopCtx?'<div style="background:#0a1e0a;border:1px solid #2d6a2d;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#88ee88">\uD83D\uDCCB Pes\u00e9e SOP J+'+S._sopCtx.j+' \u2014 '+S._sopCtx.label+'</div>':'')
       +'<div class="frow">'
       +fl('Date pesée','<input type="date" value="'+f.date+'" oninput="S.fp.date=this.value">',f.date)
-      +beteDropdown(f.id, 'S.fp.id', 'S.fp._autoFilled=false')
+      +beteDropdown(f.id, 'S.fp.id', 'S.fp._autoFilled=false', S._donePesee)
       +'</div>'
       +(f.id && peseeDejaFaite(f.id) ? '<div class="al al-o" style="margin-bottom:6px">⚠️ '+f.id+' a déjà été pesée aujourd\'hui — continuer quand même ?</div>' : '')
       +'<div class="fg"><label>Race</label><select onchange="S.fp.race=this.value;r()"><option'+((!f.race||f.race==='Djakoré')?' selected':'')+'>Djakoré</option><option'+(f.race==='Gobra'?' selected':'')+'>Gobra</option><option'+(f.race==='Autre'||(f.race&&f.race!=='Djakoré'&&f.race!=='Gobra')?' selected':'')+'>Autre</option></select></div>'  +((f.race==='Autre'||(f.race&&f.race!=='Djakoré'&&f.race!=='Gobra'))?fl('Préciser la race','<input placeholder=" " value="'+(f.raceCustom||'')+'" oninput="S.fp.raceCustom=this.value">',f.raceCustom):'')
@@ -5725,7 +5758,7 @@ function viewSaisie(){
       })()
       +'<div class="frow">'
       +fl('Date','<input type="date" value="'+f.date+'" oninput="S.fsa.date=this.value">',f.date)
-      +beteDropdown(f.id, 'S.fsa.id', '')
+      +beteDropdown(f.id, 'S.fsa.id', '', S._doneSante)
       +'</div>'
       +fl('Symptôme','<input placeholder=" " value="'+f.sym+'" oninput="S.fsa.sym=this.value">',f.sym)
       +fl('Traitement','<input placeholder=" " value="'+f.tra+'" oninput="S.fsa.tra=this.value">',f.tra)
