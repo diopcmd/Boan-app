@@ -1,4 +1,4 @@
-# BOAN — Roadmap Notifications Automatiques
+# BOAN — Roadmap Notifications Automatiques (ultérieurement)
 > Système de notifications email (vétérinaire + CNASS) — Analyse complète + plan d'implémentation
 > Statut : **EN ATTENTE** — Ne pas implémenter avant de valider les prérequis section 1.
 
