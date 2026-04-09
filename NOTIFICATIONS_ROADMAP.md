@@ -150,7 +150,11 @@ contact_cnaas_delai_h   : Délai contractuel déclaration (ex: 24)
 ferme_email_expediteur  : Adresse "De:" pour les emails (verified sender)
 ferme_responsable_nom   : Nom du fondateur/responsable
 ferme_responsable_tel   : Téléphone responsable
+ferme_email_fondateur   : Email du fondateur (mis en CC sur tous les emails)
+contact_rga_email       : Email du RGA (mis en CC sur tous les emails)
 ```
+
+> **Règle CC systématique :** chaque email envoyé par BOAN (CNAAS, vétérinaire, relances) met automatiquement le fondateur ET le RGA en copie. Cela sert de **preuve d'envoi horodatée** sans dépendre de Notifications_Log, et permet à la direction de suivre les dossiers en temps réel.
 
 ### 3.4 Variables d'environnement Vercel + GitHub
 ```
@@ -162,12 +166,24 @@ GitHub Settings > Secrets > Actions :
   CRON_SECRET      = [même valeur que Vercel]
 ```
 
+> Les emails fondateur et RGA sont stockés dans `Config_App` (Sheets), pas en variable Vercel — ils sont modifiables depuis l'interface sans redéploiement.
+
 ---
 
 ## 4. Templates emails
 
+> **Règle CC appliquée à tous les emails ci-dessous :**
+> ```
+> À  : [destinataire principal]
+> CC : [ferme_email_fondateur], [contact_rga_email]
+> De : [ferme_email_expediteur]
+> ```
+> Le fondateur et le RGA reçoivent une copie de **chaque email** envoyé. Leur boîte mail constitue une preuve d'envoi horodatée indépendante de Notifications_Log.
+
 ### 4.1 Email vétérinaire — Rappel SOP (J-7/J-3/J-2)
 ```
+À    : [contact_vet_email]
+CC   : [ferme_email_fondateur], [contact_rga_email]
 Objet : [BOAN] Rappel acte vétérinaire dans [N] jours — [TYPE_ACTE]
 
 Bonjour [contact_vet_nom],
@@ -194,6 +210,8 @@ Ce message est automatique. Répondre à [ferme_email_expediteur].
 
 ### 4.2 Email vétérinaire — Décès constaté (J+0 immédiat)
 ```
+À    : [contact_vet_email]
+CC   : [ferme_email_fondateur], [contact_rga_email]
 Objet : [BOAN] ⚠️ Décès animal — Présence requise — [ID_ANIMAL]
 
 Bonjour [contact_vet_nom],
@@ -213,6 +231,8 @@ Ferme BOAN, Thiès, Sénégal
 
 ### 4.3 Email CNAAS — Déclaration décès (J+0)
 ```
+À    : [contact_cnaas_email]
+CC   : [ferme_email_fondateur], [contact_rga_email]
 Objet : [BOAN] Déclaration sinistre — Décès [ID_ANIMAL] — Police n°[N_POLICE]
 
 Madame, Monsieur,
@@ -246,6 +266,8 @@ Ferme BOAN, Thiès, Sénégal
 
 ### 4.4 Email CNAAS — Déclaration vol (J+0)
 ```
+À    : [contact_cnaas_email]
+CC   : [ferme_email_fondateur], [contact_rga_email]
 Objet : [BOAN] Déclaration sinistre — Vol bétail — Police n°[N_POLICE]
 
 Madame, Monsieur,
@@ -272,6 +294,8 @@ Ferme BOAN, Thiès, Sénégal
 
 ### 4.5 Email CNAAS — Relances J+2 / J+5 / J+10
 ```
+À    : [contact_cnaas_email]
+CC   : [ferme_email_fondateur], [contact_rga_email]
 Objet : [BOAN] Relance [N] — Sinistre [ID_SINISTRE] — Police n°[N_POLICE]
 
 [En-tête rappelant la déclaration initiale...]
@@ -290,7 +314,7 @@ nous procéderons à la saisine de la Direction Régionale CNAAS de Thiès.
 #### `/api/notify.js`
 ```
 Fonctions exportées :
-  sendEmail(to, subject, body)                → appel SendGrid API
+  sendEmail(to, subject, body, cc)            → appel SendGrid API (cc = array d'adresses)
   logNotification(entry)                      → appendRow dans Notifications_Log
   updateNotificationStatus(rowIdx, status)    → batchUpdate Sheets
   checkAndSendVetReminders()                  → logique SOP J-7/J-3/J-2
@@ -393,6 +417,7 @@ try {
 - Au submit décès/vol : badge `📧 Email CNAAS en cours...`
 - Au prochain `loadLiveData()` : lire `Notifications_Log` → `✅ Email envoyé` ou `⚠️ Échec`
 - Badge numérique sur onglet Livrables si dossier(s) en attente fondateur
+- **Preuve d'envoi primaire : la boîte mail du fondateur et du RGA** — CC systématique sur tous les emails (voir section 4). En cas de litige avec la CNAAS, l'email reçu par le fondateur fait foi avec son horodatage serveur Gmail/Outlook, indépendamment de Notifications_Log.
 
 ---
 
@@ -405,6 +430,7 @@ Bloc A — HORS CODE (à faire avant tout)
   □ Créer compte SendGrid + Single Sender Verification
   □ Créer onglet Notifications_Log dans Sheet fondateur (9 colonnes)
   □ Collecter contacts : vétérinaire, CNAAS, N° police, email expéditeur
+  □ Collecter emails fondateur + RGA (destinataires CC)
   □ Ajouter SENDGRID_API_KEY et CRON_SECRET dans Vercel + GitHub Secrets
 
 Bloc B — Config UI (index.html)
