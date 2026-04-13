@@ -5180,7 +5180,7 @@ function viewDash(){
   var _tresoNette = Math.max(0, MOCK.treso);
   var _dernPeseeJours = (function(){
     if (!LIVE.pesees || !LIVE.pesees.length) return null;
-    var _pDern = LIVE.pesees[0];
+    var _pDern = LIVE.pesees[LIVE.pesees.length - 1];
     if (!_pDern || !_pDern.date) return null;
     var _ppD = _pDern.date.split('/');
     if (_ppD.length !== 3) return null;
@@ -7312,7 +7312,7 @@ function viewMarche(){
         + '<div style="font-size:11px;color:#4caf50;text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:6px">📊 Dépenses réalisées (KPI trésorerie)</div>'
         + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">'
         + '<div><div style="font-size:22px;font-weight:800;color:#fff">'+fmt(_depReal)+'</div>'
-        + '<div style="font-size:11px;color:#88aa88">FCFA brülés depuis le départ</div></div>'
+        + '<div style="font-size:11px;color:#88aa88">FCFA br\u00fbl\u00e9s depuis le d\u00e9part</div></div>'
         + (_depSimP.dep > 0
           ? '<div style="text-align:right"><div style="font-size:12px;font-weight:700;color:'+(_dsOver?'#f44336':'#4caf50')+'">Sim. proratisée : '+fmt(_depSimP.dep)+' FCFA</div>'
           + '<div style="font-size:10px;color:#7a9a7a">'+(_dsOver?'⚠️ Dépasse la sim.':'✓ Conforme')+'</div></div>'
@@ -7797,7 +7797,7 @@ function viewMarche(){
       var _pMoy = 0, _cnt = 0;
       LIVE.beteIds.forEach(function(id){
         var _pb = LIVE.pesees.filter(function(p){ return p.id === id; });
-        if (_pb.length) { _pMoy += (_pb[0].poids || 0); _cnt++; }
+        if (_pb.length) { _pMoy += (_pb[_pb.length - 1].poids || 0); _cnt++; }
       });
       return _cnt > 0 ? Math.round(_pMoy / _cnt) : (CYCLE.poidsDepart || 270);
     })();
@@ -7866,7 +7866,7 @@ function viewGuide(){
   // ── Données situationnelles partagées ──
   var _dpjG = (function(){
     if (!LIVE.pesees || !LIVE.pesees.length) return null;
-    var _pG = LIVE.pesees[0];
+    var _pG = LIVE.pesees[LIVE.pesees.length - 1];
     if (!_pG || !_pG.date) return null;
     var _ppG = _pG.date.split('/');
     if (_ppG.length !== 3) return null;
