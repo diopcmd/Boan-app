@@ -1871,6 +1871,23 @@ function doSubmit(type) {
   if (type==='stock' && !S.fst.rat) {
     S.msg='err:Saisir la ration journalière totale'; r(); return;
   }
+  if (type==='stock') {
+    // Guard final : vérifie que la consommation ne dépasse pas le stock disponible
+    var _stockGuard = {};
+    (STOCK_MVTS||[]).forEach(function(m){
+      var _kg = parseFloat(m.kg)||0;
+      _stockGuard[m.type] = (_stockGuard[m.type]||0) + (m.mode==='ajouter' ? _kg : -_kg);
+    });
+    var _stockErr = null;
+    (S.fst.mvts||[]).forEach(function(m){
+      var _kg = parseFloat(m.kg)||0;
+      _stockGuard[m.type] = (_stockGuard[m.type]||0) + (m.mode==='ajouter' ? _kg : -_kg);
+      if (m.mode === 'consommer' && _stockGuard[m.type] < -0.01 && !_stockErr) {
+        _stockErr = m.type + ' : insuffisant (déficit ' + Math.round(Math.abs(_stockGuard[m.type])) + ' kg)';
+      }
+    });
+    if (_stockErr) { S.msg = 'err:Stock insuffisant — ' + _stockErr; r(); return; }
+  }
   if (type==='inc' && (!S.fin.id || !S.fin.type || !S.fin.desc)) {
     S.msg='err:ID bête, type et description sont obligatoires'; r(); return;
   }
@@ -2905,7 +2922,12 @@ function addStockLigne(mode){
       return mv.type === t ? s + (mv.mode === 'ajouter' ? mv.kg : -mv.kg) : s;
     }, 0);
     var dispo = Math.max(0, (stockParT[t] || 0) + pendingNet);
-    if (k > dispo) { S.msg = 'err:Stock insuffisant pour '+t+' (dispo\u00a0: '+dispo+'\u00a0kg)'; r(); return; }
+    if (k > dispo) {
+      var _syncMsg = (!LIVE.loaded && STOCK_MVTS.length === 0)
+        ? ' — synchronisez d\'abord les données (bouton ↻)' : '';
+      S.msg = 'err:Stock insuffisant pour '+t+' (dispo\u00a0: '+dispo+'\u00a0kg)'+_syncMsg;
+      r(); return;
+    }
   }
 
   // Sauvegarder le type dans CYCLE.alimentTypes pour suggestions futures
