@@ -12,7 +12,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 - **GitHub** : https://github.com/diopcmd/Boan-app (branche `main`)
 - **Dossier local** : `C:\Temp\Boan-app\`
 - **Langue** : Tout en français (code, UI, communications)
-- **Dernier commit** : `a8705a8` — audit passe 3 : 5 bugs corrigés (7 avril 2026)
+- **Dernier commit** : `2fd764a` — fix pesees[0]→dernière pesée (3 endroits), typo brûlés
 - **Webhook Vercel** : cassé → redeploy manuel sur vercel.com (Deployments → Redeploy)
 
 ---
@@ -71,7 +71,9 @@ ANTHROPIC_API_KEY     (optionnel — fonctionnalité IA)
 | Fondateur / Direction | `fondateur` | Dashboard, Saisie, Livrables, Marché | `{fondateur, gerant, fallou}` |
 | Gérant terrain | `gerant` | Dashboard, Saisie | `{gerant, fondateur}` |
 | RGA | `rga` | Dashboard, Livrables, Marché | `{rga, gerant, fondateur}` |
-| Commerciale | `fallou` | Dashboard, Marché | `{fallou, fondateur}` |
+| Commerciale | `fallou` | Dashboard, Marché (+ fiche commerciale) | `{fallou, fondateur}` |
+
+> **Renommage** : le rôle `fallou` s'appelle désormais "commerciale" dans l'UI et les variables internes (`_sigComm`, guard `u==='fallou'` inchangé). Identifiants Vercel/Sheets inchangés.
 
 > **Règle critique** : Le gérant reçoit `SID_FONDATEUR` pour que `writeAll` écrive
 > dans les deux sheets simultanément. `sidHisto = SID.gerant || SID.fondateur`.
@@ -245,7 +247,7 @@ var _sbSub = _sbLt ? '#445533' : '#88aa88';
 | `CYCLE.*` | `saveCycle()`, `_syncCycle()`, `lsSet('cycle')`, `loadLiveData()` step1 | partout — pratiquement chaque fonction | **TRÈS HAUTE** — objet central, toute modification doit être suivie de `lsSet('cycle', CYCLE)` |
 | `STOCK_MVTS` | `_submitActual('stock')`, `loadLiveData()` Vague 2, `saveCycle()` | `calcStockLocal()`, `calcStockParAliment()`, `stockSyntheseHtml()`, PDF, IA | **HAUTE** — persisté localStorage + Sheets |
 | `HISTORY` | `addHistory()`, `buildHistoryFromSheets()`, `saveCycle()` | anti-doublons (`ficheDejaSoumise`, `bilanDejaFaitCetteSemaine`, `joursSince`...), dashboard, sidebar, WhatsApp | **HAUTE** — trié desc par date |
-| `LIVE.pesees` | `loadPesees()` | dashboard (GMQ live), section Bêtes, SOP véto pesée, `peseeDejaFaite()` | **MOYENNE** |
+| `LIVE.pesees` | `loadPesees()` | dashboard (GMQ live + fraîcheur), section Bêtes, SOP véto pesée, `peseeDejaFaite()`, fiche commerciale poids moyen, guide situationnel `_dpjG` | **MOYENNE** — `[0]` = plus ancienne pesée, `[length-1]` = plus récente |
 | `LIVE.incidents` | `buildHistoryFromSheets()` | dashboard alertes, sidebar score santé, closeIncident | **MOYENNE** |
 | `LIVE.deceased` | `loadLiveData()` Vague 1, `saveCycle()` | `beteSelect()`, `beteDropdown()`, `loadPesees()` | **MOYENNE** |
 | `S` (state UI) | partout | partout | **NORMALE** — temporaire, re-render only |
@@ -412,6 +414,8 @@ L6013  viewLiv()          L6776  viewMarche()
 ### Dashboard
 - **KPI GMQ moyen** : utilise `LIVE.pesees` (intervalles réels inter-pesées par bête) prioritaire sur `MOCK.gmq` (toujours /7) — badge 🟢 live affiché sur la carte
 - **1ère pesée par bête** : GMQ calculé sur jours réels depuis `CYCLE.dateDebut` (plus /30 fixe)
+- **KPI fraîcheur pesée** : carte "Dernière pesée" — badge couleur (✅ ≤`peseeFreq`j / ⚠️ ≤2× / 🔴 >2×) — `_dernPeseeJours` lit `LIVE.pesees[LIVE.pesees.length-1]` (la plus récente)
+- **Dépenses réalisées** : bannière dans le simulateur — compare dépenses réelles (`capital - tréso`) vs simulation proratisée ; badge ✓/⚠️
 - KPIs live : bêtes, GMQ, stock, trésorerie (avec sparklines)
 - Alerte GMQ prédictive (comparaison sem. vs sem. -1)
 - Synthèse stock cycle (par type d'aliment)
@@ -470,6 +474,7 @@ L6013  viewLiv()          L6776  viewMarche()
 - Pas de boutons filtre foirail (supprimés — inutiles), pas de band bas/haut, pas de labels sur chaque point
 - Formulaire saisie : Date + Foirail (select) + Foirail custom si "Autre" + Prix bas/moy/haut
 - **Simulateur** : seuil de rentabilité `pxSeuil = ceil(cTotal / (nb * sp * (1-comm/100)))` + badge `_vsSeuilMkt` (% vs seuil)
+- **Fiche commerciale** (`S.sub='comm'`) : lecture seule pour fondateur/rga/commerciale — poids moyen actuel (`LIVE.pesees[length-1]` par bête), prix de référence, seuil rentabilité, projection poids fin cycle, signal commercial 🟢/🟡/🔴 — accessible depuis onglet Marché
 - Partage WhatsApp synthèse + KPI
 - Export PDF rapport mensuel
 
@@ -495,7 +500,25 @@ L6013  viewLiv()          L6776  viewMarche()
 - `SOP_PROTOCOL_DEFAULT` = tableau de référence standard si pas de personnalisation
 - **L'éditeur de protocole est UNIQUEMENT dans Livrables > SOP Véto** (il a été retiré de Livrables > Objectifs car doublon)
 
-### Objectifs configurables (fondateur / rga)
+### Guide situationnel (viewGuide)
+- `viewGuide()` — accessible depuis le Dashboard (bouton "Guide")
+- Chaque rôle a sa propre vue situationnelle : gérant, fondateur, rga, commerciale
+- **Guide gérant** : liste des actions prioritaires du jour (SOP, fiche, pesée…)
+- **Guide fondateur / rga** : vue analytique synthétique + indicateurs de performance
+- **Guide commerciale** : fiche de vente rapide, signal marché, poids projeté
+- `_dpjG` = jours depuis dernière pesée — lit `LIVE.pesees[LIVE.pesees.length-1]` (plus récente) — badge retard pes\u00e9e
+
+### Sécurité stock — double guard
+- **`doSubmit('stock')`** : avant soumission, simule le stock résultant en replaying `STOCK_MVTS` + nouveaux mouvements du panier → bloque si solde < 0 pour un type d'aliment avec message `'err:Stock insuffisant — type...'`
+- **`addStockLigne()`** : v\u00e9rifie solde actuel (`calcStockParAliment()[type]`) avant d'ajouter la consommation en panier — modale d'alerte si insuffisant
+- Les deux guards sont indépendants et complémentaires
+
+### calcSemaine() — ancre lundi
+- La semaine courante est calculée depuis `CYCLE.dateDebut` en comptant les **lundis** \u00e9coul\u00e9s
+- Démarrage en cours de semaine = semaine 1 jusqu'au lundi suivant
+- `calcSemaine()` retourne un entier \u2265 1 (ou 1 si pas de `dateDebut`)
+
+
 - Carte dans Livrables → Objectifs
 - **Zootechniques** : `gmqCible` (vert), `gmqWarn` (orange), `poidsCible`, `poidsVenteMin`, `tauxMortMax`
 - **Financiers** : `coutRevientMax`, `margeParBeteMin`, `alerteSeuilTreso`
@@ -526,6 +549,11 @@ L6013  viewLiv()          L6776  viewMarche()
 
 | Commit | Description |
 |---|---|
+| `2fd764a` | **fix** : `LIVE.pesees[0]` → `[length-1]` (dernière pesée) dans viewDash + viewGuide + viewMarche comm ; typo `brûlés` dans simulateur |
+| `f10973a` | **fix** : double guard anti-sur-consommation stock — `doSubmit` (simule stock résultant avant accept) + `addStockLigne` (vérifie solde actuel) |
+| `1adb2d1` | **feat** : KPI fraîcheur pesée (J depuis dernière pesée), dépenses réalisées simulateur, fiche commerciale lecture (viewMarche), guide situationnel (viewGuide), renommage fallou→commerciale |
+| `b6bb8e6` | **fix** : init simulateur complet (toutes variables reset), reset cycle complet, Cycle N° affiché dans 4 emplacements |
+| `f1ef90e` | **fix** : `calcSemaine()` ancré sur lundi (lundi = jour pivot semaine), variables simulateur init, Cycle N° dynamique |
 | `a8705a8` | **audit passe 3** : 5 bugs — `_jourDepuis` NaN alertes (Date.UTC), `_betesV2 >= 0`, STOCK_MVTS kg=0, `joursSince` Date.UTC, `_joursDepuisDebut` fallback retournait 7 |
 | `0580668` | **audit passe 2** : 3 bugs — `_joursDepuisDebut` helper, `_alertGmqChute` Date.UTC (2 occurrences), bouton PDF role-gated fondateur/rga |
 | `51f5fee` | **audit passe 1** : 7 bugs — Go/No-Go /8, KPI `objGMQ`, `cVetPeriode` prorata, `f.sem` bilan, `Object.values` ES5, GMQ alert DST, santé décès → incident G3 |
