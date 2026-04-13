@@ -15,7 +15,9 @@ Contractualiser avec un vétérinaire agréé de la région de Thiès. Rôle obl
 
 - Suivre le troupeau selon le protocole SOP (actes planifiés J+N)
 - **Signer le certificat de constatation du décès** — pièce obligatoire CNAAS
-- Répondre aux rappels automatiques (email + WhatsApp J-7/J-3/J-2)
+- Répondre aux rappels automatiques (WhatsApp **prioritaire** + email trace écrite) aux jalons **J-3 / J-2 / J-1**
+- ⚠️ **WhatsApp = seul canal fiable** pour un vétérinaire rural à Thiès — l'email reste envoyé comme preuve opposable mais ne pas compter dessus comme action principale
+- Confirmer sa venue → `vet_confirmed = TRUE` dans Notifications_Log → arrêt automatique des rappels suivants
 - Constituer un historique de suivi opposable pour tout sinistre
 
 > Sans vétérinaire contractualisé : pas de certificat → dossier CNAAS rejeté.
@@ -30,6 +32,8 @@ Contacter la CNAAS (siège Dakar ou agence Thiès) et obtenir :
 - **Téléphone et WhatsApp** du correspondant sinistres
 - **Délai contractuel** de déclaration (hypothèse : 24h — à confirmer)
 - **Liste exacte des pièces** requises pour décès et pour vol
+- **Grille officielle d'indemnisation** par race et classe d'âge — à obtenir impérativement (remplace le calcul `poids × prix_foirail` qui sera rejeté comme non conforme)
+- **Contact direct agent CNAAS Thiès** : un numéro de téléphone vocal (pas WhatsApp officiel — inexistant) pour les appels de déclaration urgente
 
 ### Chantier 3 — Clause contractuelle critique : NE PAS ABATTRE NI ENTERRER
 
@@ -77,11 +81,17 @@ J+0 — Gérant constate le décès
        engagement "animal non abattu ni enterré"
   3. [App] Email Vétérinaire envoyé automatiquement (CC: Fondateur, RGA)
      → "Présence requise pour certificat de constatation"
-  4. [App] Affiche boutons : 💬 WhatsApp Vét  📞 Appeler Vét
-                              💬 WhatsApp CNAAS  📞 Appeler CNAAS
-  5. [Gérant] Envoie photos par WhatsApp au vétérinaire et/ou CNAAS
+  4. [App] Affiche modal : "✅ Emails envoyés. ⚠️ APPEL VOCAL FONDATEUR REQUIS maintenant —
+     la CNAAS n'actionne pas sur email seul."
+  5. [Fondateur en France] Appelle CNAAS Thiès vocalement (numéro dans contacts)
+     → Colonne Sinistres_CNAAS : Appel_Fondateur_J0 = date/heure
+  6. [App] Affiche boutons par priorité :
+     1️⃣ 📞 Appeler CNAAS (bouton primaire)   — fondateur France + gérant terrain
+     2️⃣ 📞 Appeler Vétérinaire (secondaire)
+     3️⃣ 💬 WhatsApp Vétérinaire (secondaire)
+  7. [Gérant] Envoie photos par WhatsApp au vétérinaire et/ou CNAAS agence
 
-J+1 à J+3 — Vétérinaire constate
+J+1 à J+5-7 — Vétérinaire constate ⚠️ délai réel terrain Thiès = 5-7 jours
 
   6. Vétérinaire vient constater → signe le certificat de décès
   7. Fondateur scanne/photo le certificat
@@ -90,9 +100,11 @@ J+1 à J+3 — Vétérinaire constate
      ☑ "Certificat vétérinaire reçu"
      ☑ "Certificat transmis à CNAAS le [date]"
 
-Relances automatiques (cron matinal, si pas de confirmation)
-  J+2, J+5, J+10 → Email relance CNAAS (CC: Fondateur, RGA)
-  J+10 → Ajout mention saisine Direction Régionale CNAAS
+Relances automatiques (cron matinal, si Statut_CNAAS = EN_COURS)
+  J+7  → Email relance courtois CNAAS (CC: Fondateur, RGA)
+  J+14 → Email relance + notification fondateur "Appel vocal requis"
+  ❌ La mention "saisine Direction Régionale" est supprimée — contre-productive
+     en administration sénégalaise, brûle les ponts. Rester courtois.
 
 Expert CNAAS
   9. Expert CNAAS vient constater
@@ -118,8 +130,8 @@ J+0 — Gérant constate le vol
   4. [App] Affiche boutons : 💬 WhatsApp CNAAS  📞 Appeler CNAAS
 
 Relances automatiques
-  J+2, J+5, J+10 → Email relance CNAAS
-  J+10 → Mention saisine direction régionale
+  J+7  → Email relance courtois CNAAS
+  J+14 → Email relance + notification fondateur "Appel vocal requis"
 
 Clôture
   5. Fondateur clique "CNAAS a confirmé réception" → dossier clôturé
@@ -136,17 +148,21 @@ Clôture
 | Bannière rouge `⛔ NE PAS ABATTRE NI ENTERRER` | Persistante — disparaît seulement quand expert CNAAS coché | Dès que décès = OUI |
 | Alerte photo `📸 Photographiez l'animal MAINTENANT` | Affichée juste au-dessus du bouton Enregistrer | Dès que décès = OUI |
 | `📧 Email CNAAS + Vétérinaire envoyés automatiquement` | Badge vert/spinner après submit | Post-submit |
-| `💬 WhatsApp Vétérinaire` | `wa.me/[contact_vet_tel]?text=[msg_court]` | Post-submit |
-| `📞 Appeler Vétérinaire` | `tel:[contact_vet_tel]` | Post-submit |
-| `💬 WhatsApp CNAAS` | `wa.me/[contact_cnaas_whatsapp]?text=[msg_court]` | Post-submit |
-| `📞 Appeler CNAAS` | `tel:[contact_cnaas_tel]` | Post-submit |
+| Modal "Appel fondateur requis" | Texte : "✅ Emails envoyés. Prévenez le fondateur — il doit appeler la CNAAS vocalement." | Post-submit immédiat |
+| `1️⃣ 📞 Appeler CNAAS` | Bouton **primaire** — `tel:[contact_cnaas_tel]` | Post-submit |
+| `2️⃣ 📞 Appeler Vétérinaire` | Bouton secondaire — `tel:[contact_vet_tel]` | Post-submit |
+| `3️⃣ 💬 WhatsApp Vétérinaire` | Bouton tertiaire — `wa.me/[contact_vet_tel]?text=...` | Post-submit |
+| `⚠️ Annuler — erreur de saisie` | Bouton visible 30 min — envoi email correctif CNAAS | Post-submit, timeout 30 min |
 
 ### 3.2 Livrables > Incidents (dossier sinistre actif) — Fondateur
 
 | Élément UI | Détail |
 |---|---|
-| Bannière `⛔ NE PAS ENTERRER — Expert CNAAS n'est pas encore passé` | Visible jusqu'au coche "Expert passé" |
-| Timeline dossier (J+0 envoyé / J+2 relance / J+5 relance / J+10 relance) | Dates réelles depuis `Sinistres_CNAAS` |
+| Bannière `⛔ NE PAS ENTERRER — Expert CNAAS n'est pas encore passé` | Visible jusqu'au coche "Expert passé" — délai réel 5-7 jours |
+| Modal post-submit "Appel fondateur requis" | S'affiche après submit décès : "✅ Email parti — ⚠️ Appeler CNAAS vocalement maintenant (la CNAAS n'actionne pas sur email seul)" |
+| Bouton `⚠️ Annuler — erreur de saisie` | Visible 30 min après submit — déclenche email correctif CNAAS "fausse alerte" + marque ligne ANNULÉ |
+| Timeline dossier (J+0 email / Appel fondateur / J+7 relance / J+14 relance) | Dates réelles depuis `Sinistres_CNAAS` — délais mis à jour |
+| Statut CNAAS | Select fondateur : `En attente` / `Dossier reçu` / `Expert assigné` / `Expertise passée` / `Rejeté` — stoppe les relances auto dès ≠ `En attente` |
 | Checkbox `☑ Certificat vétérinaire reçu` | Étape clé avant indemnisation |
 | Champ `Certificat transmis à CNAAS le [date]` | Texte libre + date |
 | Checkbox `☑ Expert CNAAS passé — animal peut être retiré` | Libère la bannière NE PAS ENTERRER |
@@ -205,11 +221,13 @@ En-têtes ligne 1 :
 #### `Sinistres_CNAAS` (Sheet fondateur)
 En-têtes ligne 1 :
 
-| A | B | C | D | E | F | G | H | I | J |
-|---|---|---|---|---|---|---|---|---|---|
-| Date | Type | ID_Animal(s) | N°_PV_Gendarmerie | Statut | Date_Email_J0 | Certif_Vet_Recu | Expert_Passe | Relances_Stop | Notes |
+| A | B | C | D | E | F | G | H | I | J | K |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Date | Type | ID_Animal(s) | N°_PV_Gendarmerie | Statut_CNAAS | Date_Email_J0 | Appel_Fondateur_J0 | Certif_Vet_Recu | Expert_Passe | Relances_Stop | Notes |
 
-Valeurs Statut : `EN_COURS` / `CERTIF_RECU` / `EXPERT_PASSE` / `CONFIRME` / `CLOTURE`
+Valeurs `Statut_CNAAS` : `EN_COURS` / `DOSSIER_RECU` / `EXPERT_ASSIGNE` / `EXPERTISE_PASSEE` / `CONFIRME` / `REJETE` / `CLOTURE`
+
+> ⚠️ `Appel_Fondateur_J0` (nouvelle colonne K) : date/heure de l'appel vocal fondateur vers CNAAS — doit être rempli manuellement par le fondateur. Les relances automatiques vérifient cette colonne : si vide à J+2, notification fondateur "Appel requis".
 
 ### 4.3 Contacts à collecter auprès du fondateur
 ```
@@ -218,8 +236,8 @@ contact_vet_email        : Adresse email du vétérinaire
 contact_vet_tel          : +221XXXXXXXXX — WhatsApp + appel direct
 
 contact_cnaas_email      : Email officiel déclaration sinistres CNAAS
-contact_cnaas_tel        : Téléphone CNAAS (appel direct)
-contact_cnaas_whatsapp   : N° WhatsApp CNAAS — identique ou différent du tél
+contact_cnaas_tel        : Téléphone CNAAS (appel direct — canal principal)
+contact_cnaas_whatsapp   : N° WhatsApp CNAAS — si disponible (souvent absent)
 contact_cnaas_n_police   : Numéro de police d'assurance — OBLIGATOIRE
 contact_cnaas_delai_h    : Délai contractuel déclaration en heures (ex: 24)
 
@@ -228,7 +246,17 @@ ferme_responsable_nom    : Nom du fondateur/responsable
 ferme_responsable_tel    : Téléphone responsable
 ferme_email_fondateur    : Email fondateur → CC sur tous les emails
 contact_rga_email        : Email RGA → CC sur tous les emails
+
+— Nouveaux champs (ajout panel experts) :
+horaire_vet_dakar        : HH:MM heure d'intervention prévue (ex: 09:00)
+                           → affiché dans bannière gérant J-1 "Vét arrive demain à 09h00"
+contact_gerant_tel       : +221XXXXXXXXX — pour WhatsApp notification gérant J-1
+jours_fermes             : JSON array de dates ISO YYYY-MM-DD (Tabaski, Magal, Gamou,
+                           jours fériés nationaux SN) → cron skip avant d'envoyer rappels vet
+                           ex: ["2026-03-30","2026-06-06"]
 ```
+
+> **Note technique critique :** `CYCLE.dateDebut` doit être stockée au format **`YYYY-MM-DD`** dans `Config_Cycle!A1` (pas `DD/MM/YYYY`) pour que le cron puisse calculer J-N côté serveur : `Math.floor((Date.now() - new Date(dateDebut + 'T00:00:00Z')) / 86400000)`. Voir point bloquant #12.
 
 > **Règle CC systématique :** tout email envoyé par BOAN met fondateur + RGA en copie. Leur boîte mail constitue une **preuve d'envoi horodatée indépendante** de Notifications_Log — opposable en cas de litige CNAAS.
 
@@ -255,7 +283,12 @@ GitHub > Settings > Secrets > Actions :
 > De : [ferme_email_expediteur]
 > ```
 
-### 5.1 Rappel SOP vétérinaire (J-7 / J-3 / J-2)
+### 5.1 Rappel SOP vétérinaire (J-3 / J-2 / J-1)
+
+> ❌ **J-7 supprimé** — Un vétérinaire rural planifie à la semaine, pas 7 jours à l'avance. Message ignoré, quota SendGrid gaspillé.
+> ✅ **J-1 ajouté** — La veille est le jalon le plus efficace pour ancrer le RDV.
+> ⚠️ **Si `vet_confirmed = TRUE`** (colonne `Date_Confirmation` renseignée dans Notifications_Log) → sauter l'envoi. Ne pas relancer un vétérinaire qui a déjà confirmé.
+
 ```
 À    : [contact_vet_email]
 CC   : [ferme_email_fondateur], [contact_rga_email]
@@ -327,7 +360,10 @@ LIEU              : Ferme BOAN, Thiès, Sénégal
   Race            : [race]
   Poids entrée    : [poidsEntree] kg (entrée le [dateIntro])
   Poids actuel    : [poids_dernier_pesee] kg (pesée du [date_derniere_pesee])
-  Valeur estimée  : [poids × prix_foirail_actuel] FCFA
+  Valeur estimée  : [GRILLE_CNAAS_race_age] FCFA
+    ⚠️ Valeur déterminée selon grille officielle CNAAS par race/classe d'âge.
+    Si grille non disponible : [poids × prix_foirail] FCFA au prorata —
+    "Valeur estimée au prorata marché, sujette à expertise CNAAS"
     (basé sur relevé foirail du [date_dernier_prix_foirail])
 
 ─── HISTORIQUE DES SOINS ───
@@ -377,25 +413,33 @@ Dépôt de plainte : Gendarmerie de Thiès, le [date_plainte]
 Ferme BOAN, Thiès, Sénégal
 ```
 
-### 5.5 Relances CNAAS — J+2 / J+5 / J+10
+### 5.5 Relances CNAAS — J+7 / J+14
+
+> ❌ **Ancien calendrier J+2/J+5/J+10 supprimé** — trop agressif, harcèlement bureaucratique.
+> La CNAAS a un délai interne de traitement de 3-5 jours. La 2e relance à J+2 arrivait avant
+> que le dossier J+0 soit classé. Résultat : agents ignoraient toutes les relances.
+> ❌ **Mention "saisine Direction Régionale" supprimée** — contre-productive en administration
+> sénégalaise, génère des blocages volontaires. Rester courtois jusqu'à J+14.
+
 ```
 À    : [contact_cnaas_email]
 CC   : [ferme_email_fondateur], [contact_rga_email]
-Objet : [BOAN] Relance [N] — Police n°[N_POLICE] — Sinistre du [date_sinistre]
+Objet : [BOAN] Suivi sinistre — Police n°[N_POLICE] — Déclaration du [date_sinistre]
 
 Madame, Monsieur,
 
-Sans retour de votre part depuis notre déclaration du [date_J0],
-nous vous adressons ce rappel.
+Nous revenons vers vous au sujet de notre déclaration du [date_J0],
+restée sans accusé de réception à ce jour.
 
 Réf. sinistre : [Type] — [ID_ANIMAL ou N°_PV] — Police n°[N_POLICE]
 
-[uniquement J+10]
-Sans accusé de réception sous 5 jours ouvrés, nous procéderons
-à la saisine de la Direction Régionale CNAAS de Thiès.
+Nous restons à votre disposition pour tout complément de dossier.
 
 [ferme_responsable_nom] — [ferme_responsable_tel]
 ```
+
+> **J+14 uniquement :** en plus de l'email, le système envoie une notification au fondateur :
+> "⚠️ Dossier [ID] sans réponse CNAAS à J+14 — Appel vocal recommandé."
 
 ---
 
@@ -418,7 +462,7 @@ Symptômes : [symptomes]
 Ferme BOAN — [ferme_responsable_nom] — [ferme_responsable_tel]
 ```
 
-### 6.2 WhatsApp Vétérinaire — Rappel SOP
+### 6.2 WhatsApp Vétérinaire — Rappel SOP (J-3 / J-2 / J-1, cron automatique)
 ```
 📅 *BOAN — Rappel SOP*
 
@@ -429,7 +473,43 @@ Troupeau : [MOCK.betes] bêtes actives
 Ferme BOAN — [ferme_responsable_tel]
 ```
 
-### 6.3 WhatsApp CNAAS — Décès (J+0, après email auto)
+### 6.3 WhatsApp Vétérinaire — Rappel urgent J-0 (bouton manuel gérant, jour J uniquement)
+
+> Ce message est déclenché par le **gérant terrain** via un bouton dans Livrables > SOP Véto,
+> affiché uniquement le jour de l'acte. Pas de cron — le gérant est sur place et peut enchaîner
+> avec un appel direct si pas de réponse.
+
+```
+🔔 *BOAN — Intervention aujourd'hui*
+
+Bonjour [contact_vet_nom],
+
+Rappel urgent : acte SOP prévu AUJOURD'HUI à la Ferme BOAN.
+
+Acte : [label_acte]
+Troupeau : [MOCK.betes] bêtes actives
+
+📞 [ferme_responsable_tel]
+Ferme BOAN, Thiès, Sénégal
+```
+
+### 6.4 Notification gérant — Intervention vétérinaire demain (J-1, cron + bannière app)
+
+> Bannière affichée dans l'app côté gérant le jour J-1. Si `contact_gerant_tel` configuré,
+> envoi WhatsApp optionnel. Le gérant doit préparer la zone et contenir le troupeau.
+
+```
+📋 *BOAN — Intervention SOP demain*
+
+Le vétérinaire [contact_vet_nom] est attendu demain à [horaire_vet_dakar].
+
+Acte : [label_acte]
+
+➡ Préparer zone, contenir troupeau, prévoir [fournitures si applicable].
+Ferme BOAN — [ferme_responsable_tel]
+```
+
+### 6.5 WhatsApp CNAAS — Décès (J+0, après email auto)
 ```
 📋 *BOAN — Déclaration sinistre (email envoyé)*
 
@@ -444,7 +524,7 @@ Email de déclaration envoyé à [contact_cnaas_email].
 [ferme_responsable_nom] — [ferme_responsable_tel]
 ```
 
-### 6.4 WhatsApp CNAAS — Vol (J+0, après email auto)
+### 6.6 WhatsApp CNAAS — Vol (J+0, après email auto)
 ```
 📋 *BOAN — Déclaration sinistre (email envoyé)*
 
@@ -471,10 +551,10 @@ Fonctions :
   buildWaUrl(tel, msg)                      → 'https://wa.me/'+tel+'?text='+encodeURIComponent(msg)
   logNotification(entry)                    → appendRow Notifications_Log
   updateNotificationStatus(rowIdx, status)  → batchUpdate Sheets
-  checkAndSendVetReminders()                → SOP J-7/J-3/J-2
+  checkAndSendVetReminders()                → SOP J-3/J-2/J-1 (J-7 supprimé) — skip si vet_confirmed=TRUE ou jour férié
   checkAndSendDecesAlerts()                 → J+0 décès (vet + CNAAS) — déclenché aussi au flush offline queue
   checkAndSendVolAlerts()                   → J+0 vol (CNAAS)
-  checkAndSendCnaasFollowups()              → relances J+2/J+5/J+10 (depuis Sinistres_CNAAS)
+  checkAndSendCnaasFollowups()              → relances J+7/J+14 (depuis Sinistres_CNAAS) — skip si Statut_CNAAS ≠ EN_COURS
   safeText(s)                               → sanitize champs libres avant template email
   confirmVet(sopActeId)                     → Statut=CONFIRME dans Notifications_Log
   confirmCnaas(sinistreId)                  → Statut=CLOTURE dans Sinistres_CNAAS
@@ -603,12 +683,88 @@ try {
 
 ---
 
+### #11 — 5 validations pre-cron obligatoires (VET)
+
+> Sans ces gardes, `checkAndSendVetReminders()` crashe silencieusement ou envoie des rappels absurdes.
+
+```js
+// 1. sopProtocol vide → pas de crash, alerte fondateur
+if (!sopProtocol || sopProtocol.length === 0) {
+  logNotification({ type:'VET_ERROR', statut:'ERROR_EMPTY_PROTOCOL' }); return;
+}
+// 2. Contact vétérinaire manquant → alerte fondateur, pas crash
+if (!config.contact_vet_whatsapp && !config.contact_vet_email) {
+  logNotification({ type:'VET_ERROR', statut:'ALERT_NO_CONTACT' }); return;
+}
+// 3. Acte hors durée de cycle → skip (ex: J+60 sur cycle de 45j)
+if (acte.j > CYCLE_DUREE_JOURS) { continue; }
+// 4. Acte déjà validé dans SOP_Check → skip (pas de rappel inutile)
+if (sopCheckIds.indexOf(acte.id) !== -1) { continue; }
+// 5. Jour férié sénégalais → skip (table 'jours_fermes' dans Config_App)
+if ((joursFermes || []).indexOf(todayISO) !== -1) {
+  logNotification({ type:'VET_SKIPPED', notes:'Jour ferme: ' + todayISO }); return;
+}
+```
+
+### #12 — `CYCLE.dateDebut` doit être en ISO UTC côté serveur (VET + CNAAS)
+
+Le navigateur client affiche `DD/MM/YYYY` — mais le cron Node.js doit calculer J-N arithmétiquement sans accès à `_nowDakar()`.
+
+**Solution :**
+- Stocker `dateDebut` au format **`YYYY-MM-DD`** dans `Config_Cycle!A1`.
+- Si format actuel `DD/MM/YYYY` → adapter `_syncCycle()` : normaliser avant PUT Sheets.
+- Calcul cron : `Math.floor((Date.now() - new Date(dateDebut + 'T00:00:00Z').getTime()) / 86400000)`
+- Dakar = UTC+0 aujourd'hui — coder comme si ça peut changer (pas d'hypothèse hard-codée).
+
+### #13 — `vet_confirmed` : arrêt des rappels après confirmation vétérinaire (VET)
+
+Sans ce mécanisme, le vétérinaire reçoit J-3/J-2/J-1 même après avoir dit "OK je viens".
+
+**Solution :**
+- Utiliser la colonne `Date_Confirmation` existante dans `Notifications_Log`.
+- Si une ligne `Type=SOP_VET_Jx / Reference_ID=acte.id` a `Date_Confirmation` renseignée → `vet_confirmed = TRUE` → skip cet acte dans le cron.
+- Bouton **"✓ Vétérinaire a confirmé"** dans Livrables > SOP Véto → écrit `Date_Confirmation = today` dans Notifications_Log + badge 🟢 dans la timeline.
+
+### #14 — Grille officielle CNAAS requise pour valeur déclarée (CNAAS)
+
+`poids × prix_foirail` sera révisé ou rejeté par l'expert CNAAS comme calcul non conforme à leur grille.
+
+**Solution :**
+- Obtenir la grille CNAAS lors de la souscription (Chantier 2).
+- Hard-coder dans `Config_App` clé `cnaas_grille` : JSON `{zebu_senegalais_18_36m: 1200000, ...}`.
+- Si race absente de la grille → mention dans email : *"Valeur estimée au prorata marché, sujette à expertise CNAAS"*.
+- Alerte bloquante au submit décès si grille et prix foirail tous les deux absents.
+
+### #15 — Fêtes religieuses et fermetures administratives sénégalaises (VET + CNAAS)
+
+Décès pendant Tabaski/Magal/Gamou → administrations fermées 3-5 jours → expert CNAAS absent.
+
+**Solution :**
+- Table `jours_fermes` dans `Config_App` (JSON, mise à jour manuelle annuelle par fondateur).
+- Cron vet : skip envoi si `today in jours_fermes`.
+- Email CNAAS décès : si décès pendant période fermée → mention *"Décès survenu pendant [fête] — expert attendu après réouverture administrative estimée au [date]"*.
+- Délai bannière "NE PAS ENTERRER" étendu à 9-12j affiché plutôt que 5-7j.
+
+### #16 — Cron : accès à `Sante_Mortalite` (SID gérant) pour `email_pending` (CNAAS)
+
+Le cron tourne avec le SID fondateur. `Sante_Mortalite` est dans la sheet gérant.
+
+**Solution :**
+- Option A : ajouter colonne `email_pending` dans `Sinistres_CNAAS` (sheet fondateur) plutôt que dans `Sante_Mortalite` gérant — le cron a les droits.
+- Option B : partager `Sante_Mortalite` en lecture avec le service account fondateur — configuration Sheets.
+- **Recommandé : Option A** — plus simple, pas de modification des droits Sheets.
+```
+
+---
+
 ## 9. Ordre d'implémentation
 
 ```
 BLOC A — HORS CODE (prérequis absolus)
   □ [Chantier 1] Contractualiser vétérinaire agréé Thiès — nom, email, +221XX, WhatsApp
-  □ [Chantier 2] Souscrire police CNAAS — N° police, email, tel, WhatsApp, délai, liste pièces
+  □ [Chantier 2] Souscrire police CNAAS — N° police, email, tel, délai, liste pièces
+  □ [Chantier 2] Obtenir grille officielle CNAAS indemnisation par race/classe d'âge (PDF)
+  □ [Chantier 2] Obtenir numéro téléphone vocal agent CNAAS Thiès (canal principal déclarations)
   □ Créer compte SendGrid + Single Sender Verification de l'adresse ferme
   □ Créer onglet Notifications_Log dans Sheet fondateur (9 colonnes — section 4.2)
   □ Créer onglet Sinistres_CNAAS dans Sheet fondateur (10 colonnes — section 4.2)
@@ -622,6 +778,7 @@ BLOC B — Config UI index.html
   □ Alerte photo ⚠️ avant bouton Enregistrer (décès = OUI)
   □ Champ N° PV gendarmerie bloquant + sélection multiple animaux dans formulaire VOL
   □ Alerte prix foirail obsolète > 30j dans formulaire décès
+  □ Config `horaire_vet_dakar`, `contact_gerant_tel`, `jours_fermes`, `cnaas_grille` dans sous-onglet Contacts & Assurance
 
 BLOC C — API serveur
   □ /api/notify.js — toutes les fonctions (section 7.1)
@@ -633,13 +790,20 @@ BLOC D — GitHub Actions
   □ Ajouter CRON_SECRET dans GitHub Secrets
 
 BLOC E — Boutons et statuts index.html
-  □ Boutons 💬 WhatsApp + 📞 Appel Vétérinaire post-submit décès
-  □ Boutons 💬 WhatsApp + 📞 Appel CNAAS post-submit décès + vol
-  □ Bouton "Vétérinaire confirme" (conditionnel — acte SOP dans 7j)
+  □ Bouton 1️⃣ 📞 Appeler CNAAS (primaire post-submit décès) + 2️⃣ Appeler Vét + 3️⃣ WhatsApp Vét
+  □ Bouton ⚠️ "Annuler — erreur de saisie" visible 30 min post-submit décès
+  □ Modal post-submit "✅ Emails envoyés — Appeler CNAAS vocalement maintenant"
+  □ Bouton "✓ Vétérinaire a confirmé" (SOP Véto, conditionnel acte dans 7j) → Date_Confirmation Notifications_Log
+  □ Bouton "🔔 Rappel urgent J-0" (gérant uniquement, affiché le jour J de l'acte SOP) → wa.me/ msg 6.3
+  □ Bannière gérant J-1 dans app : "Intervention SOP demain [horaire_vet_dakar] — Préparer zone"
+  □ SOP_Check menu étendu : ✅ Réalisé / ⚠️ Reporté (raison + nouvelle date J+7) / ❌ Annulé (raison)
+  □ Timeline SOP Livrables > SOP Véto : J-3/J-2/J-1 ✓ envoyé / 🟢 confirmé / ⏳ en attente
+  □ Statut CNAAS select (Livrables > Incidents) : En attente / Dossier reçu / Expert assigné / Expertise passée / Rejeté
+  □ Colonne Appel_Fondateur_J0 dans Sinistres_CNAAS — à renseigner manuellement par fondateur
   □ Checkboxes fondateur : Certif reçu / Certif transmis / Expert passé
   □ Bouton "CNAAS a confirmé réception" (clôture dossier)
-  □ Bouton "Arrêter les relances" (confirmation téléphone)
-  □ Timeline dossier sinistre depuis Sinistres_CNAAS
+  □ Bouton "Arrêter les relances" (confirmation CNAAS par téléphone)
+  □ Timeline dossier sinistre (J+0 / Appel fondateur / J+7 relance / J+14) depuis Sinistres_CNAAS
   □ Badge statut email (lecture Notifications_Log via loadLiveData)
   □ Badge numérique onglet Livrables si dossier(s) en attente
 
