@@ -504,13 +504,15 @@ function _gmqLabel() {
 }
 function calcSemaine() {
   if (!CYCLE.dateDebut) return MOCK.sem;
-  // Utiliser Date.UTC pour éviter les décalages DST (changement d'heure device)
-  // Les deux bornes sont à minuit UTC → différence toujours multiple exact de 86400000 ms
   var p = CYCLE.dateDebut.split('-');
   var debut = new Date(Date.UTC(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2])));
+  // Ancrer au lundi de la semaine de dateDebut → l'incrément est toujours un lundi
+  var debutDay = debut.getUTCDay(); // 0=dim, 1=lun, ..., 6=sam
+  var mondayOffset = debutDay === 0 ? -6 : 1 - debutDay;
+  var debutLundi = new Date(debut.getTime() + mondayOffset * 86400000);
   var _nd3  = _nowDakar();
   var now   = new Date(Date.UTC(_nd3.year, _nd3.month-1, _nd3.day));
-  var diff  = Math.floor((now - debut) / (7 * 24 * 3600 * 1000)) + 1;
+  var diff  = Math.floor((now - debutLundi) / (7 * 24 * 3600 * 1000)) + 1;
   return Math.max(1, Math.min(diff, Math.round((CYCLE.dureeMois||8)*4.33)));
 }
 
@@ -1036,7 +1038,7 @@ var S = {
   fb:{sem:'',nb:'',nou:'',stk:'',inc:'',poi:'',msg:''},
   fm:{date:'',foi:'Thiès',foiCustom:'',bas:'',moy:'',haut:''},
   falim:{date:'',type:'',prix:''},
-  sn:null, sp:null, spx:null, sveau:null, salim:180000, svet:20000, ssec:50000, seau:5000, smdo:0, simpMode:'pct', simpPct:5, simpFix:100000,
+  sn:null, sp:null, spx:null, sveau:null, salim:180000, svet:20000, ssec:50000, seau:5000, smdo:undefined, simpMode:'pct', simpPct:5, simpFix:100000,
   _resetPwdOpen:false, _resetPwd:'', _resetPwdError:'', _resetGoCheck:false,
   _pwdMgrOpen:false, _pwdMgrStep:'auth', _pwdMgrError:'', _pwdMgrSuccess:'',
   _pwdMgrCurrent:'', _pwdMgrRole:'', _pwdMgrNew:'', _pwdMgrConfirm:'', _pwdMgrNewLogin:'',
@@ -6277,7 +6279,7 @@ function viewLiv(){
     }
 
     view = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
-      +'<div class="stitle" style="margin-bottom:0">Cycle 1 — Sem. '+semCourante+'/'+totalSemCycle+'</div>'
+      +'<div class="stitle" style="margin-bottom:0">Cycle '+(CYCLE.numCycle||1)+' — Sem. '+semCourante+'/'+totalSemCycle+'</div>'
       +'<button onclick="exportPDF()" style="width:auto;padding:8px 14px;font-size:12px;background:#C8A06A;color:#0f1a0f;border-radius:8px;font-weight:700">⬇ PDF</button>'
       +'</div>'
       +'<div style="margin-bottom:16px">'
