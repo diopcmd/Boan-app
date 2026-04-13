@@ -1038,7 +1038,7 @@ var S = {
   fb:{sem:'',nb:'',nou:'',stk:'',inc:'',poi:'',msg:''},
   fm:{date:'',foi:'Thiès',foiCustom:'',bas:'',moy:'',haut:''},
   falim:{date:'',type:'',prix:''},
-  sn:null, sp:null, spx:null, sveau:null, salim:180000, svet:20000, ssec:50000, seau:5000, smdo:undefined, simpMode:'pct', simpPct:5, simpFix:100000,
+  sn:null, sp:null, spx:null, sveau:undefined, salim:undefined, svet:undefined, ssec:undefined, seau:undefined, smdo:undefined, simpMode:undefined, simpPct:undefined, simpFix:undefined,
   _resetPwdOpen:false, _resetPwd:'', _resetPwdError:'', _resetGoCheck:false,
   _pwdMgrOpen:false, _pwdMgrStep:'auth', _pwdMgrError:'', _pwdMgrSuccess:'',
   _pwdMgrCurrent:'', _pwdMgrRole:'', _pwdMgrNew:'', _pwdMgrConfirm:'', _pwdMgrNewLogin:'',
@@ -2725,7 +2725,7 @@ function pageModal(){
     +'<div class="modal">'
     +'<div class="modal-head">'
     +'<div>'
-    +'<div style="font-size:16px;font-weight:700">Initialisation Cycle 1</div>'
+    +'<div style="font-size:16px;font-weight:700">Initialisation Cycle '+(CYCLE.numCycle||1)+'</div>'
     +'<div style="font-size:12px;color:#88aa88;margin-top:2px">Étape '+MODAL.step+' / 4 — '+steps[MODAL.step-1]+'</div>'
     +'</div>'
     +'<div style="display:flex;gap:6px;align-items:center">'+dotsHtml+'</div>'
@@ -4200,7 +4200,7 @@ function exportPDF() {
     doc.setFontSize(20); doc.setFont('helvetica','bold');
     doc.text('BOANR', 14, 12);
     doc.setFontSize(10); doc.setFont('helvetica','normal');
-    doc.text('Bilan Mensuel — Cycle 1 — Semaine '+sem+'/'+totalSemCycle, 14, 20);
+    doc.text('Bilan Mensuel — Cycle '+(CYCLE.numCycle||1)+' — Semaine '+sem+'/'+totalSemCycle, 14, 20);
     doc.text('Généré le '+now, 150, 20);
     // KPIs
     doc.setTextColor(30,74,30);
@@ -4269,7 +4269,7 @@ function exportPDF() {
         if (navigator.canShare({files:[file]})) {
           navigator.share({
             title: 'BOANR — Bilan Semaine '+sem,
-            text: 'Bilan d\'élevage BOANR — Cycle 1 — Semaine '+sem,
+            text: 'Bilan d\'élevage BOANR — Cycle '+(CYCLE.numCycle||1)+' — Semaine '+sem,
             files: [file]
           }).then(function(){ haptic('success'); })
             .catch(function(){ doc.save(filename); haptic('success'); });
@@ -4449,7 +4449,7 @@ function pageApp(){
     +'<div class="hdr">'
     +'<div class="logo"><div class="logo-b">B</div>'
     +'<div><div style="font-size:18px;font-weight:700">BOANR</div>'
-    +'<div style="font-size:11px;color:#88bb88;display:flex;align-items:center;gap:4px">Cycle 1 \u2014 Sem. '+calcSemaine()
+    +'<div style="font-size:11px;color:#88bb88;display:flex;align-items:center;gap:4px">Cycle '+(CYCLE.numCycle||1)+' \u2014 Sem. '+calcSemaine()
     +(LIVE.source==='loading'
       ? '<span style="color:#5ab4ff" title="Chargement...">&#9203;</span>'
       : LIVE.source==='live'
@@ -7175,7 +7175,7 @@ function viewMarche(){
     var sp      = S.sp  !== null && S.sp  !== undefined ? S.sp  : (CYCLE.poidsDepart ? Math.round(CYCLE.poidsDepart*1.5) : 420); // poids vente ≈ 1.5× départ
     var _lastLiveMoy = (function(){ var _e=_livePrixMax(); return _e?_e.moy:0; })();
     var px      = S.spx !== null && S.spx !== undefined ? S.spx : (_lastLiveMoy || CYCLE.objectifPrix || 2000);
-    var pveau   = S.sveau !== null && S.sveau !== undefined ? S.sveau : (CYCLE.capital && CYCLE.nbBetes ? Math.round(CYCLE.capital/CYCLE.nbBetes) : 450000);
+    var pveau   = S.sveau !== undefined ? S.sveau : (CYCLE.capital && CYCLE.nbBetes ? Math.round(CYCLE.capital/CYCLE.nbBetes) : 450000);
     var calim   = S.salim    !== undefined ? S.salim    : 180000; // alim FCFA/mois troupeau entier
     var cvet    = S.svet     !== undefined ? S.svet     : 20000;  // vét FCFA/bête/cycle
     var csec    = S.ssec     !== undefined ? S.ssec     : 50000;  // sécurité FCFA/mois
@@ -7275,7 +7275,7 @@ function viewMarche(){
     +   '<div><div style="font-size:11px;color:#88aa88">\u23f1 Dur\u00e9e simul\u00e9e</div>'
     +   '<div style="font-size:10px;color:#445540;margin-top:2px">R\u00e9el\u00a0: ' + (CYCLE.dureeMois||8) + '\u00a0m</div></div>'
     +   '<div style="display:flex;align-items:center;gap:8px">'
-    +     '<button onclick="event.stopPropagation();S.simMois=null;S.sn=null;S.sp=null;S.spx=null;S.sveau=null;S.salim=undefined;S.svet=undefined;S.ssec=undefined;S.strans=undefined;S.simpPct=undefined;S.simpFix=undefined;r()" style="font-size:11px;padding:5px 10px;border-radius:7px;background:#0a150a;border:1px solid #2a4a2a;color:#88aa88;cursor:pointer">↺ Reset</button>'
+    +     '<button onclick="event.stopPropagation();S.simMois=null;S.sn=null;S.sp=null;S.spx=null;S.sveau=undefined;S.salim=undefined;S.svet=undefined;S.ssec=undefined;S.seau=undefined;S.smdo=undefined;S.strans=undefined;S.simpMode=undefined;S.simpPct=undefined;S.simpFix=undefined;r()" style="font-size:11px;padding:5px 10px;border-radius:7px;background:#0a150a;border:1px solid #2a4a2a;color:#88aa88;cursor:pointer">↺ Reset</button>'
     +     '<div style="display:flex;align-items:center">'
     +       '<button onclick="event.stopPropagation();S.simMois=Math.max(1,(S.simMois!==undefined?S.simMois:' + cycleMois + ')-1);r()" style="width:34px;height:34px;font-size:20px;border-radius:8px 0 0 8px;background:#0a150a;border:1px solid #2a4a2a;border-right:none;color:#C8A06A;cursor:pointer">&#8722;</button>'
     +       '<div style="min-width:50px;height:34px;display:flex;align-items:center;justify-content:center;background:#0a150a;border-top:1px solid #2a4a2a;border-bottom:1px solid #2a4a2a;font-size:17px;font-weight:800;color:#eee">' + cycleMois + '\u00a0m</div>'
