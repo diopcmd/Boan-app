@@ -5,7 +5,7 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
 
 **Production** → https://boan-app-ur3x.vercel.app  
 **Stack** : Vanilla JS ES5 · Vercel Serverless · Google Sheets API v4  
-**État** : commit `8599ed6` — ~7 804 lignes — Avril 2026
+**État** : commit `61fc2c0` — ~8 000 lignes — Avril 2026
 
 ---
 
@@ -55,11 +55,13 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
 - **SOP Véto** — calendrier timeline des actes J+N calculés depuis `CYCLE.dateDebut` :
   - Statuts : ✅ réalisé / ⚠️ en retard / 🔔 dans 7j / 📅 planifié
   - Tolérance ±7 jours (comptent dans la conformité) ; seuil 8–21j = orange "hors délai"
-  - Formulaire inline pour les actes Santé (pas de changement de page)
-  - Compteur double `✅ X · ⚠️ Y / total` dans l'en-tête
+  - Actes Santé : formulaire inline bête par bête ou "🐄 Toutes les bêtes restantes" en 1 clic
+  - Suivi **par bête** : badge 🔄 X/N traitées (partiel) / ✅ N/N traitées (complet) — une bête traitée ne valide plus TOUTES les bêtes
+  - Champ `sopLabel` sur chaque entrée SOP → isole les étapes proches (ex: Vitamine J+1 vs Déparasitage J+7 ne se valident plus mutuellement)
   - Pesée SOP → formulaire pesée avec bannière contextuelle J+N
-  - Éditeur du protocole : ajout/modif/suppression étapes, persisté dans `Config_App`
-- **Cycles archivés** — historique de tous les cycles clôturés dans `Historique_Cycles` (snapshot automatique avant reset)
+  - Éditeur du protocole (onglet SOP Véto) : ajout/modif/suppression étapes, persisté dans `Config_App` — **fondateur uniquement**
+- **Cycles archivés** — historique de tous les cycles clôturés dans `Historique_Cycles` (snapshot automatique avant reset, colonnes A:O incl. N° de cycle)
+- **Numéro de cycle** — `CYCLE.numCycle` éditable par le fondateur (modal init + onglet Objectifs) ; IDs bêtes préfixés `Cx-NNN` ; affiché sur le dashboard hero card
 
 ### Marché (fondateur / RGA / Commerciale)
 - **Prix foirail** — hero card prix max/min + tendance + vs objectif + courbe historique 10 derniers relevés
@@ -87,23 +89,32 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
 
 ```
 Boan-app/
-├── index.html              SPA complète (HTML + CSS + JS inline, ~7 804 lignes)
+├── index.html              SPA complète (HTML + CSS + JS inline, ~8 200 lignes)
 ├── vercel.json             Rewrites SPA (exclut /api/ et /manifest.json)
 ├── manifest.json           Web App Manifest (PWA — icône, nom, display:standalone)
+├── sw.js                   Service Worker (cache offline)
+├── README.md               Ce fichier
+│
 ├── api/
 │   ├── auth.js             Login multi-rôle + SID multi-sheet par rôle
 │   ├── token.js            Service Account → Google OAuth2 access token
 │   ├── sheets.js           Proxy lecture/écriture Google Sheets
 │   ├── change-password.js  Modification credentials (fondateur)
 │   └── ai.js               Proxy Anthropic Claude
+│
 ├── guides/
 │   ├── fondateur.html      Guide PDF imprimable — Direction
 │   ├── gerant.html         Guide PDF imprimable — Gérant terrain
 │   ├── rga.html            Guide PDF imprimable — RGA
 │   └── fallou.html         Guide PDF imprimable — Commerciale
-├── README.md               Ce fichier
-├── DOCUMENTATION_TECHNIQUE.md   Architecture et référence développeur
-└── AI_RESUMPTION_PROMPT.md      Prompt de reprise IA
+│
+├── docs/
+│   ├── DOCUMENTATION_TECHNIQUE.md   Architecture et référence développeur
+│   ├── AI_RESUMPTION_PROMPT.md      Prompt de reprise IA (contexte session)
+│   └── NOTIFICATIONS_ROADMAP.md     Roadmap notifications CNAAS + vétérinaire
+│
+└── scripts/
+    └── boan_sheets_format.gs        Script Google Apps Script (mise en forme Sheets)
 ```
 
 ---
@@ -112,9 +123,9 @@ Boan-app/
 
 | Onglet | Spreadsheet | Description |
 |---|---|---|
-| `Config_Cycle` A1:R1 | Fondateur | dateDebut, nbBetes, poidsDepart, race, ration, capital, objectifPrix, budgetSante, vétérinaire, foirail, commission, contactUrgence, peseeFreq, betes(JSON), stockLines(JSON), dureeMois, simCharges(JSON), prixAlim |
-| `Config_App` A:B | Fondateur | Clé-valeur : gmqCible, gmqWarn, poidsCible, poidsVenteMin, tauxMortMax, coutRevientMax, margeParBeteMin, alerteSeuilTreso, mixSon, mixTourteau, prixAlim, objectifPrix, _mktUpdated, sopProtocol(JSON), dureeMois, cycleDebut |
-| `Historique_Cycles` A:N | Fondateur | Début, Fin, Durée, Race, Foirail, NbBêtesDépart, NbBêtesFin, Décès, PoidsDépart, PoidsFin, GMQ, Capital, TrésoFin, Marge/tête *(à créer manuellement)* |
+| `Config_Cycle` A1:S1 | Fondateur | dateDebut, nbBetes, poidsDepart, race, ration, capital, objectifPrix, budgetSante, vétérinaire, foirail, commission, contactUrgence, peseeFreq, betes(JSON), stockLines(JSON), dureeMois, simCharges(JSON), prixAlim, **numCycle** |
+| `Config_App` A:B | Fondateur | Clé-valeur : gmqCible, gmqWarn, poidsCible, poidsVenteMin, tauxMortMax, coutRevientMax, margeParBeteMin, alerteSeuilTreso, mixSon, mixTourteau, prixAlim, objectifPrix, _mktUpdated, sopProtocol(JSON), dureeMois, cycleDebut, **numCycle** |
+| `Historique_Cycles` A:O | Fondateur | Début, Fin, Durée, Race, Foirail, NbBêtesDépart, NbBêtesFin, Décès, PoidsDépart, PoidsFin, GMQ, Capital, TrésoFin, Marge/tête, **N° cycle** *(à créer manuellement)* |
 | `Fiche_Quotidienne` | Gérant + Fondateur | Saisies journalières |
 | `SOP_Check` | Gérant + Fondateur | Checklist SOP quotidienne |
 | `Pesees` | Gérant + Fondateur | Pesées individuelles par bête |
@@ -171,7 +182,13 @@ git push origin main
 
 | Commit | Description |
 |---|---|
-| `8599ed6` | feat: SOP veto inline form + seuil 21j + compteur double, retire SOP des Objectifs (doublon) |
+| `61fc2c0` | fix: sopLabel sur entrées SOP — Vitamine ADE et Déparasitage ne se valident plus mutuellement |
+| `f95b166` | fix: variables persistantes à l'init cycle — gonogo, simCharges, _mktUpdated, S._sop*, LIVE._histCycles |
+| `c357a07` | fix: numCycle input sans r() (clavier stable) + suppression carte SOP dans Objectifs |
+| `d44e161` | fix: lire Historique_Cycles A:O (colonne numCycle ajoutée) |
+| `6fb1b19` | feat: numCycle manuel — init modal, dashboard, IDs bêtes, archivage, Config_App/Cycle |
+| `32c081e` | feat: SOP per-bête — badge 🔄 X/N, Toutes les bêtes restantes, _sopInlineSave(idx, tous) |
+| `8599ed6` | feat: SOP veto inline form + seuil 21j + compteur double |
 | `2d7eebe` | fix: cohérence GMQ — toutes les formules inline unifiées vers MOCK.gmq (source canonique) |
 | `7acd693` | fix: SOP véto validation — 3 niveaux selon délai (OK / avertissement 8-14j / bloqué >14j) |
 | `85d7e9f` | fix: cohérence dashboard KPI vs sidebar — tréso seuil dynamique, score santé gmqCible, cycle N° |
@@ -181,9 +198,6 @@ git push origin main
 | `14468d4` | feat: onglet Guide par rôle + 4 guides HTML imprimables en PDF |
 | `7db6560` | feat: Objectifs — card Marché & Ration (prixAlim + objectifPrix + mix ration lié + badge date) |
 | `5a0ca03` | feat: Historique_Cycles — snapshot avant reset + vue fondateur/rga |
-| `fa31f67` | fix: MOCK.betes=4 persistant — sync depuis CYCLE.nbBetes dès step1, decesV2 vague2 |
-| `8f676ef` | fix: cycle non démarré (dateDebut vide modale), GMQ diviseur peseeFreq, parseISO dates locales |
-| `79eb9a5` | refactor: suppression redondances SOP — calendrier fusionné dans sopvet (Livrables) |
 | `c737d6c` | audit: 14 recommandations experts — sécurité, SOP, BCS, GMQ adaptatif, alertes prix |
 
 ---

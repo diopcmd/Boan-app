@@ -35,18 +35,28 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 
 ```
 Boan-app/
-├── index.html              SPA complète (~8 000 lignes)
+├── index.html              SPA complète (~8 200 lignes)
 ├── vercel.json             Rewrites SPA (exclut /api/ et /manifest.json)
 ├── manifest.json           Web App Manifest (PWA — icône, nom, display:standalone)
+├── sw.js                   Service Worker
+├── README.md
 ├── api/
 │   ├── auth.js             Login → session token HMAC + SID multi-sheet par rôle
 │   ├── token.js            RS256 JWT → access_token Google OAuth2
 │   ├── sheets.js           Proxy CRUD Sheets
 │   ├── change-password.js  Override mots de passe/identifiants (fondateur)
 │   └── ai.js               Proxy Anthropic Claude
-├── README.md
-├── DOCUMENTATION_TECHNIQUE.md
-└── AI_RESUMPTION_PROMPT.md (ce fichier)
+├── guides/
+│   ├── fondateur.html
+│   ├── gerant.html
+│   ├── rga.html
+│   └── fallou.html
+├── docs/
+│   ├── DOCUMENTATION_TECHNIQUE.md
+│   ├── AI_RESUMPTION_PROMPT.md (ce fichier)
+│   └── NOTIFICATIONS_ROADMAP.md
+└── scripts/
+    └── boan_sheets_format.gs
 ```
 
 ---
