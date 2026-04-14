@@ -1038,7 +1038,7 @@ var S = {
   fb:{sem:'',nb:'',nou:'',stk:'',inc:'',poi:'',msg:''},
   fm:{date:'',foi:'Thiès',foiCustom:'',bas:'',moy:'',haut:''},
   falim:{date:'',type:'',prix:''},
-  sn:null, sp:null, spx:null, sveau:undefined, salim:undefined, svet:undefined, ssec:undefined, seau:undefined, smdo:undefined, simpMode:undefined, simpPct:undefined, simpFix:undefined,
+  sn:null, sp:null, spx:null, sveau:undefined, salim:undefined, svet:undefined, ssec:undefined, seau:undefined, smdo:undefined, sassur:undefined, simpMode:undefined, simpPct:undefined, simpFix:undefined,
   _resetPwdOpen:false, _resetPwd:'', _resetPwdError:'', _resetGoCheck:false,
   _pwdMgrOpen:false, _pwdMgrStep:'auth', _pwdMgrError:'', _pwdMgrSuccess:'',
   _pwdMgrCurrent:'', _pwdMgrRole:'', _pwdMgrNew:'', _pwdMgrConfirm:'', _pwdMgrNewLogin:'',
@@ -4876,7 +4876,7 @@ function buildSidebar(){
           return '<div class="sb-row"><span class="sb-lbl">Incidents cette semaine</span><span class="sb-val '+(nbInc>0?'kval-crit':'kval-ok')+'">'+nbInc+'</span></div>';
         })()
         +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'kval-ok':MOCK.gmq>=(CYCLE.gmqWarn||0.8)?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
-        +(function(){var _pFw=CYCLE.peseeFreq||30;var _pJw=joursSince('pesee');var _pClw=_pJw>=999?'kval-crit':_pJw>_pFw?'kval-crit':_pJw>_pFw-3?'kval-warn':'kval-ok';var _pTxw=_pJw>=999?'\u2717 Aucune':_pJw>_pFw?'\u2717 Retard '+(_pJw-_pFw)+'j':_pJw>_pFw-3?'\u26a0 Dans '+(_pFw-_pJw)+'j':'\u2713 '+_pJw+'j / '+_pFw+'j';return '<div class="sb-row"><span class="sb-lbl">Pes\u00e9e (/'+_pFw+'j)</span><span class="sb-val '+_pClw+'">'+_pTxw+'</span></div>';})()
+        +(function(){var _pFw=CYCLE.peseeFreq||30;var _pJw=joursSince('pesee');var _pClw=_pJw>=999?'kval-crit':_pJw>_pFw?'kval-crit':_pJw>_pFw-3?'kval-warn':'kval-ok';var _remw=_pFw-_pJw;var _pTxw=_pJw>=999?'\u2717 Aucune':_pJw>_pFw?'\u2717 Retard '+(_pJw-_pFw)+'j':_pJw>_pFw-3?(_remw===0?'\u26a0 Aujourd\'hui !':_remw===1?'\u26a0 Demain !':'\u26a0 Dans '+_remw+'j'):'\u2713 '+_pJw+'j / '+_pFw+'j';return '<div class="sb-row"><span class="sb-lbl">Pes\u00e9e (/'+_pFw+'j)</span><span class="sb-val '+_pClw+'">'+_pTxw+'</span></div>';})()
         +(function(){
           var _n3=_nowDakar();
           var _wd3=_n3.weekday;
@@ -5071,6 +5071,7 @@ function _calcPxSeuil() {
   var vt  = sc.svet   !== undefined ? sc.svet   : 20000;
   var sec = sc.ssec   !== undefined ? sc.ssec   : 50000;
   var tr  = sc.strans !== undefined ? sc.strans : 0;
+  var asu = sc.sassur !== undefined ? sc.sassur : 0;
   var eau = sc.seau   !== undefined ? sc.seau   : 5000;
   var mdo = sc.smdo   !== undefined ? sc.smdo   : 0;
   var cm  = CYCLE.dureeMois || 8;
@@ -5084,7 +5085,7 @@ function _calcPxSeuil() {
   var iPct  = sc.simpPct !== undefined ? sc.simpPct : 5;
   var iFix  = sc.simpFix !== undefined ? sc.simpFix : 100000;
   var cImprev = iMode === 'pct' ? Math.round(cBase * iPct / 100) : iFix;
-  var cTotal  = cBase + cImprev + tr;
+  var cTotal  = cBase + cImprev + tr + asu;
   if (comm >= 100) return 0;
   return Math.ceil(cTotal / (nb * sp * (1 - comm / 100)));
 }
@@ -5120,6 +5121,7 @@ function _calcDepSim() {
   var simE = sc.seau    !== undefined ? sc.seau    : 5000;   // eau mensuelle
   var simM = sc.smdo    !== undefined ? sc.smdo    : 0;      // main d'œuvre mensuelle
   var simT = sc.strans  !== undefined ? sc.strans  : 0;      // transport one-shot
+  var simAs= sc.sassur  !== undefined ? sc.sassur  : 0;      // assurance CNAAS one-shot
   var iMode= sc.simpMode || 'pct';
   var iPct = sc.simpPct !== undefined ? sc.simpPct : 5;
   var iFix = sc.simpFix !== undefined ? sc.simpFix : 100000;
@@ -5132,7 +5134,7 @@ function _calcDepSim() {
   var cBase   = cVeau + cRec;
   var cImprev = iMode === 'pct' ? Math.round(cBase * iPct / 100) : iFix;
   var cRecurr = cRec + cImprev;
-  var cTotal  = cVeau + cRecurr + simT;
+  var cTotal  = cVeau + cRecurr + simT + simAs;
   var tj = Math.round(cm * 30.4);
   var je = _joursDepuisDebut();
   // Alimentation réelle si prixAlim configuré (kg consommés × prix/kg)
@@ -5148,7 +5150,7 @@ function _calcDepSim() {
   var cGardPeriode   = tj > 0 ? Math.round(simG * cm * je / tj) : 0;
   var cVetPeriode    = tj > 0 ? Math.round(nb * simW * je / tj) : 0;
   var cImprevPeriode = tj > 0 ? Math.round(cImprev * je / tj) : 0;
-  var dep = cVeau + simT + cAlimPeriode + cGardPeriode + cVetPeriode + cImprevPeriode;
+  var dep = cVeau + simT + simAs + cAlimPeriode + cGardPeriode + cVetPeriode + cImprevPeriode;
   return {
     dep: dep, total: cTotal, veau: cVeau, trans: simT, recurr: cRecurr, joursTotal: tj,
     alim: cAlimPeriode, gard: cGardPeriode, vet: cVetPeriode, imprev: cImprevPeriode,
@@ -5327,7 +5329,7 @@ function viewDash(){
       var _sopTxt=_tSopJ<=14?'\u2713 Il y a '+_tSopJ+'j':'\u2717 '+_tSopJ+'j \u2014 A faire';
       var _pesOkCl=_tPesJ!==null&&_tPesJ<=_tPesFreq-3;
       var _pesWarn=_tPesJ!==null&&_tPesJ>_tPesFreq-3&&_tPesJ<=_tPesFreq;
-      var _peseTxt=_tPesJ===null?'\u2717 Jamais faite':_pesWarn?'\u26a0 Dans '+(_tPesFreq-_tPesJ)+'j \u2014 planifier':_pesOkCl?'\u2713 Il y a '+_tPesJ+'j / '+_tPesFreq+'j':'\u2717 Retard de '+(_tPesJ-_tPesFreq)+'j';
+      var _peseTxt=_tPesJ===null?'\u2717 Jamais faite':_pesWarn?(_tPesFreq-_tPesJ===0?'\u26a0 Aujourd\'hui !':_tPesFreq-_tPesJ===1?'\u26a0 Demain !':'\u26a0 Dans '+(_tPesFreq-_tPesJ)+'j \u2014 planifier'):_pesOkCl?'\u2713 Il y a '+_tPesJ+'j / '+_tPesFreq+'j':'\u2717 Retard de '+(_tPesJ-_tPesFreq)+'j';
       var _bilTxt=_tBilOk?'\u2713 Envoye sem. '+calcSemaine():_tJSem===5?'\u2717 A envoyer ce soir':_tVen<=2?'\u26a0 Dans '+_tVen+'j (vendredi)':'Dans '+_tVen+'j (vendredi)';
       var _bilWarn=!_tBilOk&&_tVen<=2;
       return '<div style="background:#0c1c0c;border:1px solid #1e3a1e;border-radius:12px;padding:12px 14px;margin-bottom:14px">'
@@ -5382,9 +5384,20 @@ function viewDash(){
       +'<div class="sparkline-wrap">'+sparkline(SPARK.stk,gc('stk',stkDisplay))+'</div>'
       +'</div>';
   })()
-    +'<div class="kcard '+trBg+'"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">Trésorerie</div><div class="'+trC+'" style="font-size:26px;font-weight:700" data-count="'+Math.round(MOCK.treso/1000)+'">'+Math.round(MOCK.treso/1000)+'</div>'
-    +(_budgetJour!==null?'<div style="font-size:11px;margin-top:4px;color:'+(_budgetJour<=(_budgetJourCible||9999)?'#4caf50':'#f44336')+'">'+fmt(_budgetJour)+' FCFA/j'+(_budgetJourCible?' (cible '+fmt(_budgetJourCible)+'FCFA/j)':'')+'</div>':'<div style="font-size:11px;margin-top:4px;color:'+gc('tr',MOCK.treso)+'">k FCFA — Min. '+Math.round(_trSeuilHaut/1000)+'k</div>')
-    +'<div class="sparkline-wrap">'+sparkline(SPARK.treso.map(function(v){return v/1000;}),gc('tr',MOCK.treso))+'</div></div>'
+    +'<div class="kcard '+trBg+'">'+(S.user==='gerant'?(function(){
+      var _mort2=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;
+      var _tmK=CYCLE.tauxMortMax||3;
+      var _sB=_mort2===0?20:_mort2<=_tmK?12:_mort2<=_tmK*2?5:0;
+      var _incO=(LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';});
+      var _mlus=_incO.reduce(function(s,i){return s+(i.grav==='3'?8:i.grav==='2'?4:2);},0);
+      var _sc=Math.min(100,Math.max(0,Math.round(Math.min(50,(MOCK.gmq/(CYCLE.gmqCible||1.1))*50)+(MOCK.stock>=6?30:MOCK.stock>=4?15:MOCK.stock>0?5:0)+_sB)-_mlus));
+      var _scCol=_sc>=70?'#4caf50':_sc>=40?'#ff9800':'#f44336';
+      var _scBg=_sc>=70?'kcard-ok':_sc>=40?'kcard-warn':'kcard-crit';
+      return '<div style="font-size:12px;color:#88bb88;margin-bottom:4px">Santé troupeau</div>'
+        +'<div class="'+((_sc>=70?'kval-ok':_sc>=40?'kval-warn':'kval-crit'))+'" style="font-size:26px;font-weight:700">'+_sc+'</div>'
+        +'<div style="font-size:11px;margin-top:4px;color:'+_scCol+'">/100'+(_incO.length?' — '+_incO.length+' incident(s) ouvert(s)':' — troupeau OK')+'</div>'
+        +'<div class="sparkline-wrap">'+sparkline(SPARK.betes,_scCol)+'</div>';
+    })():('<div style="font-size:12px;color:#88bb88;margin-bottom:4px">Trésorerie</div><div class="'+trC+'" style="font-size:26px;font-weight:700" data-count="'+Math.round(MOCK.treso/1000)+'">'+Math.round(MOCK.treso/1000)+'</div>'+(_budgetJour!==null?'<div style="font-size:11px;margin-top:4px;color:'+(_budgetJour<=(_budgetJourCible||9999)?'#4caf50':'#f44336')+'">'+fmt(_budgetJour)+' FCFA/j'+(_budgetJourCible?' (cible '+fmt(_budgetJourCible)+'FCFA/j)':'')+'</div>':'<div style="font-size:11px;margin-top:4px;color:'+gc('tr',MOCK.treso)+'">k FCFA — Min. '+Math.round(_trSeuilHaut/1000)+'k</div>')+'<div class="sparkline-wrap">'+sparkline(SPARK.treso.map(function(v){return v/1000;}),gc('tr',MOCK.treso))+'</div>'))+'</div>'
     +'</div>'
     +'<div class="card">'
     +'<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:13px;color:#aaa">Avancement cycle</span><span style="font-size:11px;background:#2a1f0a;color:#C8A06A;padding:3px 10px;border-radius:12px">Mois '+MOCK.mois+'/'+(CYCLE.dureeMois||8)+'</span></div>'
@@ -7253,6 +7266,7 @@ function viewMarche(){
     if (S.strans  === undefined && _sc0.strans  !== undefined) S.strans  = _sc0.strans;
     if (S.seau    === undefined && _sc0.seau    !== undefined) S.seau    = _sc0.seau;
     if (S.smdo    === undefined && _sc0.smdo    !== undefined) S.smdo    = _sc0.smdo;
+    if (S.sassur  === undefined && _sc0.sassur  !== undefined) S.sassur  = _sc0.sassur;
     if (S.simpPct === undefined && _sc0.simpPct !== undefined) S.simpPct = _sc0.simpPct;
     if (S.simpFix === undefined && _sc0.simpFix !== undefined) S.simpFix = _sc0.simpFix;
     if (!S.simpMode && _sc0.simpMode) S.simpMode = _sc0.simpMode;
@@ -7275,6 +7289,7 @@ function viewMarche(){
     var ceau    = S.seau     !== undefined ? S.seau     : 5000;   // eau FCFA/mois
     var cmdo    = S.smdo     !== undefined ? S.smdo     : 0;      // main d'œuvre gérant FCFA/mois
     var ctrans  = S.strans   !== undefined ? S.strans   : 0;      // transport FCFA (one-shot)
+    var cassur  = S.sassur   !== undefined ? S.sassur   : 0;      // assurance CNAAS FCFA (one-shot)
     var simpMode = S.simpMode || 'pct';
     var simpPct  = S.simpPct  !== undefined ? S.simpPct  : 5;
     var simpFix  = S.simpFix  !== undefined ? S.simpFix  : 100000;
@@ -7291,7 +7306,8 @@ function viewMarche(){
     var cBase   = cVeau + cAlim + cVet + cSec + cEau + cMdo;
     var cImprev = simpMode === 'pct' ? Math.round(cBase * simpPct / 100) : simpFix;
     var cTrans  = ctrans;
-    var cTotal  = cBase + cImprev + cTrans;
+    var cAssur  = cassur;
+    var cTotal  = cBase + cImprev + cTrans + cAssur;
     var ben     = ca - cTotal;
     var commVal = Math.round(ca * comm / 100);
     var benNet  = ben - commVal;
@@ -7387,7 +7403,7 @@ function viewMarche(){
     +   '<div><div style="font-size:11px;color:#88aa88">\u23f1 Dur\u00e9e simul\u00e9e</div>'
     +   '<div style="font-size:10px;color:#445540;margin-top:2px">R\u00e9el\u00a0: ' + (CYCLE.dureeMois||8) + '\u00a0m</div></div>'
     +   '<div style="display:flex;align-items:center;gap:8px">'
-    +     '<button onclick="event.stopPropagation();S.simMois=null;S.sn=null;S.sp=null;S.spx=null;S.sveau=undefined;S.salim=undefined;S.svet=undefined;S.ssec=undefined;S.seau=undefined;S.smdo=undefined;S.strans=undefined;S.simpMode=undefined;S.simpPct=undefined;S.simpFix=undefined;r()" style="font-size:11px;padding:5px 10px;border-radius:7px;background:#0a150a;border:1px solid #2a4a2a;color:#88aa88;cursor:pointer">↺ Reset</button>'
+    +     '<button onclick="event.stopPropagation();S.simMois=null;S.sn=null;S.sp=null;S.spx=null;S.sveau=undefined;S.salim=undefined;S.svet=undefined;S.ssec=undefined;S.seau=undefined;S.smdo=undefined;S.sassur=undefined;S.strans=undefined;S.simpMode=undefined;S.simpPct=undefined;S.simpFix=undefined;r()" style="font-size:11px;padding:5px 10px;border-radius:7px;background:#0a150a;border:1px solid #2a4a2a;color:#88aa88;cursor:pointer">↺ Reset</button>'
     +     '<div style="display:flex;align-items:center">'
     +       '<button onclick="event.stopPropagation();S.simMois=Math.max(1,(S.simMois!==undefined?S.simMois:' + cycleMois + ')-1);r()" style="width:34px;height:34px;font-size:20px;border-radius:8px 0 0 8px;background:#0a150a;border:1px solid #2a4a2a;border-right:none;color:#C8A06A;cursor:pointer">&#8722;</button>'
     +       '<div style="min-width:50px;height:34px;display:flex;align-items:center;justify-content:center;background:#0a150a;border-top:1px solid #2a4a2a;border-bottom:1px solid #2a4a2a;font-size:17px;font-weight:800;color:#eee">' + cycleMois + '\u00a0m</div>'
@@ -7446,12 +7462,16 @@ function viewMarche(){
     +   simField('Coût de l\'eau / mois', 'seau', ceau, 0, 200000, 1000, 'FCFA / mois', false)
     +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Sur ' + cycleMois + ' mois → <strong style="color:#eee">' + fmt(cEau) + ' FCFA</strong></div>'
     + '</div>'
-
-    // ── Bloc Main d'œuvre ──
     + '<div class="card">'
     +   '<div class="stitle">👷 Main d\'œuvre gérant</div>'
     +   simField('Salaire / rémunération par mois', 'smdo', cmdo, 0, 500000, 5000, 'FCFA / mois', false)
     +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Sur ' + cycleMois + ' mois → <strong style="color:#eee">' + fmt(cMdo) + ' FCFA</strong></div>'
+    + '</div>'
+
+    + '<div class="card">'
+    +   '<div class="stitle">🛡️ Assurance CNAAS</div>'
+    +   simField('Prime assurance (forfait cycle)', 'sassur', cassur, 0, 500000, 5000, 'FCFA (one-shot)', false)
+    +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Cotisation unique — si 0 : non souscrite ou incluse dans imprévus</div>'
     + '</div>'
 
     // ── Bloc Imprévus ──
@@ -7479,6 +7499,7 @@ function viewMarche(){
     +   (cEau > 0 ? simRow('− Eau (' + cycleMois + 'm)',      fmt(cEau)  + ' FCFA', '#ff9090') : '')
     +   (cMdo > 0 ? simRow('− Main d\'œuvre (' + cycleMois + 'm)', fmt(cMdo) + ' FCFA', '#ff9090') : '')
     +   (cTrans > 0 ? simRow('− Transport',              fmt(cTrans) + ' FCFA', '#ff9090') : '')
+    +   (cAssur > 0 ? simRow('− Assurance CNAAS',        fmt(cAssur) + ' FCFA', '#ff9090') : '')
     +   simRow('− Imprévus',                  fmt(cImprev)+ ' FCFA', '#ff9800')
     +   '<div style="height:1px;background:#2a4a2a;margin:6px 0"></div>'
     +   simRow('Total charges',               fmt(cTotal) + ' FCFA', '#ff6060')
@@ -8219,7 +8240,7 @@ function pageGuide() {
   var _tachePesee = (_guidePeseeJ === 999)
     ? ['⚖️', 'Peser chaque bête', 'Aucune pesée enregistrée. Tous les '+peseeFreq+' jours : numéro de bête + race + poids.', 'chTab(\'saisie\');chSub(\'pesee\')']
     : _guidePeseeOk
-      ? ['✅', 'Pesée à jour — prochaine dans '+Math.max(0, peseeFreq - _guidePeseeJ)+' jour(s)', 'Dernière pesée il y a '+_guidePeseeJ+' j. Prochain rappel dans '+Math.max(0, peseeFreq - _guidePeseeJ)+' jour(s).', null]
+      ? ['✅', 'Pesée à jour — '+(Math.max(0,peseeFreq-_guidePeseeJ)===0?'aujourd\'hui !':Math.max(0,peseeFreq-_guidePeseeJ)===1?'prochaine demain':'prochaine dans '+Math.max(0,peseeFreq-_guidePeseeJ)+' jour(s)'), 'Dernière pesée il y a '+_guidePeseeJ+' j. Prochain rappel dans '+Math.max(0, peseeFreq - _guidePeseeJ)+' jour(s).', null]
       : ['🔴', 'PESÉE EN RETARD — '+(_guidePeseeJ - peseeFreq)+' jours de retard !', 'Dernière pesée il y a '+_guidePeseeJ+' jours (fréquence : tous les '+peseeFreq+' j). À faire le plus tôt possible.', 'chTab(\'saisie\');chSub(\'pesee\')'];
 
     // QUAND LIVRAISON
