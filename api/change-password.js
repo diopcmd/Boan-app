@@ -20,7 +20,7 @@ export default async function handler(req, res) {
   const { founderPassword, role, newPassword, newLogin } = req.body || {};
 
   // 2. Vérifier champs
-  const validRoles = ['fondateur', 'gerant', 'rga', 'fallou'];
+  const validRoles = ['fondateur', 'gerant', 'rga', 'commerciale'];
   if (!role || !validRoles.includes(role)) return res.status(400).json({ error: 'Rôle invalide' });
   if (!newPassword && !newLogin) return res.status(400).json({ error: 'Saisir un nouvel identifiant et/ou un nouveau mot de passe' });
   if (newPassword && newPassword.length < 6) return res.status(400).json({ error: 'Nouveau mot de passe trop court (6 car. min)' });

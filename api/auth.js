@@ -8,7 +8,7 @@ export default async function handler(req, res) {
     fondateur: { name:'Direction',      pwd: process.env.PWD_FONDATEUR, tabs:['dashboard','saisie','livrables','marche'], sid: process.env.SID_FONDATEUR },
     gerant:    { name:'Gerant terrain', pwd: process.env.PWD_GERANT,    tabs:['dashboard','saisie'],                      sid: process.env.SID_GERANT    },
     rga:       { name:'RGA',            pwd: process.env.PWD_RGA,       tabs:['dashboard','livrables'],                   sid: process.env.SID_RGA       },
-    fallou:    { name:'Commerciale',    pwd: process.env.PWD_FALLOU,    tabs:['dashboard','marche'],                      sid: process.env.SID_FALLOU    },
+    commerciale: { name:'Commerciale',   pwd: process.env.PWD_FALLOU,    tabs:['dashboard','marche','guide'],               sid: process.env.SID_FALLOU    },
   };
 
   // R-03 : restreindre CORS — autoriser les domaines Vercel légitimes + localhost dev
@@ -104,7 +104,7 @@ export default async function handler(req, res) {
       sid = {
         fondateur: process.env.SID_FONDATEUR,
         gerant:    process.env.SID_GERANT,
-        fallou:    process.env.SID_FALLOU,
+        commerciale: process.env.SID_FALLOU,
       };
     } else if (role === 'rga') {
       sid = {
@@ -112,9 +112,9 @@ export default async function handler(req, res) {
         gerant:    process.env.SID_GERANT,
         fondateur: process.env.SID_FONDATEUR,
       };
-    } else if (role === 'fallou') {
+    } else if (role === 'commerciale') {
       sid = {
-        fallou:    process.env.SID_FALLOU,
+        commerciale: process.env.SID_FALLOU,
         fondateur: process.env.SID_FONDATEUR,
       };
     } else {
