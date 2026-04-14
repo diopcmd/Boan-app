@@ -4635,7 +4635,7 @@ function buildSidebar(){
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'bilan\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">📊 Bilan hebdo</span>'
             +'<span class=\"sb-val '+(bilanSem?'sb-ok':(bilanDu&&_heure>=18?'sb-ko':'sb-warn'))+'\">'
-            +(bilanSem?'✓ Sem. '+calcSemaine():bilanDu&&_heure>=18?'✗ À envoyer':(_jourSem<5?'Dans '+_bilanJoursVen+'j':_heure>=18?'✗ Ce soir !':'Ce soir'))+'</span></div>'
+            +(bilanSem?'\u2713 Envoye sem. '+calcSemaine():bilanDu&&_heure>=18?'\u2717 A envoyer ce soir':(_jourSem<5?'Dans '+_bilanJoursVen+'j (ven.)':_heure>=18?'\u2717 Ce soir !':'Ce soir'))+'</span></div>'
             // Stock : à tout moment (mais alerte si > 14j)
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'stock\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">🌾 Stock</span>'
@@ -4643,7 +4643,7 @@ function buildSidebar(){
             // Pesée : selon fréquence cycle
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'pesee\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">⚖️ Pesée</span>'
-            +'<span class=\"sb-val '+(peseeOk2?'sb-ok':'sb-ko')+'\">'+(peseeJ<999?'Il y a '+peseeJ+'j':'Jamais faite')+'</span></div>'
+            +(function(){var _pF=CYCLE.peseeFreq||30;var _pCl=peseeJ>=999?'sb-ko':peseeJ>_pF?'sb-ko':peseeJ>_pF-3?'sb-warn':'sb-ok';var _pTxt=peseeJ>=999?'\u2717 Jamais faite':peseeJ>_pF?'\u2717 Retard '+(peseeJ-_pF)+'j':peseeJ>_pF-3?'\u26a0 Dans '+(_pF-peseeJ)+'j':'\u2713 Il y a '+peseeJ+'j / '+_pF+'j';return '<span class=\"sb-val '+_pCl+'\">'+_pTxt+'</span></div>';})()
             // Incident : nb aujourd'hui
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'inc\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">⚠️ Incidents</span>'
@@ -4835,7 +4835,7 @@ function buildSidebar(){
             +'<span class="sb-val '+(sopOk2b?'sb-ok':'sb-ko')+'">'+(sopOk2b?'Il y a '+sopJ2+'j':'✗ '+sopJ2+'j')+'</span></div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'bilan\');closeSB()\' style="cursor:pointer">'
             +'<span class="sb-lbl">📊 Bilan sem.</span>'
-            +'<span class="sb-val '+(bilOk2?'sb-ok':'sb-warn')+'">'+(bilOk2?'✓ Sem.'+calcSemaine():'À recevoir')+'</span></div>'
+            +'<span class="sb-val '+(bilOk2?'sb-ok':'sb-warn')+'">'+(bilOk2?'\u2713 Gerant a envoye sem. '+calcSemaine():'\u2717 En attente gerant')+'</span></div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'stock\');closeSB()\' style="cursor:pointer">'
             +'<span class="sb-lbl">🌾 Stock</span>'
             +'<span class="sb-val '+(stkOk2b?'sb-ok':'sb-ko')+'">'+(stkJ2<999?'Il y a '+stkJ2+'j':'Jamais')+'</span></div>'
@@ -4859,7 +4859,7 @@ function buildSidebar(){
       body='<div class="sb-card">'
         +(function(){
           var bilOk = bilanDejaFaitCetteSemaine();
-          return '<div class="sb-row"><span class="sb-lbl">Bilan sem. '+calcSemaine()+' reçu</span><span class="'+(bilOk?'sb-ok':'sb-ko')+'">'+(bilOk?'✓ Reçu':'✗ En attente')+'</span></div>';
+          return '<div class="sb-row"><span class="sb-lbl">\ud83d\udcca Bilan sem. '+calcSemaine()+'</span><span class="'+(bilOk?'sb-ok':'sb-ko')+'">'+(bilOk?'\u2713 Gerant a envoye':'\u2717 Non envoye cette sem.')+'</span></div>';
         })()
         +(function(){
           // Incidents de la semaine (pas seulement aujourd'hui)
@@ -4876,7 +4876,7 @@ function buildSidebar(){
           return '<div class="sb-row"><span class="sb-lbl">Incidents cette semaine</span><span class="sb-val '+(nbInc>0?'kval-crit':'kval-ok')+'">'+nbInc+'</span></div>';
         })()
         +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'kval-ok':MOCK.gmq>=(CYCLE.gmqWarn||0.8)?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
-        +'<div class="sb-row"><span class="sb-lbl">Pesée à jour</span><span class="sb-val '+(joursSince('pesee')<=(CYCLE.peseeFreq||30)?'kval-ok':'kval-warn')+'">'+((function(){var j=joursSince('pesee');return j<999?('Il y a '+j+'j'):'Aucune';})())+'</span></div>'
+        +(function(){var _pFw=CYCLE.peseeFreq||30;var _pJw=joursSince('pesee');var _pClw=_pJw>=999?'kval-crit':_pJw>_pFw?'kval-crit':_pJw>_pFw-3?'kval-warn':'kval-ok';var _pTxw=_pJw>=999?'\u2717 Aucune':_pJw>_pFw?'\u2717 Retard '+(_pJw-_pFw)+'j':_pJw>_pFw-3?'\u26a0 Dans '+(_pFw-_pJw)+'j':'\u2713 '+_pJw+'j / '+_pFw+'j';return '<div class="sb-row"><span class="sb-lbl">Pes\u00e9e (/'+_pFw+'j)</span><span class="sb-val '+_pClw+'">'+_pTxw+'</span></div>';})()
         +(function(){
           var _n3=_nowDakar();
           var _wd3=_n3.weekday;
@@ -5307,6 +5307,65 @@ function viewDash(){
     +'<div style="background:rgba(90,180,255,0.08);border:1px solid rgba(90,180,255,0.2);border-radius:20px;padding:5px 13px;font-size:12px;color:#5ab4ff;font-weight:600">'+pct+'% avancement</div>'
     +'</div>'
     +'</div>'
+    +(S.user==='gerant'?(function(){
+      var _tFichOk=ficheDejaSoumise();
+      var _tSopJ=joursSince('sop');
+      var _tPesJ=_dernPeseeJours, _tPesFreq=CYCLE.peseeFreq||30;
+      var _tBilOk=bilanDejaFaitCetteSemaine();
+      var _tJSem=_nowDakar().weekday;
+      var _tVen=_tJSem===5?0:(_tJSem<5?5-_tJSem:12-_tJSem);
+      function _tRow(ico,lbl,ok,warn,txt,sub){
+        var cl=ok?'#4caf50':warn?'#ff9800':'#f44336';
+        var bg=ok?'rgba(76,175,80,0.07)':warn?'rgba(255,152,0,0.07)':'rgba(244,67,54,0.07)';
+        var bdr=ok?'rgba(76,175,80,0.25)':warn?'rgba(255,152,0,0.25)':'rgba(244,67,54,0.25)';
+        return '<div onclick="chTab(\'saisie\');chSub(\''+sub+'\')" style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:'+bg+';border:1px solid '+bdr+';border-radius:8px;margin-bottom:5px;cursor:pointer">'
+          +'<span style="font-size:13px;color:#d0d0d0">'+ico+' '+lbl+'</span>'
+          +'<span style="font-size:12px;font-weight:700;color:'+cl+'">'+txt+'</span>'
+          +'</div>';
+      }
+      var _fichTxt=_tFichOk?'\u2713 Faite':'\u2717 A faire';
+      var _sopTxt=_tSopJ<=14?'\u2713 Il y a '+_tSopJ+'j':'\u2717 '+_tSopJ+'j \u2014 A faire';
+      var _pesOkCl=_tPesJ!==null&&_tPesJ<=_tPesFreq-3;
+      var _pesWarn=_tPesJ!==null&&_tPesJ>_tPesFreq-3&&_tPesJ<=_tPesFreq;
+      var _peseTxt=_tPesJ===null?'\u2717 Jamais faite':_pesWarn?'\u26a0 Dans '+(_tPesFreq-_tPesJ)+'j \u2014 planifier':_pesOkCl?'\u2713 Il y a '+_tPesJ+'j / '+_tPesFreq+'j':'\u2717 Retard de '+(_tPesJ-_tPesFreq)+'j';
+      var _bilTxt=_tBilOk?'\u2713 Envoye sem. '+calcSemaine():_tJSem===5?'\u2717 A envoyer ce soir':_tVen<=2?'\u26a0 Dans '+_tVen+'j (vendredi)':'Dans '+_tVen+'j (vendredi)';
+      var _bilWarn=!_tBilOk&&_tVen<=2;
+      return '<div style="background:#0c1c0c;border:1px solid #1e3a1e;border-radius:12px;padding:12px 14px;margin-bottom:14px">'
+        +'<div style="font-size:11px;color:#88aa88;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">\ud83d\udccb T\u00e2ches actives</div>'
+        +_tRow('\ud83d\udccb','Fiche du jour',_tFichOk,false,_fichTxt,'fiche')
+        +_tRow('\u2705','SOP (\u00d7\u00a014j)',_tSopJ<=14,false,_sopTxt,'sop')
+        +_tRow('\u2696\ufe0f','Pes\u00e9e (/\u00a0'+_tPesFreq+'j)',_pesOkCl,_pesWarn,_peseTxt,'pesee')
+        +_tRow('\ud83d\udcca','Bilan hebdo',_tBilOk,_bilWarn,_bilTxt,'bilan')
+        +'</div>';
+    })():'')
+    +(S.user==='fondateur'?(function(){
+      var _td3=today();
+      var _fF=HISTORY.some(function(h){return h.type==='fiche'&&h.date===_td3;})||CYCLE._lastFicheDate===_td3;
+      var _bF=bilanDejaFaitCetteSemaine();
+      var _bilH=HISTORY.filter(function(h){return h.type==='bilan';});
+      var _bilD=_bilH.length?_bilH[0].date:null;
+      var _pJF=_dernPeseeJours, _pFrF=CYCLE.peseeFreq||30;
+      var _pOkCF=_pJF!==null&&_pJF<=_pFrF-3;
+      var _pWF=_pJF!==null&&_pJF>_pFrF-3&&_pJF<=_pFrF;
+      function _fRow(ico,lbl,ok,warn,txt){
+        var cl=ok?'#4caf50':warn?'#ff9800':'#f44336';
+        var bg=ok?'rgba(76,175,80,0.07)':warn?'rgba(255,152,0,0.07)':'rgba(244,67,54,0.07)';
+        var bdr=ok?'rgba(76,175,80,0.25)':warn?'rgba(255,152,0,0.25)':'rgba(244,67,54,0.25)';
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:'+bg+';border:1px solid '+bdr+';border-radius:8px;margin-bottom:5px">'
+          +'<span style="font-size:13px;color:#d0d0d0">'+ico+' '+lbl+'</span>'
+          +'<span style="font-size:12px;font-weight:700;color:'+cl+'">'+txt+'</span>'
+          +'</div>';
+      }
+      var _bilTxtF=_bF?'\u2713 Gerant a envoye'+(_bilD?' le '+_bilD:' sem. '+calcSemaine()):'\u2717 Non envoye \u2014 sem. '+calcSemaine();
+      var _fichTxtF=_fF?'\u2713 Recue auj.':'\u2717 Non recue';
+      var _peseTxtF=_pJF===null?'\u2717 Aucune pesee':_pWF?'Il y a '+_pJF+'j \u2014 planifier (/'+_pFrF+'j)':_pOkCF?'\u2713 Il y a '+_pJF+'j / '+_pFrF+'j':'\u2717 Retard de '+(_pJF-_pFrF)+'j';
+      return '<div style="background:#0c1c0c;border:1px solid #1e3a1e;border-radius:12px;padding:12px 14px;margin-bottom:14px">'
+        +'<div style="font-size:11px;color:#88aa88;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">\ud83d\udce5 Saisies g\u00e9rant \u2014 Sem. '+calcSemaine()+'</div>'
+        +_fRow('\ud83d\udcca','Bilan hebdomadaire',_bF,false,_bilTxtF)
+        +_fRow('\ud83d\udccb','Fiche du jour',_fF,false,_fichTxtF)
+        +_fRow('\u2696\ufe0f','Pes\u00e9e (d\u00e9lai '+_pFrF+'j)',_pOkCF,_pWF,_peseTxtF)
+        +'</div>';
+    })():'')
     +'<div class="stitle">Indicateurs Cycle</div>'
     +'<div class="kgrid">'
     +'<div class="kcard kcard-ok"><div style="font-size:12px;color:#88bb88;margin-bottom:4px">Bêtes actives</div><div class="kval-ok" style="font-size:26px;font-weight:700" data-count="'+MOCK.betes+'">'+MOCK.betes+'</div>'+(function(){var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;var _tmKcard=CYCLE.tauxMortMax||3;var col=mort===0?'#4caf50':mort<=_tmKcard?'#ff9800':'#f44336';var ico=mort===0?' ✓':mort<=_tmKcard?' ⚠':' 🔴';return '<div style="font-size:11px;margin-top:4px;color:'+col+'">'+mort+'% mortalité'+ico+'</div><div class="sparkline-wrap">'+sparkline(SPARK.betes,col)+'</div></div>';})()
