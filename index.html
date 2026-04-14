@@ -2960,6 +2960,7 @@ function addStockLigne(mode){
 // Construire le contexte complet pour Claude
 function buildAIContext() {
   var sem = calcSemaine();
+  var totalSem = Math.round((CYCLE.dureeMois||8)*4.33);
   var mort = CYCLE.nbBetes > 0
     ? Math.round(((CYCLE.nbBetes||4) - MOCK.betes) / (CYCLE.nbBetes||4) * 100)
     : 0;
@@ -2978,19 +2979,29 @@ function buildAIContext() {
     return t + ': ' + Math.max(0, Math.round(netKg[t])) + ' kg';
   }).join(', ') || 'Aucun mouvement enregistré';
 
-  // Pesées récentes
-  var paseesRecentes = LIVE.loaded && LIVE.pesees.length
-    ? LIVE.pesees.slice(0,6).map(function(p){
-        return p.id + ' (' + p.race + ') : ' + p.poids + ' kg, GMQ=' + (p.gmq||'?') + ' kg/j';
+  // Pesées récentes — les 6 plus récentes (LIVE.pesees = trié asc, plus récente = dernière)
+  var peseesRecentes = LIVE.loaded && LIVE.pesees.length
+    ? LIVE.pesees.slice(-6).reverse().map(function(p){
+        return p.id + ' (' + (p.race||'?') + ') : ' + p.poids + ' kg, GMQ=' + (p.gmq||'?') + ' kg/j';
       }).join(' | ')
     : 'Non chargées';
 
-  // Prix foirail récents
+  // Prix foirail récents — les 3 plus récents (LIVE.prix = trié asc depuis Sheets)
   var prixRecents = LIVE.prix && LIVE.prix.length
-    ? LIVE.prix.slice(0,3).map(function(p){
+    ? LIVE.prix.slice(-3).map(function(p){
         return p.foi + ' ' + p.date + ': moy=' + fmt(p.moy||0) + ' FCFA/kg';
       }).join(' | ')
     : 'Non chargés';
+
+  // Prix aliments récents — dernier prix par type (LIVE.alimPrix = trié asc)
+  var alimResume = 'Non chargés';
+  if (LIVE.alimPrix && LIVE.alimPrix.length) {
+    var _lastAlim = {};
+    LIVE.alimPrix.forEach(function(a){ _lastAlim[a.type] = a.prix; });
+    alimResume = Object.keys(_lastAlim).map(function(t){
+      return t + ': ' + fmt(_lastAlim[t]) + ' FCFA/kg';
+    }).join(' | ');
+  }
 
   // Historique incidents récents
   var incidents = HISTORY.filter(function(h){ return h.type==='inc'; }).slice(0,5)
@@ -3000,35 +3011,100 @@ function buildAIContext() {
   var sante = HISTORY.filter(function(h){ return h.type==='sante'; }).slice(0,5)
     .map(function(h){ return h.date + ': ' + h.label; }).join(' | ') || 'Aucun';
 
+  // Finances — dépenses réalisées vs prorata
+  var _depReal = (CYCLE.capital||0) - MOCK.treso;
+  var _depRatio = totalSem > 0 ? Math.round(sem / totalSem * 100) : 0;
+  var _depProrataTarget = Math.round((CYCLE.capital||0) * sem / totalSem);
+
+  // Charges simulateur (one-shot)
+  var _sc = CYCLE.simCharges || {};
+  var _chargesSimParts = [];
+  if (_sc.smain)  _chargesSimParts.push('Main d'oeuvre: ' + fmt(_sc.smain) + ' FCFA');
+  if (_sc.strans) _chargesSimParts.push('Transport: '      + fmt(_sc.strans) + ' FCFA');
+  if (_sc.sassur) _chargesSimParts.push('Assurance CNAAS: '+ fmt(_sc.sassur) + ' FCFA');
+  if (_sc.sautre) _chargesSimParts.push('Imprévus: '       + fmt(_sc.sautre) + ' FCFA');
+  var _chargesSim = _chargesSimParts.length ? _chargesSimParts.join(', ') : 'Non renseignées';
+
+  // Score santé troupeau (même logique que la kcard dashboard)
+  var _scGmq   = Math.min(50, Math.round((_gmqLiveAI / (CYCLE.gmqCible||1)) * 50));
+  var _scStk   = (function(){ var _s = MOCK.stock > 0 ? MOCK.stock : calcStockLocal(); return _s>=6?30:_s>=4?20:_s>=2?10:0; })();
+  var _scBetes = (CYCLE.nbBetes||0) > 0 ? Math.round((MOCK.betes / CYCLE.nbBetes) * 20) : 20;
+  var _scMalus = _incOuvertsAI.reduce(function(t,i){ return t + (i.grav==='3'?8:i.grav==='2'?4:2); }, 0);
+  var _scoreSante = Math.max(0, _scGmq + _scStk + _scBetes - _scMalus);
+
+  // Compliance SOP véto
+  var _sopCompliance = 'Non évaluable (cycle non démarré)';
+  var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+  if (CYCLE.dateDebut && _proto && _proto.length) {
+    var _nd = _nowDakar();
+    var _nowMs = new Date(_nd.year, _nd.month-1, _nd.day).getTime();
+    var _debSop = parseISO(CYCLE.dateDebut);
+    var _sopFaits = 0, _sopTotal = 0;
+    if (_debSop) {
+      _proto.forEach(function(acte){
+        var _echeMs = _debSop.getTime() + acte.j * 86400000;
+        if (_echeMs <= _nowMs + 7 * 86400000) {
+          _sopTotal++;
+          var _fait = HISTORY.some(function(h){
+            if (acte.type === 'pesee' && h.type === 'pesee') return true;
+            if (acte.type === 'sante' && h.type === 'sante') {
+              var _hi = parseISO(h.date);
+              return _hi && Math.abs(_hi.getTime() - _echeMs) / 86400000 <= 21;
+            }
+            return false;
+          });
+          if (_fait) _sopFaits++;
+        }
+      });
+      if (_sopTotal > 0) {
+        _sopCompliance = _sopFaits + '/' + _sopTotal + ' actes (' + Math.round(_sopFaits / _sopTotal * 100) + '% conformité)';
+      }
+    }
+  }
+
   return [
     '=== CONTEXTE CYCLE BOANR ===',
+    'Cycle n°: ' + (CYCLE.numCycle||1),
     'Date début: ' + (CYCLE.dateDebut ? isoToFr(CYCLE.dateDebut) : 'Non définie'),
-    'Semaine courante: ' + sem + ' / ' + Math.round((CYCLE.dureeMois||8)*4.33),
+    'Semaine courante: ' + sem + ' / ' + totalSem + ' (' + _depRatio + '% du cycle écoulé)',
     'Durée prévue: ' + (CYCLE.dureeMois||8) + ' mois',
     '',
     '=== TROUPEAU ===',
     'Bêtes actives: ' + MOCK.betes + ' / ' + (CYCLE.nbBetes||4),
     'Race: ' + (CYCLE.race||'Non définie'),
-    'Mortalité cycle: ' + mort + '%',
+    'Mortalité cycle: ' + mort + '% (max acceptable: ' + (CYCLE.tauxMortMax||3) + '%)',
     'Poids départ moyen: ' + (CYCLE.poidsDepart||270) + ' kg',
-    'GMQ moyen actuel: ' + _gmqLiveAI + ' kg/j (cible >= '+(CYCLE.gmqCible||1)+' kg/j)'+(LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?' [donnée live]':' [estimation]'),
-    'Incidents ouverts: ' + _incOuvertsAI.length + (_incOuvertsAI.length ? ' — '+_incResume : ''),
-    'Ration journalière: ' + (CYCLE.ration||12) + ' kg/bête/jour',
+    'Poids cible fin de cycle: ' + (CYCLE.poidsCible||400) + ' kg/bête',
+    'Poids vente minimum: ' + (CYCLE.poidsVenteMin||340) + ' kg/bête',
+    'GMQ moyen actuel: ' + _gmqLiveAI + ' kg/j (cible >= ' + (CYCLE.gmqCible||1) + ' kg/j, warn < ' + (CYCLE.gmqWarn||0.8) + ' kg/j)' + (LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?' [donnée live]':' [estimation]'),
+    'Score santé troupeau: ' + _scoreSante + '/100',
+    'Incidents ouverts: ' + _incOuvertsAI.length + (_incOuvertsAI.length ? ' — ' + _incResume : ''),
+    'Ration journalière: ' + (CYCLE.ration||12) + ' kg/bête/jour (mix: ' + (CYCLE.mixSon||60) + '% son, ' + (CYCLE.mixTourteau||40) + '% tourteau arachide)',
     'Stock restant: ' + (MOCK.stock > 0 ? MOCK.stock : calcStockLocal()) + ' semaines',
     'Détail stock: ' + stockDetail,
+    'Compliance SOP véto: ' + _sopCompliance,
     '',
     '=== FINANCES ===',
     'Capital investi: ' + fmt(CYCLE.capital||0) + ' FCFA',
     'Trésorerie actuelle: ' + fmt(MOCK.treso) + ' FCFA',
+    'Dépenses réalisées: ' + fmt(_depReal) + ' FCFA (prorata cible à sem. ' + sem + ': ' + fmt(_depProrataTarget) + ' FCFA)',
     'Objectif prix vente: ' + fmt(CYCLE.objectifPrix||2000) + ' FCFA/kg',
+    'Commission vente: ' + (CYCLE.commission||0) + '%',
     'Budget santé: ' + fmt(CYCLE.budgetSante||0) + ' FCFA',
+    'Coût revient max acceptable: ' + fmt(CYCLE.coutRevientMax||1100) + ' FCFA/kg de gain',
+    'Marge min par bête: ' + fmt(CYCLE.margeParBeteMin||80000) + ' FCFA',
+    'Seuil alerte trésorerie: ' + fmt(CYCLE.alerteSeuilTreso||100000) + ' FCFA',
+    'Charges simulées: ' + _chargesSim,
     'Foirail principal: ' + (CYCLE.foirail||'Thiès'),
     '',
-    '=== PESÉES RÉCENTES ===',
-    paseesRecentes,
+    '=== PESÉES RÉCENTES (6 dernières) ===',
+    peseesRecentes,
     '',
     '=== PRIX MARCHÉ RÉCENTS ===',
     prixRecents,
+    '',
+    '=== PRIX ALIMENTS (dernier prix connu par type) ===',
+    alimResume,
     '',
     '=== INCIDENTS RÉCENTS ===',
     incidents,
@@ -3095,11 +3171,13 @@ function askAI(question) {
 // Questions prédéfinies rapides
 var AI_QUESTIONS = [
   { icon:'📈', label:'Analyse GMQ', q:'Analyse mon GMQ actuel et dis-moi si mon troupeau est sur la bonne trajectoire pour atteindre mon objectif de vente.' },
-  { icon:'🌾', label:'Stock aliments', q:'Évalue mon stock d\'aliments actuel et recommande-moi des actions concrètes pour optimiser l\'alimentation.' },
-  { icon:'💰', label:'Rentabilité', q:'Fais une analyse rapide de la rentabilité de mon cycle et dis-moi si je suis dans les clous par rapport à mon objectif.' },
-  { icon:'⚖️', label:'Quand vendre ?', q:'En te basant sur mon GMQ, mes pesées récentes et les prix du foirail, quelle serait la semaine optimale pour vendre mes bêtes ?' },
-  { icon:'⚠️', label:'Risques', q:'Identifie les principaux risques de mon cycle actuel et donne-moi des actions préventives prioritaires.' },
-  { icon:'🐄', label:'Bête à surveiller', q:'Y a-t-il des bêtes qui montrent des signes inquiétants dans mes données ? Lesquelles dois-je surveiller en priorité ?' },
+  { icon:'💰', label:'Rentabilité', q:'Fais une analyse rapide de la rentabilité de mon cycle : dépenses réalisées vs prorata, marge estimée par bête, seuil de rentabilité. Suis-je dans les clous ?' },
+  { icon:'⚖️', label:'Quand vendre ?', q:'En te basant sur mon GMQ, mes pesées récentes, les prix du foirail et mon poids cible, quelle serait la semaine optimale pour vendre mes bêtes ?' },
+  { icon:'🌿', label:'Coût alimentation', q:'Analyse mes coûts d\'achat d\'aliments et la composition de ma ration (son/tourteau). Suis-je compétitif et comment optimiser mes coûts d\'alimentation pour ce cycle ?' },
+  { icon:'🌾', label:'Stock aliments', q:'Évalue mon stock d\'aliments actuel. Avec mon rythme de consommation et les semaines restantes du cycle, quand dois-je passer commande ?' },
+  { icon:'⚠️', label:'Risques', q:'Identifie les principaux risques de mon cycle actuel (GMQ, stock, trésorerie, santé, SOP véto) et donne-moi des actions préventives prioritaires.' },
+  { icon:'🐄', label:'Bête à surveiller', q:'Y a-t-il des bêtes qui montrent des signes inquétants dans mes données de pesée ou de santé ? Lesquelles dois-je surveiller en priorité ?' },
+  { icon:'📅', label:'SOP véto', q:'Analyse la conformité de mon protocole vétérinaire. Quels actes ont été faits, lesquels sont en retard, et quelles sont les prochaines échéances ?' },
 ];
 
 // Modale IA
