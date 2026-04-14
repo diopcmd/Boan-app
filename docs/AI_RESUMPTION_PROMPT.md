@@ -12,7 +12,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 - **GitHub** : https://github.com/diopcmd/Boan-app (branche `main`)
 - **Dossier local** : `C:\Temp\Boan-app\`
 - **Langue** : Tout en français (code, UI, communications)
-- **Dernier commit** : `2fd764a` — fix pesees[0]→dernière pesée (3 endroits), typo brûlés
+- **Dernier commit** : `a94b32f` — fix exhaustif "0j/1j" → Aujourd'hui/Demain/Hier (9 occurrences, toute l'app)
 - **Webhook Vercel** : cassé → redeploy manuel sur vercel.com (Deployments → Redeploy)
 
 ---
@@ -342,7 +342,7 @@ doLogin() → loadLiveData()
 Après loadLiveData() : setTimeout(loadPesees, 300)
 ```
 
-### Index lignes clés — `index.html` (commit `a8705a8`)
+### Index lignes clés — `index.html` (commit `a94b32f`)
 
 ```
 L352   var USERS          L361   var MOCK           L419  var CYCLE
@@ -429,7 +429,9 @@ L6013  viewLiv()          L6776  viewMarche()
 - KPIs live : bêtes, GMQ, stock, trésorerie (avec sparklines)
 - Alerte GMQ prédictive (comparaison sem. vs sem. -1)
 - Synthèse stock cycle (par type d'aliment)
-- **Score santé troupeau** : GMQ (50pts) + Stock (30pts) + Bêtes actives (20pts) − malus incidents ouverts (−8/G3, −4/G2, −2/G1)
+- **Score santé troupeau** : GMQ (50pts) + Stock (30pts) + Bêtes actives (20pts) − malus incidents ouverts (−8/G3, −4/G2, −2/G1) — **affiché comme 4ème kcard pour le gérant uniquement** (remplace Trésorerie)
+- **Bloc "📋 Tâches actives"** (viewDash gérant) : SOP, Pesée, Bilan hebdo — statuts ✅/⚠️/✗ avec libellés "Aujourd'hui / Demain / Hier / Il y a Nj"
+- **Bloc "📥 Saisies gérant"** (viewDash fondateur) : SOP, Fiche, Pesée — libellés identiques
 - **Alertes intelligentes** : fiche manquante, stock critique, pesée en retard, incidents ouverts, GMQ chute 2 sem., bilan retard >8j, fin cycle ≤2 sem., météo chaleur ≥38°C — toutes dismissables (bouton ×)
 - **Bannières dismissables** : reset quotidien automatique
 - **Coût/jour** : charges brûlées vs cible (capital/durée cycle)
@@ -457,6 +459,20 @@ L6013  viewLiv()          L6776  viewMarche()
 - Onglet Bêtes : `poidsFinal` calculé dans les 2 branches (LIVE + démo)
 - **SOP Véto** : éditeur complet du protocole (ajout/modification/suppression étapes, ↺ réinitialiser, persisté via `saveObjectifs()`)
 - **Calendrier** : vue calendrier full — dates théoriques J+N avec statuts couleur, compteur complétés/total
+
+### Simulateur de charges
+- **Assurance CNAAS** (`CYCLE.simCharges.sassur`) : champ one-shot comme transport — inclus dans `_calcDepSim()` et `_calcPrixSeuil()` — ligne résultat masquée si 0
+- Champs : main d'oeuvre, transport+vente, imprévus, assurance CNAAS — tous optionnels
+
+### Dashboard gérant vs fondateur — différences de contenu
+- **Gérant** : 4ème kcard = Score Santé Troupeau /100 (remplace Trésorerie) ; bloc "📋 Tâches actives"
+- **Fondateur** : 4ème kcard = Trésorerie ; bloc "📥 Saisies gérant" ; accès IA
+
+### Règle UX affichage jours (appliquée partout)
+- `0j` → **"Aujourd'hui"** (jamais "Il y a 0j" ni "Dans 0j")
+- `1j` → **"Hier"** ou **"Demain"** selon contexte
+- Pesée IIFE sidebar : condition `peseeJ>=_pF` (pas `>_pF`) pour attraper le cas `=_pF` → "Aujourd'hui !"
+- Couverts : sidebar gérant (SOP/Stock/Pesée), sidebar fondateur (SOP/Stock), viewDash tâches (SOP/Pesée/Bilan), viewDash saisies fondateur (pesée), form SOP badge
 
 ### Sidebar
 - **Durée cycle** : stepper pur `−` / `+` (sans input — évite reset au re-render) — fondateur/rga/fallou — plage 1–60 mois — `updateDureeMois(v)` → `_syncCycle()`
