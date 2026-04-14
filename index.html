@@ -4630,7 +4630,7 @@ function buildSidebar(){
             // SOP : 1 / 14 jours
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'sop\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">✅ SOP</span>'
-            +'<span class=\"sb-val '+(sopOkSb?'sb-ok':'sb-ko')+'\">'+(sopOkSb?'✓ Il y a '+sopJ+'j':'✗ '+sopJ+'j passés')+'</span></div>'
+            +'<span class=\"sb-val '+(sopOkSb?'sb-ok':'sb-ko')+'\">'+(sopOkSb?(sopJ===0?'✓ Aujourd\'hui':sopJ===1?'✓ Hier':'✓ Il y a '+sopJ+'j'):'✗ '+sopJ+'j passés')+'</span></div>'
             // Bilan : 1/semaine (vendredi)
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'bilan\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">📊 Bilan hebdo</span>'
@@ -4639,11 +4639,11 @@ function buildSidebar(){
             // Stock : à tout moment (mais alerte si > 14j)
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'stock\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">🌾 Stock</span>'
-            +'<span class=\"sb-val '+(stockOk2?'sb-ok':'sb-ko')+'\">'+(stockJ<999?'Il y a '+stockJ+'j':'Jamais saisi')+'</span></div>'
+            +'<span class=\"sb-val '+(stockOk2?'sb-ok':'sb-ko')+'\">'+(stockJ<999?(stockJ===0?'Aujourd\'hui':stockJ===1?'Hier':'Il y a '+stockJ+'j'):'Jamais saisi')+'</span></div>'
             // Pesée : selon fréquence cycle
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'pesee\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">⚖️ Pesée</span>'
-            +(function(){var _pF=CYCLE.peseeFreq||30;var _pCl=peseeJ>=999?'sb-ko':peseeJ>_pF?'sb-ko':peseeJ>_pF-3?'sb-warn':'sb-ok';var _pTxt=peseeJ>=999?'\u2717 Jamais faite':peseeJ>_pF?'\u2717 Retard '+(peseeJ-_pF)+'j':peseeJ>_pF-3?'\u26a0 Dans '+(_pF-peseeJ)+'j':'\u2713 Il y a '+peseeJ+'j / '+_pF+'j';return '<span class=\"sb-val '+_pCl+'\">'+_pTxt+'</span></div>';})()
+            +(function(){var _pF=CYCLE.peseeFreq||30;var _pCl=peseeJ>=999?'sb-ko':peseeJ>=_pF?'sb-ko':peseeJ>_pF-3?'sb-warn':'sb-ok';var _pTxt=peseeJ>=999?'\u2717 Jamais faite':peseeJ>_pF?'\u2717 Retard '+(peseeJ-_pF)+'j':peseeJ===_pF?'\u26a0 Aujourd\'hui !':(_pF-peseeJ)===1?'\u26a0 Demain !':peseeJ>_pF-3?'\u26a0 Dans '+(_pF-peseeJ)+'j':'\u2713 Il y a '+peseeJ+'j / '+_pF+'j';return '<span class=\"sb-val '+_pCl+'\">'+_pTxt+'</span></div>';})()
             // Incident : nb aujourd'hui
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'inc\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">⚠️ Incidents</span>'
@@ -4832,13 +4832,13 @@ function buildSidebar(){
             +'<span class="sb-val '+(fOk?'sb-ok':'sb-ko')+'">'+(fOk?'✓ Reçue':'✗ En attente')+'</span></div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'sop\');closeSB()\' style="cursor:pointer">'
             +'<span class="sb-lbl">✅ SOP</span>'
-            +'<span class="sb-val '+(sopOk2b?'sb-ok':'sb-ko')+'">'+(sopOk2b?'Il y a '+sopJ2+'j':'✗ '+sopJ2+'j')+'</span></div>'
+            +'<span class="sb-val '+(sopOk2b?'sb-ok':'sb-ko')+'">'+(sopOk2b?(sopJ2===0?'Aujourd\'hui':sopJ2===1?'Hier':'Il y a '+sopJ2+'j'):'✗ '+sopJ2+'j')+'</span></div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'bilan\');closeSB()\' style="cursor:pointer">'
             +'<span class="sb-lbl">📊 Bilan sem.</span>'
             +'<span class="sb-val '+(bilOk2?'sb-ok':'sb-warn')+'">'+(bilOk2?'\u2713 Gerant a envoye sem. '+calcSemaine():'\u2717 En attente gerant')+'</span></div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'stock\');closeSB()\' style="cursor:pointer">'
             +'<span class="sb-lbl">🌾 Stock</span>'
-            +'<span class="sb-val '+(stkOk2b?'sb-ok':'sb-ko')+'">'+(stkJ2<999?'Il y a '+stkJ2+'j':'Jamais')+'</span></div>'
+            +'<span class="sb-val '+(stkOk2b?'sb-ok':'sb-ko')+'">'+(stkJ2<999?(stkJ2===0?'Aujourd\'hui':stkJ2===1?'Hier':'Il y a '+stkJ2+'j'):'Jamais')+'</span></div>'
             +(incNb2>0?'<div class="sb-row" onclick="chTab(\'livrables\');chSub(\'incidents\');closeSB()" style="cursor:pointer"><span class="sb-lbl">⚠️ Incidents</span><span class="sb-val sb-warn">'+incNb2+' auj. →</span></div>':'')
             +(santeNb2>0?'<div class="sb-row"><span class="sb-lbl">💊 Santé</span><span class="sb-val sb-warn">'+santeNb2+' auj.</span></div>':'');
         })()
@@ -5326,11 +5326,11 @@ function viewDash(){
           +'</div>';
       }
       var _fichTxt=_tFichOk?'\u2713 Faite':'\u2717 A faire';
-      var _sopTxt=_tSopJ<=14?'\u2713 Il y a '+_tSopJ+'j':'\u2717 '+_tSopJ+'j \u2014 A faire';
+      var _sopTxt=_tSopJ<=14?(_tSopJ===0?'\u2713 Aujourd\'hui':_tSopJ===1?'\u2713 Hier':'\u2713 Il y a '+_tSopJ+'j'):'\u2717 '+_tSopJ+'j \u2014 A faire';
       var _pesOkCl=_tPesJ!==null&&_tPesJ<=_tPesFreq-3;
       var _pesWarn=_tPesJ!==null&&_tPesJ>_tPesFreq-3&&_tPesJ<=_tPesFreq;
       var _peseTxt=_tPesJ===null?'\u2717 Jamais faite':_pesWarn?(_tPesFreq-_tPesJ===0?'\u26a0 Aujourd\'hui !':_tPesFreq-_tPesJ===1?'\u26a0 Demain !':'\u26a0 Dans '+(_tPesFreq-_tPesJ)+'j \u2014 planifier'):_pesOkCl?'\u2713 Il y a '+_tPesJ+'j / '+_tPesFreq+'j':'\u2717 Retard de '+(_tPesJ-_tPesFreq)+'j';
-      var _bilTxt=_tBilOk?'\u2713 Envoye sem. '+calcSemaine():_tJSem===5?'\u2717 A envoyer ce soir':_tVen<=2?'\u26a0 Dans '+_tVen+'j (vendredi)':'Dans '+_tVen+'j (vendredi)';
+      var _bilTxt=_tBilOk?'\u2713 Envoye sem. '+calcSemaine():_tJSem===5?'\u2717 A envoyer ce soir':_tVen===1?'\u26a0 Demain (vendredi)':_tVen<=2?'\u26a0 Dans '+_tVen+'j (vendredi)':'Dans '+_tVen+'j (vendredi)';
       var _bilWarn=!_tBilOk&&_tVen<=2;
       return '<div style="background:#0c1c0c;border:1px solid #1e3a1e;border-radius:12px;padding:12px 14px;margin-bottom:14px">'
         +'<div style="font-size:11px;color:#88aa88;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">\ud83d\udccb T\u00e2ches actives</div>'
@@ -5360,7 +5360,7 @@ function viewDash(){
       }
       var _bilTxtF=_bF?'\u2713 Gerant a envoye'+(_bilD?' le '+_bilD:' sem. '+calcSemaine()):'\u2717 Non envoye \u2014 sem. '+calcSemaine();
       var _fichTxtF=_fF?'\u2713 Recue auj.':'\u2717 Non recue';
-      var _peseTxtF=_pJF===null?'\u2717 Aucune pesee':_pWF?'Il y a '+_pJF+'j \u2014 planifier (/'+_pFrF+'j)':_pOkCF?'\u2713 Il y a '+_pJF+'j / '+_pFrF+'j':'\u2717 Retard de '+(_pJF-_pFrF)+'j';
+      var _peseTxtF=_pJF===null?'\u2717 Aucune pesee':_pWF?(_pJF===0?'Aujourd\'hui \u2014 planifier (/'+_pFrF+'j)':'Il y a '+_pJF+'j \u2014 planifier (/'+_pFrF+'j)'):_pOkCF?(_pJF===0?'\u2713 Aujourd\'hui / '+_pFrF+'j':_pJF===1?'\u2713 Hier / '+_pFrF+'j':'\u2713 Il y a '+_pJF+'j / '+_pFrF+'j'):'\u2717 Retard de '+(_pJF-_pFrF)+'j';
       return '<div style="background:#0c1c0c;border:1px solid #1e3a1e;border-radius:12px;padding:12px 14px;margin-bottom:14px">'
         +'<div style="font-size:11px;color:#88aa88;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">\ud83d\udce5 Saisies g\u00e9rant \u2014 Sem. '+calcSemaine()+'</div>'
         +_fRow('\ud83d\udcca','Bilan hebdomadaire',_bF,false,_bilTxtF)
@@ -5570,7 +5570,7 @@ function viewSaisie(){
         var joursDepuis = dernSop ? (function(){var _nd=_nowDakar();return Math.floor((new Date(_nd.year,_nd.month-1,_nd.day)-dernSop)/86400000);})() : null;
         var fait = sopDejaFait();
         var msg = fait
-          ? 'SOP soumis il y a '+joursDepuis+' j — prochain dans '+(14-joursDepuis)+' j'
+          ? (joursDepuis===0?'SOP soumis aujourd\'hui \u2014 prochain dans 14 j':('SOP soumis il y a '+joursDepuis+' j \u2014 '+((14-joursDepuis)===0?'à faire aujourd\'hui !':(14-joursDepuis===1?'prochain demain !':'prochain dans '+(14-joursDepuis)+' j'))))
           : (joursDepuis===null ? 'Premier SOP à enregistrer' : 'SOP à soumettre ('+joursDepuis+' j depuis le dernier)');
         return calBadge(fait, msg, 'resetSop()');
       })()
