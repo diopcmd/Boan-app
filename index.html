@@ -4704,32 +4704,32 @@ function buildSidebar(){
             // Fiche : 1/jour
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'fiche\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">📋 Fiche du jour</span>'
-            +'<span class=\"sb-val '+(fichOk2?'sb-ok':'sb-ko')+'\">'+(fichOk2?'✓':'auj.')+'</span></div>'
+            +'<span class=\"sb-val '+(fichOk2?'sb-ok':'sb-ko')+'\">'+(fichOk2?'faite ✓':'auj. ✗')+'</span></div>'
             // SOP : 1 / 14 jours
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'sop\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">✅ SOP</span>'
-            +'<span class=\"sb-val '+(sopOkSb?'sb-ok':'sb-ko')+'\">'+(sopOkSb?'✓':sopJ>=999?'jamais':'retard '+(sopJ-14)+'j')+'</span></div>'
+            +'<span class=\"sb-val '+(sopOkSb?'sb-ok':'sb-ko')+'\">'+(sopOkSb?'il y a '+sopJ+'j ✓':sopJ>=999?'jamais ✗':'retard '+(sopJ-14)+'j ✗')+'</span></div>'
             // Bilan : 1/semaine (vendredi)
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'bilan\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">📊 Bilan hebdo</span>'
-            +'<span class=\"sb-val '+(bilanSem?'sb-ok':(bilanDu&&_heure>=18?'sb-ko':'sb-ok'))+'\">' 
-            +(bilanSem?'✓':(bilanDu&&_heure>=18?'ce soir !':'ven.'))+'</span></div>'
+            +'<span class=\"sb-val '+(bilanSem?'sb-ok':'sb-ko')+'\">' 
+            +(bilanSem?'sem. '+calcSemaine()+' ✓':(bilanDu&&_heure>=18?'ce soir ✗':'ven. ✗'))+'</span></div>'
             // Stock : à tout moment (mais alerte si > 14j)
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'stock\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">🌾 Stock</span>'
-            +'<span class=\"sb-val '+(stockOk2?'sb-ok':'sb-ko')+'\">'+(stockOk2?'✓':stockJ<999?stockJ+'j':'jamais')+'</span></div>'
+            +'<span class=\"sb-val '+(stockOk2?'sb-ok':'sb-ko')+'\">'+(stockOk2?'il y a '+stockJ+'j ✓':stockJ<999?stockJ+'j ✗':'jamais ✗')+'</span></div>'
             // Pesée : selon fréquence cycle
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'pesee\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">⚖️ Pesée</span>'
-            +'<span class=\"sb-val '+(peseeOk2?'sb-ok':'sb-ko')+'\">'+(peseeOk2?'✓':(peseeJ>=999?'jamais':'retard '+(peseeJ-(CYCLE.peseeFreq||30))+'j'))+'</span></div>'
+            +'<span class=\"sb-val '+(peseeOk2?'sb-ok':'sb-ko')+'\">'+(peseeOk2?'il y a '+peseeJ+'j ✓':(peseeJ>=999?'jamais ✗':'retard '+(peseeJ-(CYCLE.peseeFreq||30))+'j ✗'))+'</span></div>'
             // Incident : nb aujourd'hui
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'inc\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">⚠️ Incidents</span>'
-            +'<span class=\"sb-val '+(incNb>0?'sb-ko':'sb-ok')+'\">'+(incNb>0?incNb+' auj.':'✓')+'</span></div>'
+            +'<span class=\"sb-val '+(incNb>0?'sb-ko':'sb-ok')+'\">'+(incNb>0?incNb+' auj. ✗':'aucun ✓')+'</span></div>'
             // Santé : nb aujourd'hui
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'sante\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">💊 Santé</span>'
-            +'<span class=\"sb-val '+(santeNb>0?'sb-ko':'sb-ok')+'\">'+(santeNb>0?santeNb+' auj.':'✓')+'</span></div>'
+            +'<span class=\"sb-val '+(santeNb>0?'sb-ko':'sb-ok')+'\">'+(santeNb>0?santeNb+' auj. ✗':'aucun ✓')+'</span></div>'
             +'</div>'
             +(!fichOk2?'<div class=\"alert-banner\">⚠ Fiche du jour non remplie</div>':'');
         })()
@@ -4907,16 +4907,16 @@ function buildSidebar(){
             +'<div class="sb-section-title">Saisies gérant</div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'fiche\');closeSB()\' style="cursor:pointer">'
             +'<span class="sb-lbl">📋 Fiche du jour</span>'
-            +'<span class="sb-val '+(fOk?'sb-ok':'sb-ko')+'">'+(fOk?'✓':'auj.')+'</span></div>'
+            +'<span class="sb-val '+(fOk?'sb-ok':'sb-ko')+'">'+(fOk?'reçue ✓':'auj. ✗')+'</span></div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'sop\');closeSB()\' style="cursor:pointer">'
             +'<span class="sb-lbl">✅ SOP</span>'
-            +'<span class="sb-val '+(sopOk2b?'sb-ok':'sb-ko')+'">'+( sopOk2b?'✓':sopJ2+'j')+'</span></div>'
+            +'<span class="sb-val '+(sopOk2b?'sb-ok':'sb-ko')+'">'+(sopOk2b?'il y a '+sopJ2+'j ✓':sopJ2+'j ✗')+'</span></div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'bilan\');closeSB()\' style="cursor:pointer">'
             +'<span class="sb-lbl">📊 Bilan sem.</span>'
-            +'<span class="sb-val '+(bilOk2?'sb-ok':'sb-warn')+'">'+(bilOk2?'\u2713':'sem. '+calcSemaine())+'</span></div>'
+            +'<span class="sb-val '+(bilOk2?'sb-ok':'sb-ko')+'">'+(bilOk2?'sem. '+calcSemaine()+' ✓':'sem. '+calcSemaine()+' ✗')+'</span></div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'stock\');closeSB()\' style="cursor:pointer">'
             +'<span class="sb-lbl">🌾 Stock</span>'
-            +'<span class="sb-val '+(stkOk2b?'sb-ok':'sb-ko')+'">'+(stkOk2b?'\u2713':stkJ2<999?stkJ2+'j':'jamais')+'</span></div>'
+            +'<span class="sb-val '+(stkOk2b?'sb-ok':'sb-ko')+'">'+(stkOk2b?'il y a '+stkJ2+'j ✓':stkJ2<999?stkJ2+'j ✗':'jamais ✗')+'</span></div>'
             +(incNb2>0?'<div class="sb-row" onclick="chTab(\'livrables\');chSub(\'incidents\');closeSB()" style="cursor:pointer"><span class="sb-lbl">⚠️ Incidents</span><span class="sb-val sb-warn">'+incNb2+' auj. →</span></div>':'')
             +(santeNb2>0?'<div class="sb-row"><span class="sb-lbl">💊 Santé</span><span class="sb-val sb-warn">'+santeNb2+' auj.</span></div>':'');
         })()
@@ -4937,7 +4937,7 @@ function buildSidebar(){
       body='<div class="sb-card">'
         +(function(){
           var bilOk = bilanDejaFaitCetteSemaine();
-          return '<div class="sb-row"><span class="sb-lbl">\ud83d\udcca Bilan sem. '+calcSemaine()+'</span><span class="'+(bilOk?'sb-ok':'sb-ko')+'">'+(bilOk?'\u2713 Gerant a envoye':'\u2717 Non envoye cette sem.')+'</span></div>';
+          return '<div class="sb-row"><span class="sb-lbl">\ud83d\udcca Bilan sem. '+calcSemaine()+'</span><span class="'+(bilOk?'sb-ok':'sb-ko')+'">'+(bilOk?'gérant ✓':'sem. '+calcSemaine()+' ✗')+'</span></div>';
         })()
         +(function(){
           // Incidents de la semaine (pas seulement aujourd'hui)
@@ -5032,8 +5032,8 @@ function buildSidebar(){
   } else if(u==='rga'){
     if(SB.tab==='today'){
       body='<div class="sb-card">'
-        +(function(){ var td2=today(); var ok=HISTORY.some(function(h){return (h.type==='fiche'||h.type==='pesee'||h.type==='sante'||h.type==='inc')&&h.date===td2;}); return '<div class="sb-row"><span class="sb-lbl">Données reçues</span><span class="'+(ok?'sb-ok':'sb-ko')+'">'+(ok?'✓ Reçues':'✗ En attente')+'</span></div>'; })()
-        +(function(){ var gmqOk=MOCK.gmq>=(CYCLE.gmqCible||1); var stkOk=(MOCK.stock>0?MOCK.stock:calcStockLocal())>=6; var ok=gmqOk&&stkOk; return '<div class="sb-row"><span class="sb-lbl">KPI cycle</span><span class="sb-val '+(ok?'kval-ok':'kval-crit')+'">'+(ok?'✓ Conforme':'⚠ À revoir')+'</span></div>'; })()
+        +(function(){ var td2=today(); var ok=HISTORY.some(function(h){return (h.type==='fiche'||h.type==='pesee'||h.type==='sante'||h.type==='inc')&&h.date===td2;}); return '<div class="sb-row"><span class="sb-lbl">Données reçues</span><span class="'+(ok?'sb-ok':'sb-ko')+'">'+(ok?'reçues ✓':'en attente ✗')+'</span></div>'; })()
+        +(function(){ var gmqOk=MOCK.gmq>=(CYCLE.gmqCible||1); var stkOk=(MOCK.stock>0?MOCK.stock:calcStockLocal())>=6; var ok=gmqOk&&stkOk; return '<div class="sb-row"><span class="sb-lbl">KPI cycle</span><span class="sb-val '+(ok?'kval-ok':'kval-crit')+'">'+(ok?'conforme ✓':'à revoir ✗')+'</span></div>'; })()
         +'</div>'
         +'<div class="sb-shortcut" onclick="chTab(\'livrables\');chSub(\'kpi\');closeSB()">'
         +'<div class="sb-shortcut-ico" style="background:#1a3a1a">📊</div>'
