@@ -100,7 +100,7 @@ button,.tab,.stab,.rb,.ddi{transition:transform .1s ease,background .15s ease}
 body.light .sb-card{background:#fff;border-color:#c8dcc8;color:#1a2e1a}
 body.light .sb-card *{color:#1a2e1a}
 body.light .sb-card .sb-lbl{color:#557755}
-body.light .sb-card .sb-ok{color:#1a7a1a !important}
+body.light .sb-card .sb-ok{color:#334433 !important}
 body.light .sb-card .sb-ko{color:#c82020 !important}
 .act{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #1a2e1a}
 .dot{width:8px;height:8px;border-radius:50%;background:#4caf50;margin-top:5px;flex-shrink:0}
@@ -141,7 +141,7 @@ body.light .kcard div[style*="color:#88bb88"]{color:#557755 !important}
 body.light .kcard{color:#1a2e1a}
 body.light .act div div[style*="color:#ccc"]{color:#334433 !important}
 body.light .act div div[style*="color:#555"]{color:#778877 !important}
-.sb-ok{color:#4caf50;font-weight:700}
+.sb-ok{color:#ffffff;font-weight:700}
 .sb-ko{color:#f44336;font-weight:700}
 .sb-day{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px}
 .sb-dot-ok{width:10px;height:10px;border-radius:50%;background:#4caf50}
@@ -231,7 +231,7 @@ body.light .alert-banner{background:#fff3e0;border-color:#e8a000;color:#7a4800}
 body.light .sb-foot{background:#f0f5f0;color:#334433}
 body.light .sb-foot *{color:#334433}
 /* override les spans colorés dans la sidebar */
-body.light .sb-ok{color:#1a7a1a !important}
+body.light .sb-ok{color:#334433 !important}
 body.light .sb-ko{color:#c82020 !important}
 body.light .kval-ok{color:#1a7a1a !important}
 body.light .kval-warn{color:#b86a00 !important}
@@ -293,7 +293,7 @@ body.light .modal-body *{color:#1a2e1a}
 body.light .modal-foot{border-color:#c8dcc8;background:#f0f5f0}
 body.light .sb-lbl{color:#334433}
 body.light .sb-val{color:#1a2e1a}
-body.light .sb-ok{color:#1a7a1a !important}
+body.light .sb-ok{color:#334433 !important}
 body.light .sb-ko{color:#c82020}
 body.light .hist-item div{color:#334433}
 body.light .form-progress{background:#c8dcc8}
@@ -4704,32 +4704,32 @@ function buildSidebar(){
             // Fiche : 1/jour
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'fiche\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">📋 Fiche du jour</span>'
-            +'<span class=\"sb-val '+(fichOk2?'sb-ok':'sb-ko')+'\">'+(fichOk2?'✓ Faite':'✗ À faire')+'</span></div>'
+            +'<span class=\"sb-val '+(fichOk2?'sb-ok':'sb-ko')+'\">'+(fichOk2?'✓':'auj.')+'</span></div>'
             // SOP : 1 / 14 jours
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'sop\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">✅ SOP</span>'
-            +'<span class=\"sb-val '+(sopOkSb?'sb-ok':'sb-ko')+'\">'+(sopOkSb?(sopJ===0?'✓ Aujourd\'hui':sopJ===1?'✓ Hier':'✓ Il y a '+sopJ+'j'):'✗ '+sopJ+'j passés')+'</span></div>'
+            +'<span class=\"sb-val '+(sopOkSb?'sb-ok':'sb-ko')+'\">'+(sopOkSb?'✓':sopJ>=999?'jamais':'retard '+(sopJ-14)+'j')+'</span></div>'
             // Bilan : 1/semaine (vendredi)
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'bilan\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">📊 Bilan hebdo</span>'
-            +'<span class=\"sb-val '+(bilanSem?'sb-ok':(bilanDu&&_heure>=18?'sb-ko':'sb-warn'))+'\">'
-            +(bilanSem?'\u2713 Envoye sem. '+calcSemaine():bilanDu&&_heure>=18?'\u2717 A envoyer ce soir':(_jourSem<5?'Dans '+_bilanJoursVen+'j (ven.)':_heure>=18?'\u2717 Ce soir !':'Ce soir'))+'</span></div>'
+            +'<span class=\"sb-val '+(bilanSem?'sb-ok':(bilanDu&&_heure>=18?'sb-ko':'sb-ok'))+'\">' 
+            +(bilanSem?'✓':(bilanDu&&_heure>=18?'ce soir !':'ven.'))+'</span></div>'
             // Stock : à tout moment (mais alerte si > 14j)
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'stock\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">🌾 Stock</span>'
-            +'<span class=\"sb-val '+(stockOk2?'sb-ok':'sb-ko')+'\">'+(stockJ<999?(stockJ===0?'Aujourd\'hui':stockJ===1?'Hier':'Il y a '+stockJ+'j'):'Jamais saisi')+'</span></div>'
+            +'<span class=\"sb-val '+(stockOk2?'sb-ok':'sb-ko')+'\">'+(stockOk2?'✓':stockJ<999?stockJ+'j':'jamais')+'</span></div>'
             // Pesée : selon fréquence cycle
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'pesee\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">⚖️ Pesée</span>'
-            +(function(){var _pF=CYCLE.peseeFreq||30;var _pCl=peseeJ>=999?'sb-ko':peseeJ>=_pF?'sb-ko':peseeJ>_pF-3?'sb-warn':'sb-ok';var _pTxt=peseeJ>=999?'\u2717 Jamais faite':peseeJ>_pF?'\u2717 Retard '+(peseeJ-_pF)+'j':peseeJ===_pF?'\u26a0 Aujourd\'hui !':(_pF-peseeJ)===1?'\u26a0 Demain !':peseeJ>_pF-3?'\u26a0 Dans '+(_pF-peseeJ)+'j':'\u2713 Il y a '+peseeJ+'j / '+_pF+'j';return '<span class=\"sb-val '+_pCl+'\">'+_pTxt+'</span></div>';})()
+            +'<span class=\"sb-val '+(peseeOk2?'sb-ok':'sb-ko')+'\">'+(peseeOk2?'✓':(peseeJ>=999?'jamais':'retard '+(peseeJ-(CYCLE.peseeFreq||30))+'j'))+'</span></div>'
             // Incident : nb aujourd'hui
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'inc\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">⚠️ Incidents</span>'
-            +'<span class=\"sb-val '+(incNb>0?'sb-warn':'sb-ok')+'\">'+incNb+" auj.</span></div>'"
+            +'<span class=\"sb-val '+(incNb>0?'sb-ko':'sb-ok')+'\">'+(incNb>0?incNb+' auj.':'✓')+'</span></div>'
             // Santé : nb aujourd'hui
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'sante\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">💊 Santé</span>'
-            +'<span class=\"sb-val '+(santeNb>0?'sb-warn':'sb-ok')+'\">'+santeNb+" auj.</span></div>'"
+            +'<span class=\"sb-val '+(santeNb>0?'sb-ko':'sb-ok')+'\">'+(santeNb>0?santeNb+' auj.':'✓')+'</span></div>'
             +'</div>'
             +(!fichOk2?'<div class=\"alert-banner\">⚠ Fiche du jour non remplie</div>':'');
         })()
@@ -4907,16 +4907,16 @@ function buildSidebar(){
             +'<div class="sb-section-title">Saisies gérant</div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'fiche\');closeSB()\' style="cursor:pointer">'
             +'<span class="sb-lbl">📋 Fiche du jour</span>'
-            +'<span class="sb-val '+(fOk?'sb-ok':'sb-ko')+'">'+(fOk?'✓ Reçue':'✗ En attente')+'</span></div>'
+            +'<span class="sb-val '+(fOk?'sb-ok':'sb-ko')+'">'+(fOk?'✓':'auj.')+'</span></div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'sop\');closeSB()\' style="cursor:pointer">'
             +'<span class="sb-lbl">✅ SOP</span>'
-            +'<span class="sb-val '+(sopOk2b?'sb-ok':'sb-ko')+'">'+(sopOk2b?(sopJ2===0?'Aujourd\'hui':sopJ2===1?'Hier':'Il y a '+sopJ2+'j'):'✗ '+sopJ2+'j')+'</span></div>'
+            +'<span class="sb-val '+(sopOk2b?'sb-ok':'sb-ko')+'">'+( sopOk2b?'✓':sopJ2+'j')+'</span></div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'bilan\');closeSB()\' style="cursor:pointer">'
             +'<span class="sb-lbl">📊 Bilan sem.</span>'
-            +'<span class="sb-val '+(bilOk2?'sb-ok':'sb-warn')+'">'+(bilOk2?'\u2713 Gerant a envoye sem. '+calcSemaine():'\u2717 En attente gerant')+'</span></div>'
+            +'<span class="sb-val '+(bilOk2?'sb-ok':'sb-warn')+'">'+(bilOk2?'\u2713':'sem. '+calcSemaine())+'</span></div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'stock\');closeSB()\' style="cursor:pointer">'
             +'<span class="sb-lbl">🌾 Stock</span>'
-            +'<span class="sb-val '+(stkOk2b?'sb-ok':'sb-ko')+'">'+(stkJ2<999?(stkJ2===0?'Aujourd\'hui':stkJ2===1?'Hier':'Il y a '+stkJ2+'j'):'Jamais')+'</span></div>'
+            +'<span class="sb-val '+(stkOk2b?'sb-ok':'sb-ko')+'">'+(stkOk2b?'\u2713':stkJ2<999?stkJ2+'j':'jamais')+'</span></div>'
             +(incNb2>0?'<div class="sb-row" onclick="chTab(\'livrables\');chSub(\'incidents\');closeSB()" style="cursor:pointer"><span class="sb-lbl">⚠️ Incidents</span><span class="sb-val sb-warn">'+incNb2+' auj. →</span></div>':'')
             +(santeNb2>0?'<div class="sb-row"><span class="sb-lbl">💊 Santé</span><span class="sb-val sb-warn">'+santeNb2+' auj.</span></div>':'');
         })()

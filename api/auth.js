@@ -8,7 +8,7 @@ export default async function handler(req, res) {
     fondateur: { name:'Direction',      pwd: process.env.PWD_FONDATEUR, tabs:['dashboard','saisie','livrables','marche'], sid: process.env.SID_FONDATEUR },
     gerant:    { name:'Gerant terrain', pwd: process.env.PWD_GERANT,    tabs:['dashboard','saisie'],                      sid: process.env.SID_GERANT    },
     rga:       { name:'RGA',            pwd: process.env.PWD_RGA,       tabs:['dashboard','livrables'],                   sid: process.env.SID_RGA       },
-    commerciale: { name:'Commerciale',   pwd: process.env.PWD_FALLOU,    tabs:['dashboard','marche','guide'],               sid: process.env.SID_FALLOU    },
+    fallou:    { name:'Commerciale',    pwd: process.env.PWD_FALLOU,    tabs:['dashboard','marche','guide'],               sid: process.env.SID_FALLOU    },
   };
 
   // R-03 : restreindre CORS — autoriser les domaines Vercel légitimes + localhost dev
@@ -112,10 +112,10 @@ export default async function handler(req, res) {
         gerant:    process.env.SID_GERANT,
         fondateur: process.env.SID_FONDATEUR,
       };
-    } else if (role === 'commerciale') {
+    } else if (role === 'fallou') {
       sid = {
         commerciale: process.env.SID_FALLOU,
-        fondateur: process.env.SID_FONDATEUR,
+        fondateur:   process.env.SID_FONDATEUR,
       };
     } else {
       // gerant → reçoit aussi SID_FONDATEUR pour que writeAll synchronise les 2 sheets
@@ -126,10 +126,12 @@ export default async function handler(req, res) {
       };
     }
 
+    // Mapper rôle interne fallou → commerciale (clé front-end)
+    const returnRole = role === 'fallou' ? 'commerciale' : role;
     return res.status(200).json({
       ok: true,
       sessionToken,
-      user: { login, role, name: user.name, tabs: user.tabs },
+      user: { login, role: returnRole, name: user.name, tabs: user.tabs },
       sid,
     });
 
