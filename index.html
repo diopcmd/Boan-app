@@ -4729,8 +4729,7 @@ function buildSidebar(){
             +(!fichOk2?'<div class=\"alert-banner\">⚠ Fiche du jour non remplie</div>':'');
         })()
         +'<div class="sb-section-title">Stock aliments</div>'
-        +(function(){var stkDisplay=MOCK.stock>0?MOCK.stock:calcStockLocal();var stkCl=stkDisplay>=6?'sb-ok':stkDisplay>=4?'sb-warn':'sb-ko';var jours=Math.round(stkDisplay*7);return '<div class="sb-row"><span class="sb-lbl">Semaines restantes</span>'+'<span class="sb-val '+stkCl+'">'+stkDisplay+' sem.</span></div>'+'<div class="sb-row"><span class="sb-lbl">Rupture estimée</span>'+'<span style="font-size:12px;color:'+(stkDisplay>=6?'#4caf50':stkDisplay>=4?'#ff9800':'#f44336')+'">~'+jours+' jours</span></div>'+(STOCK_MVTS&&STOCK_MVTS.length?'<div style="margin-top:6px;padding:6px;background:'+(_sbLt?'#e8f0e8':'#0a150a')+';border-radius:6px">'+'<div style="font-size:10px;color:'+_sbSub+';margin-bottom:4px;text-transform:uppercase">Mouvements cycle</div>'+stockSyntheseHtml(true)+'</div>':'');})()
-        +'</div>';
+        +(function(){var stkDisplay=MOCK.stock>0?MOCK.stock:calcStockLocal();var stkCl=stkDisplay>=6?'sb-ok':stkDisplay>=4?'sb-warn':'sb-ko';var jours=Math.round(stkDisplay*7);return '<div class="sb-row"><span class="sb-lbl">Semaines restantes</span>'+'<span class="sb-val '+stkCl+'">'+stkDisplay+' sem.</span></div>'+'<div class="sb-row"><span class="sb-lbl">Rupture estimée</span>'+'<span style="font-size:12px;color:'+(stkDisplay>=6?'#4caf50':stkDisplay>=4?'#ff9800':'#f44336')+'">~'+jours+' jours</span></div>'+(STOCK_MVTS&&STOCK_MVTS.length?'<div style="margin-top:6px;padding:6px;background:'+(_sbLt?'#e8f0e8':'#0a150a')+';border-radius:6px">'+'<div style="font-size:10px;color:'+_sbSub+';margin-bottom:4px;text-transform:uppercase">Mouvements cycle</div>'+stockSyntheseHtml(true)+'</div>':'');})();
     } else if(SB.tab==='week'){
       // ── Calendrier semaine dynamique (fuseau Dakar) ──
       var _calSub  = _sbSub;
