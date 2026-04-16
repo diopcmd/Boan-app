@@ -464,7 +464,8 @@ var CYCLE = lsGet('cycle') || {
   numCycle: 1,   // numéro du cycle en cours (éditable par le fondateur)
   simCharges: {},  // charges simulateur persistantes
   _mktUpdated: '',  // date dernière modif paramètres marché (DD/MM/YYYY)
-  gonogo: {contrats:false, infra:false, assurance:false, securite:false},
+  gonogo: {cash:false, betes:false, contrats:false, infra:false, securite:false},
+  numCnaas: '',  // N° contrat assurance CNAAS
   // Objectifs configurables par le fondateur (lu/écrit dans Config_App)
   gmqCible:        1.0,   // seuil vert GMQ (kg/j)
   gmqWarn:         0.8,   // seuil orange GMQ (kg/j)
@@ -847,6 +848,7 @@ function resetSop() {
   S.fs = {date:td,net:'',des:'',rat:'',eau:'',stk:'',san:'',prob:''};
   HISTORY = HISTORY.filter(function(h){ return h.type!=='sop'; });
   lsSet('history', HISTORY);
+  CYCLE._lastSopDate = ''; lsSet('cycle', CYCLE);
   r();
 }
 function resetBilan() {
@@ -876,44 +878,10 @@ function resetStock() {
 
 // ── Anti-doublons calendrier ──────────────────────────────────────
 
-// Vérifie si un type a déjà été soumis AUJOURD'HUI (depuis HISTORY)
-function dejaSoumisAujourdhui(type) {
-  var td = today(); // format DD/M/YYYY
-  return HISTORY.some(function(h){ return h.type === type && h.date === td; });
-}
-
 // Vérifie si le SOP a été soumis dans les 14 derniers jours (2 semaines)
 function sopDejaFait() {
   // joursSince('sop') utilise HISTORY + CYCLE._lastSopDate (step1) comme fallback
   return joursSince('sop') < 14;
-}
-
-// Vérifie si un mouvement stock identique (même type+mode) a déjà été soumis aujourd'hui
-function stockDejaEnregistreAujourdhui(type, mode) {
-  var td = today();
-  return STOCK_MVTS.some(function(m){
-    return m.date === isoToFr(todayISO()) // STOCK_MVTS stocke en FR
-      && m.type === type && m.mode === mode;
-  });
-}
-
-// Vérifie si un incident de même ID+type a déjà été soumis aujourd'hui
-function incidentDejaEnregistreAujourdhui(id, type) {
-  var td = today();
-  return HISTORY.some(function(h){
-    return h.type === 'inc' && h.date === td
-      && h.label && h.label.indexOf(id) !== -1
-      && h.label.indexOf(type) !== -1;
-  });
-}
-
-// Vérifie si une santé pour le même ID a déjà été soumise aujourd'hui
-function santeDejaEnregistreeAujourdhui(id) {
-  var td = today();
-  return HISTORY.some(function(h){
-    return h.type === 'sante' && h.date === td
-      && h.label && h.label.indexOf(id) !== -1;
-  });
 }
 
 // Vérifie si le bilan hebdo de la semaine courante a déjà été soumis
@@ -1332,7 +1300,7 @@ function loadLiveData() {
   // Lire depuis SID.fondateur pour synchroniser CYCLE sur tout appareil
   var step1 = sidFondateur
     ? Promise.all([
-        readSheet(sidFondateur, 'Config_Cycle!A1:R1'),
+        readSheet(sidFondateur, 'Config_Cycle!A1:S1'),
         readSheet(sidFondateur, 'Config_App!A:B')
       ]).then(function(res) {
         var rows    = res[0];
@@ -1426,6 +1394,8 @@ function loadLiveData() {
               if (key === '_mktUpdated'  && val) CYCLE._mktUpdated = val;
               if (key === 'sopProtocol' && val && Array.isArray(val) && val.length) CYCLE.sopProtocol = val;
               if (key === 'numCycle'    && val && parseInt(val) > 0) CYCLE.numCycle = parseInt(val);
+              if (key === 'numCnaas'    && val !== null && val !== undefined) CYCLE.numCnaas = val;
+              if (key === 'gonogo'      && val && typeof val === 'object') CYCLE.gonogo = Object.assign(CYCLE.gonogo||{}, val);
               // cycleDebut dans Config_App = détection changement de cycle indépendante de Config_Cycle
               if (key === 'cycleDebut' && val && val.length && val !== CYCLE.dateDebut) {
                 HISTORY = []; lsSet('history', []);
@@ -2198,7 +2168,11 @@ function _syncConfigApp() {
       ['tauxMortMax',      JSON.stringify(CYCLE.tauxMortMax        || 3)],
       ['coutRevientMax',   JSON.stringify(CYCLE.coutRevientMax     || 1100)],
       ['margeParBeteMin',  JSON.stringify(CYCLE.margeParBeteMin    || 80000)],
-      ['alerteSeuilTreso', JSON.stringify(CYCLE.alerteSeuilTreso   || 100000)]
+      ['alerteSeuilTreso', JSON.stringify(CYCLE.alerteSeuilTreso   || 100000)],
+      ['numCycle',         JSON.stringify(CYCLE.numCycle           || 1)],
+      ['numCnaas',         JSON.stringify(CYCLE.numCnaas           || '')],
+      ['gonogo',           JSON.stringify(CYCLE.gonogo             || {})],
+      ['sopProtocol',      JSON.stringify(CYCLE.sopProtocol        || null)]
     ];
     // Tenter création de l'onglet (ignorer l'erreur s'il existe déjà)
     var addUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + ':batchUpdate';
@@ -2583,24 +2557,25 @@ function msgHtml(){
 function pageResetPwd(){
   var goChecked = !!S._resetGoCheck;
   var gg = CYCLE.gonogo||{};
-  var c1 = MOCK.treso>=600000;
-  var c2 = !!(CYCLE.veterinaire&&CYCLE.veterinaire.trim());
-  var c3 = MOCK.betes>=(CYCLE.nbBetes||4);
-  var c4 = !!gg.contrats; var c5=!!gg.infra; var c6=!!gg.assurance; var c7=!!gg.securite;
-  var score = [c1,c2,c3,c4,c5,c6,c7].filter(Boolean).length;
+  var c1 = !!(CYCLE.veterinaire&&CYCLE.veterinaire.trim());
+  var c2 = !!(CYCLE.numCnaas&&CYCLE.numCnaas.trim());
+  var c3 = (LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';}).length===0;
+  var c4 = !!gg.cash; var c5=!!gg.betes; var c6=!!gg.contrats; var c7=!!gg.infra; var c8=!!gg.securite;
+  var score = [c1,c2,c3,c4,c5,c6,c7,c8].filter(Boolean).length;
   function cRow(label, ok, detail) {
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #1a3a1a;font-size:12px">'
       +'<span style="color:#aaa">'+label+'</span>'
       +'<span style="color:'+(ok?'#4caf50':'#ff9800')+'">'+detail+'</span></div>';
   }
   var condHtml = ''
-    +cRow('Cash min. 600k FCFA', c1, c1 ? ('ok '+Math.round(MOCK.treso/1000)+'k') : (Math.round(MOCK.treso/1000)+'k'))
-    +cRow('Veterinaire', c2, c2 ? ('ok '+CYCLE.veterinaire) : 'Non renseigne')
-    +cRow('Betes = objectif', c3, c3 ? ('ok '+MOCK.betes) : (MOCK.betes+'/'+(CYCLE.nbBetes||4)))
-    +cRow('Contrats vente', c4, c4 ? 'Valide' : 'Non valide')
-    +cRow('Infrastructure', c5, c5 ? 'Valide' : 'Non valide')
-    +cRow('Assurance CNAAS', c6, c6 ? 'Valide' : 'Non valide')
-    +cRow('Securite fonciere', c7, c7 ? 'Valide' : 'Non valide');
+    +cRow('Vétérinaire', c1, c1 ? ('ok '+CYCLE.veterinaire) : 'Non renseigné')
+    +cRow('Assurance CNAAS', c2, c2 ? ('Réf. '+CYCLE.numCnaas) : 'Non confirmée')
+    +cRow('Aucun incident ouvert', c3, c3 ? 'ok aucun' : 'Incidents en cours')
+    +cRow('Trésorerie suffisante', c4, c4 ? 'Valide' : 'Non valide')
+    +cRow('Bêtes disponibles', c5, c5 ? 'Valide' : 'Non valide')
+    +cRow('Contrats vente', c6, c6 ? 'Valide' : 'Non valide')
+    +cRow('Infrastructure', c7, c7 ? 'Valide' : 'Non valide')
+    +cRow('Sécurité foncière', c8, c8 ? 'Valide' : 'Non valide');
 
   var canConfirm = goChecked; // mot de passe vérifié au clic, pas au rendu
   return '<div class="confirm-box" onclick="if(event.target===this){S._resetPwdOpen=false;r();}">'
@@ -2608,7 +2583,7 @@ function pageResetPwd(){
     +'<div style="font-size:22px;margin-bottom:8px">Nouveau cycle</div>'
     +'<div style="font-size:12px;color:#88aa88;margin-bottom:12px">Les donnees du cycle actuel seront archivees.</div>'
     +'<div style="background:#0a150a;border-radius:8px;padding:10px;margin-bottom:12px">'
-    +'<div style="font-size:11px;color:#7a9a7a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Go/No-Go — '+score+'/7</div>'
+    +'<div style="font-size:11px;color:#7a9a7a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Go/No-Go — '+score+'/8</div>'
     +condHtml
     +'</div>'
     +'<div onclick="S._resetGoCheck=!S._resetGoCheck;r()" style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;border:1px solid '+(goChecked?'#2d6a2d':'#4a3a00')+';background:'+(goChecked?'#0f2a0f':'#1a1500')+';cursor:pointer;margin-bottom:12px">'
@@ -4047,7 +4022,7 @@ function saveCycle(){
   } : null;
   CYCLE = Object.assign(CYCLE, MODAL.data, {initialized:true});
   // ── Reset des variables qui ne doivent PAS persister du cycle précédent ──
-  CYCLE.gonogo     = {contrats:false, infra:false, assurance:false, securite:false}; // [fix] cases Go/No-Go manuelles remises à 0
+  CYCLE.gonogo     = {cash:false, betes:false, contrats:false, infra:false, securite:false}; // [fix] cases Go/No-Go manuelles remises à 0
   CYCLE.simCharges = {};        // [fix] charges simulateur spécifiques au cycle sortant
   CYCLE._mktUpdated = '';       // [fix] date de mise à jour marché — repart de zéro
   // ── Reset état UI SOP ──
@@ -5020,9 +4995,8 @@ function buildSidebar(){
         +'<div class="sb-section-title">Activité récente</div>'
         +(function(){
           var gg2=CYCLE.gonogo||{};
-          var _ggSante2=!(LIVE.incidents||[]).some(function(i){return i.grav==='3'&&i.clos!=='OUI';});
-          var goOk2=MOCK.treso>=600000&&!!(CYCLE.veterinaire&&CYCLE.veterinaire.trim())&&MOCK.betes>=(CYCLE.nbBetes||4)&&_ggSante2&&gg2.contrats&&gg2.infra&&gg2.assurance&&gg2.securite;
-          var score2=[MOCK.treso>=600000,!!(CYCLE.veterinaire&&CYCLE.veterinaire.trim()),MOCK.betes>=(CYCLE.nbBetes||4),_ggSante2,gg2.contrats,gg2.infra,gg2.assurance,gg2.securite].filter(Boolean).length;
+          var goOk2=!!(CYCLE.veterinaire&&CYCLE.veterinaire.trim())&&!!(CYCLE.numCnaas&&CYCLE.numCnaas.trim())&&(LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';}).length===0&&!!gg2.cash&&!!gg2.betes&&!!gg2.contrats&&!!gg2.infra&&!!gg2.securite;
+          var score2=[!!(CYCLE.veterinaire&&CYCLE.veterinaire.trim()),!!(CYCLE.numCnaas&&CYCLE.numCnaas.trim()),(LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';}).length===0,!!gg2.cash,!!gg2.betes,!!gg2.contrats,!!gg2.infra,!!gg2.securite].filter(Boolean).length;
           return '<div class="sb-shortcut" style="margin-top:10px;border-color:#2a3a2a" onclick="verifyAndReset()">'            +'<div class="sb-shortcut-ico" style="background:#2a2a1a">'+(goOk2?'🚀':'⚙️')+'</div>'            +'<div>'            +'<div style="font-size:13px;font-weight:600">Nouveau cycle</div>'            +'<div class="sb-sub">Go/No-Go : '+score2+'/8'+(goOk2?' ✓':'')+'</div>'            +'</div>'            +'</div>'            +'<div class="sb-shortcut" style="margin-top:8px;border-color:#2a2a3a" onclick="closeSB();openPwdManager()">'            +'<div class="sb-shortcut-ico" style="background:#1a1a2e">🔑</div>'            +'<div>'            +'<div style="font-size:13px;font-weight:600">Mots de passe</div>'            +'<div class="sb-sub">Gérer les accès équipe</div>'            +'</div>'            +'</div>';
         })()
         +histHtml2;
@@ -6064,7 +6038,7 @@ function viewSaisie(){
           if(h.sopLabel !== undefined && h.sopLabel !== null && h.sopLabel !== evt.label) return;
           var _p = h.date.split('/'); if(_p.length !== 3) return;
           var _hd = new Date(_p[2], _p[1]-1, _p[0]);
-          if(Math.abs(_hd - _td) <= 7*86400000){
+          if(Math.abs(_hd - _td) <= 3*86400000){
             if(h.id === '__tous__'){
               _betesDonePd = _sopBeteIds.slice();
             } else if(_betesDonePd.indexOf(h.id) === -1){
@@ -6151,7 +6125,7 @@ function viewSaisie(){
       +'</div>'
       +(!_pdDeb
         ? '<div class="al al-o">Cycle non démarré — aucune date de référence</div>'
-        : '<div style="font-size:10px;color:#556655;margin-bottom:10px">Aujourd\u2019hui J+'+(_pdJour||0)+' depuis le début du cycle. Une saisie Santé ou Pesée dans ±7 j de la date théorique est comptée réalisée.</div>')
+        : '<div style="font-size:10px;color:#556655;margin-bottom:10px">Aujourd\u2019hui J+'+(_pdJour||0)+' depuis le début du cycle. Une saisie Santé ou Pesée dans ±3 j de la date théorique est comptée réalisée.</div>')
       +_pdCards
       +'</div>';
   }
@@ -6239,7 +6213,7 @@ function _sopInlineSave(idx, tous){
       if(h.sopLabel !== undefined && h.sopLabel !== null && h.sopLabel !== evt.label) return;
       var _p = h.date.split('/'); if(_p.length!==3) return;
       var _hd = new Date(_p[2],_p[1]-1,_p[0]);
-      if(Math.abs(_hd - _tdTgt) <= 7*86400000){
+      if(Math.abs(_hd - _tdTgt) <= 3*86400000){
         if(h.id === '__tous__') _doneBetes = _allBetes.slice();
         else if(_doneBetes.indexOf(h.id)===-1) _doneBetes.push(h.id);
       }
@@ -6781,11 +6755,10 @@ function viewLiv(){
       }
     }
   } else if(S.sub==='gonogo'){
-    var ggCash  = MOCK.treso >= 600000;
     var ggVeto  = !!(CYCLE.veterinaire && CYCLE.veterinaire.trim());
-    var ggBetes = MOCK.betes >= (CYCLE.nbBetes||4);
-    var ggSante = !(LIVE.incidents||[]).some(function(i){ return i.grav==='3' && i.clos!=='OUI'; });
-    var gg = CYCLE.gonogo || {contrats:false,infra:false,assurance:false,securite:false};
+    var ggAssur = !!(CYCLE.numCnaas && CYCLE.numCnaas.trim());
+    var ggInc   = (LIVE.incidents||[]).filter(function(i){ return i.clos !== 'OUI'; }).length === 0;
+    var gg = CYCLE.gonogo || {cash:false,betes:false,contrats:false,infra:false,securite:false};
     var canEdit = (S.user==='fondateur'||S.user==='rga');
 
     function ggRow(key,label,val,auto,hint){
@@ -6797,8 +6770,8 @@ function viewLiv(){
       return '<div onclick="'+onclick+'" style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #1a2e1a'+(onclick?';cursor:pointer':'')+'">'        +checkbox        +'<div style="flex:1">'        +'<div style="font-size:13px;color:#ccc">'+label+(auto?' <span style="font-size:9px;color:#7a9a7a;background:#1a2a1a;padding:1px 5px;border-radius:5px;letter-spacing:.03em">AUTO</span>':'')+'</div>'        +(hint?'<div style="font-size:10px;color:#7a9a7a;margin-top:2px">'+hint+'</div>':'')        +'</div>'        +'</div>';
     }
 
-    var allOk=ggCash&&ggVeto&&ggBetes&&ggSante&&gg.contrats&&gg.infra&&gg.assurance&&gg.securite;
-    var score=[ggCash,ggVeto,ggBetes,ggSante,gg.contrats,gg.infra,gg.assurance,gg.securite].filter(Boolean).length;
+    var allOk=ggVeto&&ggAssur&&ggInc&&!!gg.cash&&!!gg.betes&&!!gg.contrats&&!!gg.infra&&!!gg.securite;
+    var score=[ggVeto,ggAssur,ggInc,!!gg.cash,!!gg.betes,!!gg.contrats,!!gg.infra,!!gg.securite].filter(Boolean).length;
     var vBg=allOk?'#0f2a0f':score>=6?'#2a1f00':'#2e1010';
     var vBc=allOk?'#2d6a2d':score>=6?'#8a6a00':'#8a0000';
     var vCol=allOk?'#4caf50':score>=6?'#ff9800':'#f44336';
@@ -6812,17 +6785,21 @@ function viewLiv(){
       +'</div>'
       +'<div class="card">'
       +'<div class="stitle">⚙️ Automatique</div>'
-      +ggRow('cash',   'Cash minimum ≥ 600 000 FCFA',    ggCash,  true, 'Tréso. actuelle : '+fmt(MOCK.treso)+' FCFA')
-      +ggRow('veto',   'Vétérinaire référent confirmé',  ggVeto,  true, CYCLE.veterinaire?'Contact : '+CYCLE.veterinaire:'Non renseigné dans l\'init')
-      +ggRow('betes',  'Bêtes actives = objectif',        ggBetes, true, MOCK.betes+' actives / '+(CYCLE.nbBetes||4)+' prévues')
-      +ggRow('sante',  'Aucun incident URGENCE ouvert',   ggSante, true, ggSante?'✓ Aucun G3 ouvert':'⚠️ Clôturer les incidents G3 avant de lancer le cycle')
+      +ggRow('veto',  'Vétérinaire référent confirmé',  ggVeto,  true, CYCLE.veterinaire?'Contact : '+CYCLE.veterinaire:'Non renseigné dans l\'init')
+      +ggRow('assur', 'Assurance CNAAS activée',         ggAssur, true, ggAssur?'Réf. : '+CYCLE.numCnaas:'Saisissez le N° contrat ci-dessous')
+      +ggRow('inc',   'Aucun incident ouvert',            ggInc,   true, ggInc?'✓ Aucun incident en cours':'⚠️ Clôturer tous les incidents avant de lancer le cycle')
       +'</div>'
+      +(canEdit&&!ggAssur?'<div class="card" style="padding:10px 14px">'
+        +'<div style="font-size:10px;color:#7a9a7a;margin-bottom:6px">N° contrat CNAAS (déclenche confirmation auto)</div>'
+        +'<input type="text" placeholder="Ex: CNAAS-2024-00123" value="'+(CYCLE.numCnaas||'')+'" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#C8A06A;font-size:12px;padding:7px 10px;box-sizing:border-box" oninput="CYCLE.numCnaas=this.value.trim();lsSet(\'cycle\',CYCLE);r()">'
+        +'</div>':'')
       +'<div class="card">'
       +'<div class="stitle">✋ Manuel'+(canEdit?' — <span style="font-size:10px;color:#C8A06A">tap pour modifier</span>':'')+'</div>'
-      +ggRow('contrats','Contrats vente signés',        gg.contrats, false,'Accord bouchers / acheteurs')
-      +ggRow('infra',   'Infrastructure opérationnelle',gg.infra,    false,'Enclos, eau, aliments en place')
-      +ggRow('assurance','Assurance CNAAS activée',     gg.assurance,false,'Couverture mortalité confirmée')
-      +ggRow('securite','Sécurité foncière validée',    gg.securite, false,'Droits d\'usage du terrain')
+      +ggRow('cash',     'Trésorerie suffisante',              !!gg.cash,     false, 'Vérifier le solde disponible pour lancer le cycle')
+      +ggRow('betes',    'Bêtes disponibles à l\'objectif',    !!gg.betes,    false, 'Nb de bêtes achetées confirmé')
+      +ggRow('contrats', 'Contrats vente signés',              !!gg.contrats, false, 'Accord bouchers / acheteurs')
+      +ggRow('infra',    'Infrastructure opérationnelle',      !!gg.infra,    false, 'Enclos, eau, aliments en place')
+      +ggRow('securite', 'Sécurité foncière validée',          !!gg.securite, false, 'Droits d\'usage du terrain')
       +'</div>'
       +'<div style="background:'+vBg+';border:1px solid '+vBc+';color:'+vCol+';border-radius:10px;padding:14px;text-align:center;font-size:16px;font-weight:900">'
       +(allOk?'🟢 GO — Prêt pour le cycle suivant':score>=6?'🟡 PRESQUE — '+(8-score)+' condition(s) restante(s)':'🔴 NO-GO — '+(8-score)+' condition(s) manquante(s)')
@@ -7018,7 +6995,7 @@ function viewLiv(){
       var _cc = _cp.map(function(evt){
         if(!_cb) return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #1a2e1a"><div style="font-size:20px;width:32px;text-align:center">'+evt.ico+'</div><div style="flex:1"><div style="font-size:13px;color:#88aa88;font-weight:600">J+'+evt.j+' — '+evt.label+'</div><div style="font-size:10px;color:#7a9a7a">'+evt.note+'</div></div><div style="font-size:11px;color:#2a4a2a">Non démarré</div></div>';
         var _td2 = new Date(_cb.getTime()); _td2.setDate(_td2.getDate()+evt.j);
-        var _win = 7*86400000;
+        var _win = 3*86400000;
         var _f = HISTORY.some(function(h){ if(h.type!==evt.type)return false; var _p=h.date.split('/'); if(_p.length!==3)return false; return Math.abs(new Date(_p[2],_p[1]-1,_p[0])-_td2)<=_win; });
         var _dt = Math.round((_td2-_ct)/86400000);
         var _s,_sc,_sb,_sbd;
@@ -7028,11 +7005,11 @@ function viewLiv(){
         else{var _d2=_td2,_ds=('0'+_d2.getDate()).slice(-2)+'/'+('0'+(_d2.getMonth()+1)).slice(-2)+'/'+_d2.getFullYear();_s='📅 '+_ds;_sc='#88aa88';_sb='#0a150a';_sbd='#1a2e1a';}
         return '<div style="background:'+_sb+';border:1px solid '+_sbd+';border-radius:8px;padding:10px 12px;margin-bottom:8px"><div style="display:flex;align-items:center;gap:10px"><div style="font-size:20px;width:32px;text-align:center;flex-shrink:0">'+evt.ico+'</div><div style="flex:1"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px"><div style="font-size:13px;color:#ccc;font-weight:700">J+'+evt.j+' — '+evt.label+'</div><div style="font-size:11px;font-weight:700;color:'+_sc+'">'+_s+'</div></div><div style="font-size:10px;color:#7a9a7a;margin-top:2px">'+evt.note+'</div></div></div></div>';
       }).join('');
-      var _cd = _cp.filter(function(e){ if(!_cb)return false; var _td3=new Date(_cb.getTime()); _td3.setDate(_td3.getDate()+e.j); return HISTORY.some(function(h){ if(h.type!==e.type)return false; var _p=h.date.split('/'); if(_p.length!==3)return false; return Math.abs(new Date(_p[2],_p[1]-1,_p[0])-_td3)<=7*86400000; }); }).length;
+      var _cd = _cp.filter(function(e){ if(!_cb)return false; var _td3=new Date(_cb.getTime()); _td3.setDate(_td3.getDate()+e.j); return HISTORY.some(function(h){ if(h.type!==e.type)return false; var _p=h.date.split('/'); if(_p.length!==3)return false; return Math.abs(new Date(_p[2],_p[1]-1,_p[0])-_td3)<=3*86400000; }); }).length;
       return '<div class="stitle">📅 Calendrier SOP vétérinaire</div>'
         +(!_cb ? '<div style="background:#2e1500;border:1px solid #8a4400;border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:#ff9800">⚠️ Cycle non démarré — saisissez une date de début dans les paramètres.</div>'
           : '<div style="background:#0f1f0f;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11px;color:#7a9a7a">Début cycle</div><div style="font-size:13px;color:#C8A06A;font-weight:700">'+isoToFr(CYCLE.dateDebut)+'</div></div><div style="text-align:right"><div style="font-size:11px;color:#7a9a7a">Complétés</div><div style="font-size:20px;font-weight:800;color:'+(_cd>=_cp.length?'#4caf50':'#C8A06A')+'">' +_cd+' / '+_cp.length+'</div></div></div>')
-        +'<div style="font-size:10px;color:#7a9a7a;margin-bottom:10px">Une saisie Santé ou Pesée dans ±7j de la date théorique est comptée comme réalisée.</div>'
+        +'<div style="font-size:10px;color:#7a9a7a;margin-bottom:10px">Une saisie Santé ou Pesée dans ±3j de la date théorique est comptée comme réalisée.</div>'
         +_cc;
     })() + (view ? '<div class="sep"></div>' + view : '');
   } else if(S.sub==='cycles'){
