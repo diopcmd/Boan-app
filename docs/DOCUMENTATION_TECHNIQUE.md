@@ -1,7 +1,7 @@
 ﻿# DOCUMENTATION TECHNIQUE — BOAN App
 
 Référence développeur pour l'application de gestion d'élevage **BOAN**.  
-**Commit HEAD** : `a8705a8` — ~8 000 lignes — 7 Avril 2026
+**Commit HEAD** : `c0f3b1e` — ~8 400 lignes — 16 Avril 2026
 
 ---
 
@@ -44,6 +44,10 @@ Référence développeur pour l'application de gestion d'élevage **BOAN**.
 | `calcStockLocal()` | Stock faux sur dashboard + sidebar + alertes |
 | `appendRow()` / `readSheet()` | Toutes les lectures/écritures Sheets |
 | `saveCycle()` | Reset cycle corrompu — données perdues |
+
+> **Règle anti-saut clavier** : Ne jamais mettre `oninput="...;r()"` sur un `<input>` texte/number.  
+> `r()` détruit et recrée le DOM → focus perdu à chaque frappe.  
+> Utiliser `onchange` (blur/Enter) ou séparer `oninput` (stockage) + `onblur` (re-render).
 
 ### Règle des mutations CYCLE
 

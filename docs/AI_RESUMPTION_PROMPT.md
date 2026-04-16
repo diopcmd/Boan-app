@@ -12,7 +12,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 - **GitHub** : https://github.com/diopcmd/Boan-app (branche `main`)
 - **Dossier local** : `C:\Temp\Boan-app\`
 - **Langue** : Tout en français (code, UI, communications)
-- **Dernier commit** : `a94b32f` — fix exhaustif "0j/1j" → Aujourd'hui/Demain/Hier (9 occurrences, toute l'app)
+- **Dernier commit** : `c0f3b1e` — Fix CNAAS oninput→onblur + docs — Avril 2026
 - **Webhook Vercel** : cassé → redeploy manuel sur vercel.com (Deployments → Redeploy)
 
 ---
@@ -176,7 +176,7 @@ Fusionne 7 onglets Sheets avec HISTORY local. Déduplication par clé `type|date
 | `Hebdomadaire` | Gérant + Fondateur | Semaine, NbBetes, Nourriture, Stock, Incidents, Poids, Alerte, Msg |
 | `KPI_Mensuels` | Fondateur | col H = trésorerie réelle |
 | `Config_Passwords` | Fondateur | role, pwd_base64, updated_at, login_override |
-| `Config_Cycle` | Fondateur | **A1:R1** — A=nbBetes, B=dateDebut, C=poidsDepart, D=dureeMois, E=race, F=capital, G=objectifPrix, H=budgetSante, I=ration, J=veterinaire, K=foirail, L=commission, M=contactUrgence, N=peseeFreq, O=betes(JSON), P=stockLines(JSON), **Q=simCharges(JSON)**, **R=prixAlim** |
+| `Config_Cycle` | Fondateur | **A1:S1** — A=dateDebut, B=nbBetes, C=poidsDepart, D=race, E=ration, F=capital, G=objectifPrix, H=budgetSante, I=vétérinaire, J=foirail, K=commission, L=contactUrgence, M=peseeFreq, N=betes(JSON), O=stockLines(JSON), P=dureeMois, **Q=simCharges(JSON)**, **R=prixAlim**, **S=numCycle** |
 | `Config_App` | Fondateur | A=clé, B=valeur — extensible (gmqCible, gmqWarn, poidsCible, poidsVenteMin, tauxMortMax, coutRevientMax, margeParBeteMin, alerteSeuilTreso, sopProtocol, dureeMois, lastFicheDate…) |
 | `Suivi_Marche` | Fallou + Fondateur | Date, Foirail, Bas, Moy, Haut, Vol, Note |
 | `Suivi_Aliments` | Fondateur + RGA + Fallou | Date, Type, Prix/kg — **à créer manuellement** (données ligne 4+) |
@@ -474,9 +474,29 @@ L6013  viewLiv()          L6776  viewMarche()
 - Pesée IIFE sidebar : condition `peseeJ>=_pF` (pas `>_pF`) pour attraper le cas `=_pF` → "Aujourd'hui !"
 - Couverts : sidebar gérant (SOP/Stock/Pesée), sidebar fondateur (SOP/Stock), viewDash tâches (SOP/Pesée/Bilan), viewDash saisies fondateur (pesée), form SOP badge
 
-### Sidebar
-- **Durée cycle** : stepper pur `−` / `+` (sans input — évite reset au re-render) — fondateur/rga/fallou — plage 1–60 mois — `updateDureeMois(v)` → `_syncCycle()`
-- **Rappel pesée** : boutons compacts 7/14/21/30j — tous rôles — `updatePeseeFreq(v)` → `_syncCycle()`
+### Sidebar — logique indicateurs (refonte Avril 2026)
+
+```
+Philosophie : ✗ rouge = OBLIGATION non remplie. Jamais ✗ pour une info ou un état hors contrôle du gérant.
+
+Gérant + Fondateur :
+  🌾 Stock  → niveau physique calculé (sem.) : ≥6 sem. ✓ / 4-5 sem. ⚠ / <4 sem. ✗
+              PAS la date de dernière saisie (_stkSb = MOCK.stock>0 ? MOCK.stock : calcStockLocal())
+  ⚖️ Pesée  → "dans Xj ✓" si cycle récent (joursSinceDebut < peseeFreq) — évite faux ✗ dès J+1
+  ⚠️ Incidents → incidents OUVERTS (non clôturés) — PAS "N auj." (qui punissait le bon comportement)
+  💊 Santé  → mortalité cycle (mort = nbBetes - MOCK.betes) — PAS nb saisies du jour
+  SOP fondateur → "jamais ✗" si sopJ ≥ 999 (corrige bug cosmétique "999j ✗")
+
+RGA :
+  Données reçues → fenêtre 48h (aujourd'hui ou hier) — PAS uniquement aujourd'hui
+
+Gérant tab today :
+  Boutons raccourcis Fiche/SOP/Pesée SUPPRIMÉS (redondants avec les lignes cliquables)
+  Sélecteur fréquence pesée réservé fondateur uniquement
+```
+
+### Sidebar — structure globale (sans input — évite reset au re-render) — fondateur/rga/fallou — plage 1–60 mois — `updateDureeMois(v)` → `_syncCycle()`
+- **Rappel pesée** : boutons compacts 7/14/21/30j — **fondateur uniquement** — `updatePeseeFreq(v)` → `_syncCycle()`
 - Les deux contrôles synchronisent `Config_Cycle!A1:O1` dans les 4 sheets — tous les acteurs verront la nouvelle valeur au prochain `loadLiveData`
 - Durée cycle et Rappel pesée sont dans le `sb-body` scrollable (pas dans le footer fixe)
 
@@ -487,10 +507,59 @@ L6013  viewLiv()          L6776  viewMarche()
 - **iOS** : `apple-mobile-web-app-status-bar-style: black-translucent` ajouté
 - **vercel.json** : regex exclut `/manifest.json` du rewrite → `/index.html` (sinon manifest inaccessible)
 
+### Reset cycle — archivage garanti (fix Avril 2026)
+
+```js
+// PROBLÈME CORRIGÉ : _archiveCycle() appelé hors getTok() → échec silencieux si token expiré
+// SOLUTION : 3 couches de protection
+
+// 1. Backup localStorage AVANT tout effacement
+lsSet('_cycleToArchive', _prevCycleSnap);  // dans saveCycle(), avant CYCLE=...
+
+// 2. Archivage en 1ère opération du getTok().then() — même bloc async, token garanti
+var _snapToArch = lsGet('_cycleToArchive');
+if (_snapToArch && _snapToArch.dateDebut) {
+  _archiveCycle(_snapToArch).then(function(res){
+    if (res && res.ok !== false) lsSet('_cycleToArchive', null);
+  });
+}
+
+// 3. Retry au démarrage dans loadLiveData()
+var _pendingArch = lsGet('_cycleToArchive');
+if (_pendingArch && _pendingArch.dateDebut && SID.fondateur) {
+  _archiveCycle(_pendingArch).then(function(res){
+    if (res && res.ok !== false) lsSet('_cycleToArchive', null);
+  });
+}
+
+// _archiveCycle() retourne maintenant la Promise de appendRow()
+```
+
+### Inputs — règle anti-saut clavier
+
+```js
+// PROBLÈME : oninput + r() = re-render DOM complet à chaque frappe → input détruit/recréé → focus perdu
+// RÈGLE : sur les inputs qui mutent CYCLE/* et appellent r(), toujours utiliser :
+
+// Option A (simu, configs) : onchange="CYCLE.x=...;r()"  (déclenche à blur/Enter seulement)
+// Option B (CNAAS GoNoGo) : oninput="CYCLE.x=...;lsSet()" onblur="r()"
+//   (écrit en live sans re-render, met à jour le GoNoGo quand l'utilisateur quitte le champ)
+
+// Les inputs qui écrivent UNIQUEMENT dans S.xxx ou MODAL.data.xxx SANS appeler r()
+// peuvent garder oninput — pas de re-render → pas de saut
+```
+
 ### Reset cycle
 - Réinitialise : HISTORY, STOCK_MVTS, LIVE, MOCK, _lastSyncTS, _lastFondVisitTS, MOCK._tresoFromSante
 - Vide les onglets Sheets depuis : **A4** (Fiche_Quotidienne, SOP_Check, Pesees, Hebdomadaire, KPI_*) | **A5** (Stock_Nourriture, Incidents, Sante_Mortalite — ligne 4 protégée)
 - Recharge CYCLE depuis Config_Cycle Sheets après reset
+
+### Go/No-Go (Livrables — fondateur/rga)
+- Checklist **8 critères** : 3 **automatiques** (vétérinaire renseigné, N° CNAAS saisi, 0 incident ouvert) + 5 **manuels** (cash, betes, contrats, infra, securite)
+- `CYCLE.gonogo = {cash, betes, contrats, infra, securite}` — réinitialisé au reset cycle
+- `CYCLE.numCnaas` persisté dans `Config_App` et `Config_Cycle!S1`
+- Champ saisie N° CNAAS affiché si `canEdit && !ggAssur`
+- **Input CNAAS** : `oninput` stocke sans `r()`, `onblur` déclenche `r()` — évite saut clavier
 
 ### Marché
 - `readSheet()` utilise `?valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING` — critique pour éviter prix 2 FCFA/kg et dates sérialisées
@@ -513,7 +582,11 @@ L6013  viewLiv()          L6776  viewMarche()
 ### Calendrier SOP vétérinaire (fondateur / rga / gérant lecture)
 - Protocoles calculés depuis `CYCLE.dateDebut` — J15 vaccin, J30 déparasitage, J60 balnéation…
 - Statut ✅ fait / 🔔 à venir / ⚠️ en retard calculé automatiquement
-- **Seuils** : ±7 j = à temps (✅ comptent dans conformité) ; 8–21j = hors délai (⚠️ bouton orange) ; >21j = bloqué
+- **Tolérance ±3 jours** (pas ±7j) — corrigée dans 4 endroits : sopvet calendrier, compteur `_cd`, vue protocole Saisie, `_sopInlineSave`
+  - `CYCLE.gonogo = {cash, betes, contrats, infra, securite}` — réinitialisé au reset cycle
+  - `CYCLE.numCnaas` persisté `Config_App` et `Config_Cycle!S1`
+  - **Input CNAAS** : `oninput` stocke sans `r()`, `onblur` déclenche `r()` — évite saut clavier
+- **SOP véto** tolérance **±3 jours** (pas ±7j) dans 4 endroits : sopvet calendrier, compteur `_cd`, vue protocole Saisie, `_sopInlineSave`
 - **Formulaire inline (santé)** : mini-form bête + résultat directement dans la carte, SANS changer de page
   - Déclenché par `_sopValider(idx)` (sante) → `S._sopInlineIdx = idx`
   - Validé par `_sopInlineSave(idx)` → écrit dans `HISTORY` ET dans `Sante_Mortalite!A:I` (tous SIDs)
@@ -596,4 +669,17 @@ L6013  viewLiv()          L6776  viewMarche()
 | `fa31f67` | fix: MOCK.betes=4 persistant — sync depuis CYCLE.nbBetes dès step1, decesV2 vague2 |
 | `8f676ef` | fix: cycle non démarré (dateDebut vide modale), GMQ diviseur peseeFreq, parseISO dates locales |
 | `79eb9a5` | refactor: suppression redondances SOP — calendrier fusionné dans sopvet (Livrables) |
+| `aecfc6e` | fix: guide commerciale (auth fallou→commerciale) |
+| `da21daa` | feat: sidebar statuts ✓/✗ + dates rouges |
+| `66f61c1` | fix: sidebar pattern `[info] ✓` / `[info] ✗` cohérent |
+| `34073f9` | fix: supprime bouton retour superflu dans viewGuide |
+| `2ce5935` | fix: guides PDF accessibles (vercel.json + rename fallou→commerciale) |
+| `bf18af4` | **fix** : SOP ±7j → **±3j** (4 occurrences) + **GoNoGo refonte** (3 auto + 5 manuel, /8) + supprime .py orphelins |
+| `51b9020` | **fix** : audit global 6 bugs — `_syncConfigApp` incomplet, `loadLiveData` numCnaas/gonogo, `Config_Cycle!A1:S1`, 4 fonctions mortes supprimées, `resetSop()` lastSopDate |
+| `01d562e` | **feat** : sidebar refonte logique indicateurs — stock=niveau, pesée=cycle, incidents=ouverts, santé=mortalité, RGA 48h |
+| `45fc6ea` | **fix** : clavier ne saute plus dans les inputs — `oninput+r()` → `onchange` (simu, configs, mix ration) |
+| `4334fae` | **fix** : perte cycle à la réinitialisation — backup localStorage + archivage dans getTok + retry au démarrage |
+| `8512048` | **fix** : sidebar gérant — supprime boutons Fiche/SOP/Pesée inutiles + fréquence pesée réservée fondateur |
+| `337c697` | **fix** : sb-foot gérant invisible — div orphelin qui fermait sb-body prématurément |
+| `c0f3b1e` | **fix** : CNAAS oninput→onblur (évite saut clavier) + docs mis à jour |
 

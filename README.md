@@ -5,7 +5,7 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
 
 **Production** → https://boan-app-ur3x.vercel.app  
 **Stack** : Vanilla JS ES5 · Vercel Serverless · Google Sheets API v4  
-**État** : commit `61fc2c0` — ~8 000 lignes — Avril 2026
+**État** : commit `c0f3b1e` — ~8 400 lignes — Avril 2026
 
 ---
 
@@ -46,21 +46,21 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
 - **KPI** — barres GMQ / stock / bêtes / poids / projection CA vs objectifs configurables
 - **Bêtes** — courbes de croissance individuelle, IC (indice consommation), GMQ prédictif (régression linéaire), seuil rentabilité/bête
 - **Incidents** — liste avec gravité, statut, clôture
-- **Go/No-Go** — checklist 8 critères pour décision de vente
+- **Go/No-Go** — checklist 8 critères : 3 automatiques (vétérinaire renseigné, N° CNAAS saisi, 0 incident ouvert) + 5 manuels (trésorerie, bêtes, contrats, infra, sécurité). Score /8. Champ de saisie N° CNAAS affiché si non confirmé.
 - **Objectifs configurables** (fondateur + RGA) :
   - Zootechniques : GMQ cible/alerte, poids cible, poids vente min, taux mortalité max
   - Financiers : coût revient max, marge min/bête, plancher tréso
   - **Marché & Ration** *(nouveau)* : prix aliment mid-cycle, prix vente visé, mix son/tourteau lié (total=100%), badge date de modification
   - **Protocole SOP vétérinaire** *(dans onglet Livrables > SOP Véto)* : éditeur complet ajout/modification/suppression étapes J+N, types santé/pesée, réinitialisation standard. Persisté via `saveObjectifs()`.
 - **SOP Véto** — calendrier timeline des actes J+N calculés depuis `CYCLE.dateDebut` :
-  - Statuts : ✅ réalisé / ⚠️ en retard / 🔔 dans 7j / 📅 planifié
-  - Tolérance ±7 jours (comptent dans la conformité) ; seuil 8–21j = orange "hors délai"
+  - Statuts : ✅ réalisé / ⚠️ en retard / 🔔 dans 3j / 📅 planifié
+  - Tolérance **±3 jours** (comptent dans la conformité) ; seuil 4–21j = orange "hors délai"
   - Actes Santé : formulaire inline bête par bête ou "🐄 Toutes les bêtes restantes" en 1 clic
   - Suivi **par bête** : badge 🔄 X/N traitées (partiel) / ✅ N/N traitées (complet) — une bête traitée ne valide plus TOUTES les bêtes
   - Champ `sopLabel` sur chaque entrée SOP → isole les étapes proches (ex: Vitamine J+1 vs Déparasitage J+7 ne se valident plus mutuellement)
   - Pesée SOP → formulaire pesée avec bannière contextuelle J+N
   - Éditeur du protocole (onglet SOP Véto) : ajout/modif/suppression étapes, persisté dans `Config_App` — **fondateur uniquement**
-- **Cycles archivés** — historique de tous les cycles clôturés dans `Historique_Cycles` (snapshot automatique avant reset, colonnes A:O incl. N° de cycle)
+- **Cycles archivés** — historique de tous les cycles clôturés dans `Historique_Cycles` (snapshot automatique avant reset, colonnes A:O incl. N° de cycle). **Backup localStorage** (`_cycleToArchive`) protège contre perte réseau. Archivage garanti dans `getTok().then()` + retry automatique au démarrage si échec précédent.
 - **Numéro de cycle** — `CYCLE.numCycle` éditable par le fondateur (modal init + onglet Objectifs) ; IDs bêtes préfixés `Cx-NNN` ; affiché sur le dashboard hero card
 
 ### Marché (fondateur / RGA / Commerciale)

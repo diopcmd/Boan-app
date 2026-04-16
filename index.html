@@ -6801,7 +6801,7 @@ function viewLiv(){
       +'</div>'
       +(canEdit&&!ggAssur?'<div class="card" style="padding:10px 14px">'
         +'<div style="font-size:10px;color:#7a9a7a;margin-bottom:6px">N° contrat CNAAS (déclenche confirmation auto)</div>'
-        +'<input type="text" placeholder="Ex: CNAAS-2024-00123" value="'+(CYCLE.numCnaas||'')+'" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#C8A06A;font-size:12px;padding:7px 10px;box-sizing:border-box" oninput="CYCLE.numCnaas=this.value.trim();lsSet(\'cycle\',CYCLE);r()">'
+        +'<input type="text" placeholder="Ex: CNAAS-2024-00123" value="'+(CYCLE.numCnaas||'')+'" style="width:100%;background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#C8A06A;font-size:12px;padding:7px 10px;box-sizing:border-box" oninput="CYCLE.numCnaas=this.value.trim();lsSet(\'cycle\',CYCLE)" onblur="r()">'
         +'</div>':'')
       +'<div class="card">'
       +'<div class="stitle">✋ Manuel'+(canEdit?' — <span style="font-size:10px;color:#C8A06A">tap pour modifier</span>':'')+'</div>'
