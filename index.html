@@ -1276,6 +1276,14 @@ function loadLiveData() {
   _LIVE_LOADING = true;
   LIVE.source = 'loading';
 
+  // ── Retry archivage si un cycle précédent n'a pas pu être écrit (perte réseau) ──
+  var _pendingArch = lsGet('_cycleToArchive');
+  if (_pendingArch && _pendingArch.dateDebut && SID.fondateur) {
+    _archiveCycle(_pendingArch).then(function(res){
+      if (res && res.ok !== false) lsSet('_cycleToArchive', null);
+    }).catch(function(){});
+  }
+
   // Helper : filtrer les lignes depuis CYCLE.dateDebut
   function apresDebut(dateFR) {
     if (!CYCLE.dateDebut) return true;
@@ -3961,8 +3969,8 @@ function addBeteModal(){
 // Colonnes A:N — voir en-têtes dans la ligne 1 du sheet.
 // snap : objet snapshot capturé juste avant le reset de CYCLE.
 function _archiveCycle(snap) {
-  if (!snap || !snap.dateDebut) return; // cycle jamais initialisé — rien à archiver
-  if (!SID.fondateur) return;
+  if (!snap || !snap.dateDebut) return Promise.resolve(false); // cycle jamais initialisé — rien à archiver
+  if (!SID.fondateur) return Promise.resolve(false);
   var margineBrute = Math.round(snap.tresoFin - snap.capital);
   var margeParBete = snap.nbBetesFin > 0 ? Math.round(margineBrute / snap.nbBetesFin) : 0;
   var dureeReelle  = (function(){
@@ -3989,7 +3997,7 @@ function _archiveCycle(snap) {
     margeParBete,               // N — Marge brute / bête (FCFA)
     snap.numCycle || ''         // O — Numéro de cycle
   ];
-  appendRow(SID.fondateur, 'Historique_Cycles!A:O', row);
+  return appendRow(SID.fondateur, 'Historique_Cycles!A:O', row);
 }
 
 function saveCycle(){
@@ -4020,6 +4028,8 @@ function saveCycle(){
     foirail:     CYCLE.foirail    || '',
     numCycle:    CYCLE.numCycle   || 1
   } : null;
+  // ── Backup local IMMÉDIAT — protège contre perte réseau ou crash pendant le reset ──
+  if (_prevCycleSnap && _prevCycleSnap.dateDebut) lsSet('_cycleToArchive', _prevCycleSnap);
   CYCLE = Object.assign(CYCLE, MODAL.data, {initialized:true});
   // ── Reset des variables qui ne doivent PAS persister du cycle précédent ──
   CYCLE.gonogo     = {cash:false, betes:false, contrats:false, infra:false, securite:false}; // [fix] cases Go/No-Go manuelles remises à 0
@@ -4096,15 +4106,21 @@ function saveCycle(){
   lsSet('fondateur_last_visit', 0);
   // MOCK.betes et MOCK.stock déjà mis à jour plus haut dans saveCycle()
 
-  // ── ARCHIVAGE cycle sortant (avant reset) ──
-  // Snapshot depuis mémoire — zéro lecture Sheets supplémentaire
-  _archiveCycle(_prevCycleSnap);
+  // ── ARCHIVAGE cycle sortant — effectué dans getTok().then() pour garantir le token ──
 
   r();
 
   // ── Écriture Sheets + vidage données ancien cycle ──
   getTok().then(function(tk){
     if (!tk) { LIVE.source = 'cache'; r(); return; }
+
+    // 0. Archiver le cycle sortant EN PREMIER (avant tout effacement)
+    var _snapToArch = lsGet('_cycleToArchive');
+    if (_snapToArch && _snapToArch.dateDebut) {
+      _archiveCycle(_snapToArch).then(function(res){
+        if (res && res.ok !== false) lsSet('_cycleToArchive', null); // succès → effacer le backup
+      }).catch(function(){ /* backup conservé pour retry ultérieur */ });
+    }
 
     // 1. Écrire Config_Cycle dans TOUS les sheets (gerant, fondateur, rga, commerciale)
     var vals = [
