@@ -1277,11 +1277,18 @@ function loadLiveData() {
   LIVE.source = 'loading';
 
   // ── Retry archivage si un cycle précédent n'a pas pu être écrit (perte réseau) ──
+  // On vide _cycleToArchive AVANT l'appel pour éviter double-écriture si loadLiveData
+  // est appelé plusieurs fois. On restaure uniquement en cas d'échec réseau réel.
   var _pendingArch = lsGet('_cycleToArchive');
   if (_pendingArch && _pendingArch.dateDebut && SID.fondateur) {
+    lsSet('_cycleToArchive', null); // vider en amont — empêche double-écriture
     _archiveCycle(_pendingArch).then(function(res){
-      if (res && res.ok !== false) lsSet('_cycleToArchive', null);
-    }).catch(function(){});
+      if (res && res.ok === false) {
+        if (!lsGet('_cycleToArchive')) lsSet('_cycleToArchive', _pendingArch); // restaurer si échec
+      }
+    }).catch(function(){
+      if (!lsGet('_cycleToArchive')) lsSet('_cycleToArchive', _pendingArch); // restaurer si exception
+    });
   }
 
   // Helper : filtrer les lignes depuis CYCLE.dateDebut
@@ -4117,9 +4124,14 @@ function saveCycle(){
     // 0. Archiver le cycle sortant EN PREMIER (avant tout effacement)
     var _snapToArch = lsGet('_cycleToArchive');
     if (_snapToArch && _snapToArch.dateDebut) {
+      lsSet('_cycleToArchive', null); // vider en amont — empêche double-écriture depuis loadLiveData
       _archiveCycle(_snapToArch).then(function(res){
-        if (res && res.ok !== false) lsSet('_cycleToArchive', null); // succès → effacer le backup
-      }).catch(function(){ /* backup conservé pour retry ultérieur */ });
+        if (res && res.ok === false) {
+          if (!lsGet('_cycleToArchive')) lsSet('_cycleToArchive', _snapToArch); // restaurer si échec
+        }
+      }).catch(function(){
+        if (!lsGet('_cycleToArchive')) lsSet('_cycleToArchive', _snapToArch); // restaurer si exception
+      });
     }
 
     // 1. Écrire Config_Cycle dans TOUS les sheets (gerant, fondateur, rga, commerciale)
