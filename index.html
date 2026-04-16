@@ -4649,8 +4649,10 @@ function buildSidebar(){
         +(function(){
           // faitAujourdhui et joursSince sont des fonctions globales
           var fichOk2=ficheDejaSoumise(), sopOk2=faitAujourdhui('sop');
-          var stockJ=joursSince('stock'), stockOk2=stockJ<=14;
-          var peseeJ=joursSince('pesee'), peseeOk2=peseeJ<=(CYCLE.peseeFreq||30);
+          var _stkSb=MOCK.stock>0?MOCK.stock:calcStockLocal(), stockOk2=_stkSb>=6;
+          var _pFq=CYCLE.peseeFreq||30;
+          var _cycleDays=CYCLE.dateDebut?Math.floor((Date.now()-(parseISO(CYCLE.dateDebut)||new Date()).getTime())/86400000):999;
+          var peseeJ=joursSince('pesee'), peseeOk2=peseeJ<=_pFq||(peseeJ>=999&&_cycleDays<_pFq);
           function chk2(lbl,ok,detail){
             return '<div class="sb-check"><span>'+lbl+'</span><span class="'+(ok?'sb-ok':'sb-ko')+'">'+(ok?'✓ OK':detail||'✗ À faire')+'</span></div>';
           }
@@ -4672,8 +4674,8 @@ function buildSidebar(){
             return _base;
           })();
           var _tdInc  = today();
-          var incNb   = HISTORY.filter(function(h){return h.type==='inc'  &&h.date===_tdInc;}).length || (CYCLE._lastIncDate   === _tdInc ? 1 : 0);
-          var santeNb = HISTORY.filter(function(h){return h.type==='sante'&&h.date===_tdInc;}).length || (CYCLE._lastSanteDate === _tdInc ? 1 : 0);
+          var incNb   = (LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';}).length;
+          var mort    = Math.max(0,(CYCLE.nbBetes||0)-MOCK.betes);
           return '<div class=\"sb-card\">'
             +'<div class=\"sb-section-title\">Calendrier des saisies</div>'
             // Fiche : 1/jour
@@ -4689,22 +4691,24 @@ function buildSidebar(){
             +'<span class=\"sb-lbl\">📊 Bilan hebdo</span>'
             +'<span class=\"sb-val '+(bilanSem?'sb-ok':'sb-ko')+'\">' 
             +(bilanSem?'sem. '+calcSemaine()+' ✓':(bilanDu&&_heure>=18?'ce soir ✗':'ven. ✗'))+'</span></div>'
-            // Stock : à tout moment (mais alerte si > 14j)
+            // Stock : niveau physique (semaines restantes)
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'stock\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">🌾 Stock</span>'
-            +'<span class=\"sb-val '+(stockOk2?'sb-ok':'sb-ko')+'\">'+(stockOk2?'il y a '+stockJ+'j ✓':stockJ<999?stockJ+'j ✗':'jamais ✗')+'</span></div>'
+            +'<span class=\"sb-val '+(_stkSb>=6?'sb-ok':_stkSb>=4?'sb-warn':'sb-ko')+'\">'
+            +(_stkSb>0?_stkSb+' sem.'+(_stkSb>=6?' ✓':_stkSb>=4?' ⚠':' ✗'):'inconnu ✗')+'</span></div>'
             // Pesée : selon fréquence cycle
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'pesee\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">⚖️ Pesée</span>'
-            +'<span class=\"sb-val '+(peseeOk2?'sb-ok':'sb-ko')+'\">'+(peseeOk2?'il y a '+peseeJ+'j ✓':(peseeJ>=999?'jamais ✗':'retard '+(peseeJ-(CYCLE.peseeFreq||30))+'j ✗'))+'</span></div>'
-            // Incident : nb aujourd'hui
+            +'<span class=\"sb-val '+(peseeOk2?'sb-ok':'sb-ko')+'\">'
+            +(peseeOk2?(peseeJ>=999?'dans '+Math.max(0,_pFq-_cycleDays)+'j ✓':'il y a '+peseeJ+'j ✓'):(peseeJ>=999?'jamais ✗':'retard '+(peseeJ-_pFq)+'j ✗'))+'</span></div>'
+            // Incident : incidents ouverts (non clôturés)
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'inc\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">⚠️ Incidents</span>'
-            +'<span class=\"sb-val '+(incNb>0?'sb-ko':'sb-ok')+'\">'+(incNb>0?incNb+' auj. ✗':'aucun ✓')+'</span></div>'
-            // Santé : nb aujourd'hui
+            +'<span class=\"sb-val '+(incNb>0?'sb-ko':'sb-ok')+'\">'+(incNb>0?incNb+' ouvert(s) ✗':'aucun ouvert ✓')+'</span></div>'
+            // Santé : mortalité cycle
             +'<div class=\"sb-row\" onclick=\"chTab(\'saisie\');chSub(\'sante\');closeSB()\" style=\"cursor:pointer\">'
             +'<span class=\"sb-lbl\">💊 Santé</span>'
-            +'<span class=\"sb-val '+(santeNb>0?'sb-ko':'sb-ok')+'\">'+(santeNb>0?santeNb+' auj. ✗':'aucun ✓')+'</span></div>'
+            +'<span class=\"sb-val '+(mort>0?'sb-ko':'sb-ok')+'\">'+(mort>0?mort+' mort(s) ✗':'troupeau OK ✓')+'</span></div>'
             +'</div>'
             +(!fichOk2?'<div class=\"alert-banner\">⚠ Fiche du jour non remplie</div>':'');
         })()
@@ -4875,9 +4879,9 @@ function buildSidebar(){
           var fOk    = HISTORY.some(function(h){return h.type==='fiche'&&h.date===td2;}) || CYCLE._lastFicheDate === td2;
           var sopJ2  = joursSince('sop'); var sopOk2b = sopJ2<=14;
           var bilOk2 = bilanDejaFaitCetteSemaine();
-          var stkJ2  = joursSince('stock'); var stkOk2b= stkJ2<=14;
-          var incNb2   = HISTORY.filter(function(h){return h.type==='inc'  &&h.date===td2;}).length || (CYCLE._lastIncDate   === td2 ? 1 : 0);
-          var santeNb2 = HISTORY.filter(function(h){return h.type==='sante'&&h.date===td2;}).length || (CYCLE._lastSanteDate === td2 ? 1 : 0);
+          var _stkSb2  = MOCK.stock>0?MOCK.stock:calcStockLocal();
+          var incNb2   = (LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';}).length;
+          var mort2    = Math.max(0,(CYCLE.nbBetes||0)-MOCK.betes);
           return ''
             +'<div class="sb-section-title">Saisies gérant</div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'fiche\');closeSB()\' style="cursor:pointer">'
@@ -4885,15 +4889,15 @@ function buildSidebar(){
             +'<span class="sb-val '+(fOk?'sb-ok':'sb-ko')+'">'+(fOk?'reçue ✓':'auj. ✗')+'</span></div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'sop\');closeSB()\' style="cursor:pointer">'
             +'<span class="sb-lbl">✅ SOP</span>'
-            +'<span class="sb-val '+(sopOk2b?'sb-ok':'sb-ko')+'">'+(sopOk2b?'il y a '+sopJ2+'j ✓':sopJ2+'j ✗')+'</span></div>'
+            +'<span class="sb-val '+(sopOk2b?'sb-ok':'sb-ko')+'">'+(sopOk2b?'il y a '+sopJ2+'j ✓':sopJ2>=999?'jamais ✗':sopJ2+'j ✗')+'</span></div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'bilan\');closeSB()\' style="cursor:pointer">'
             +'<span class="sb-lbl">📊 Bilan sem.</span>'
             +'<span class="sb-val '+(bilOk2?'sb-ok':'sb-ko')+'">'+(bilOk2?'sem. '+calcSemaine()+' ✓':'sem. '+calcSemaine()+' ✗')+'</span></div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'stock\');closeSB()\' style="cursor:pointer">'
             +'<span class="sb-lbl">🌾 Stock</span>'
-            +'<span class="sb-val '+(stkOk2b?'sb-ok':'sb-ko')+'">'+(stkOk2b?'il y a '+stkJ2+'j ✓':stkJ2<999?stkJ2+'j ✗':'jamais ✗')+'</span></div>'
-            +(incNb2>0?'<div class="sb-row" onclick="chTab(\'livrables\');chSub(\'incidents\');closeSB()" style="cursor:pointer"><span class="sb-lbl">⚠️ Incidents</span><span class="sb-val sb-warn">'+incNb2+' auj. →</span></div>':'')
-            +(santeNb2>0?'<div class="sb-row"><span class="sb-lbl">💊 Santé</span><span class="sb-val sb-warn">'+santeNb2+' auj.</span></div>':'');
+            +'<span class="sb-val '+(_stkSb2>=6?'sb-ok':_stkSb2>=4?'sb-warn':'sb-ko')+'">'+(_stkSb2>0?_stkSb2+' sem.'+(_stkSb2>=6?' ✓':_stkSb2>=4?' ⚠':' ✗'):'inconnu ✗')+'</span></div>'
+            +(incNb2>0?'<div class="sb-row" onclick="chTab(\'livrables\');chSub(\'incidents\');closeSB()" style="cursor:pointer"><span class="sb-lbl">⚠️ Incidents</span><span class="sb-val sb-ko">'+incNb2+' ouvert(s) →</span></div>':'')
+            +(mort2>0?'<div class="sb-row"><span class="sb-lbl">💊 Santé</span><span class="sb-val sb-ko">'+mort2+' mort(s)</span></div>':'');
         })()
         +'</div>'
         +'<div class="sb-shortcut" onclick="chTab(\'livrables\');chSub(\'treso\');closeSB()">'
@@ -5006,7 +5010,7 @@ function buildSidebar(){
   } else if(u==='rga'){
     if(SB.tab==='today'){
       body='<div class="sb-card">'
-        +(function(){ var td2=today(); var ok=HISTORY.some(function(h){return (h.type==='fiche'||h.type==='pesee'||h.type==='sante'||h.type==='inc')&&h.date===td2;}); return '<div class="sb-row"><span class="sb-lbl">Données reçues</span><span class="'+(ok?'sb-ok':'sb-ko')+'">'+(ok?'reçues ✓':'en attente ✗')+'</span></div>'; })()
+        +(function(){ var td2=today(); var _nd48h=_nowDakar();var _y48h=new Date(_nd48h.year,_nd48h.month-1,_nd48h.day-1);var _yest48=(_y48h.getDate()<10?'0':'')+_y48h.getDate()+'/'+((_y48h.getMonth()+1)<10?'0':'')+(_y48h.getMonth()+1)+'/'+_y48h.getFullYear(); var ok=HISTORY.some(function(h){return (h.type==='fiche'||h.type==='pesee'||h.type==='sante'||h.type==='inc')&&(h.date===td2||h.date===_yest48);}); return '<div class="sb-row"><span class="sb-lbl">Données reçues</span><span class="'+(ok?'sb-ok':'sb-ko')+'">'+(ok?'reçues ✓':'en attente ✗')+'</span></div>'; })()
         +(function(){ var gmqOk=MOCK.gmq>=(CYCLE.gmqCible||1); var stkOk=(MOCK.stock>0?MOCK.stock:calcStockLocal())>=6; var ok=gmqOk&&stkOk; return '<div class="sb-row"><span class="sb-lbl">KPI cycle</span><span class="sb-val '+(ok?'kval-ok':'kval-crit')+'">'+(ok?'conforme ✓':'à revoir ✗')+'</span></div>'; })()
         +'</div>'
         +'<div class="sb-shortcut" onclick="chTab(\'livrables\');chSub(\'kpi\');closeSB()">'
