@@ -2123,24 +2123,15 @@ function _submitActual(type) {
       if(type==='marche')S.fm={date:td,foi:S.fm.foi||'Thiès',foiCustom:S.fm.foiCustom||'',bas:'',moy:'',haut:''}
       if(type==='alim')  S.falim={date:td,type:S.falim.type||'',prix:''};
       if(type==='alim')  setTimeout(loadAlimPrix, 400);
-      // Tracker bêtes traitées — exclusion dropdown jusqu'à ce que toutes soient faites
-      if (_beteIdSubmit) {
+      // Tracker bêtes pesées uniquement — exclusion dropdown jusqu'à ce que toutes soient pesées
+      // (santé + incidents : pas d'exclusion — on peut saisir plusieurs fois la même bête)
+      if (_beteIdSubmit && type==='pesee') {
         var _allBeteIds = CYCLE.betes && CYCLE.betes.length
           ? CYCLE.betes.filter(function(b){return (LIVE.deceased||[]).indexOf(b.id)===-1;}).map(function(b){return b.id;})
           : LIVE.beteIds && LIVE.beteIds.length ? LIVE.beteIds
           : (function(){var n=CYCLE.nbBetes||MOCK.betes||4;var _fb=[];for(var i=1;i<=n;i++)_fb.push('B'+('0'+i).slice(-2));return _fb;})();
-        if (type==='pesee') {
-          if (S._donePesee.indexOf(_beteIdSubmit)===-1) S._donePesee.push(_beteIdSubmit);
-          if (_allBeteIds.length > 0 && S._donePesee.length >= _allBeteIds.length) S._donePesee = [];
-        }
-        if (type==='sante') {
-          if (S._doneSante.indexOf(_beteIdSubmit)===-1) S._doneSante.push(_beteIdSubmit);
-          if (_allBeteIds.length > 0 && S._doneSante.length >= _allBeteIds.length) S._doneSante = [];
-        }
-        if (type==='inc') {
-          if (S._doneInc.indexOf(_beteIdSubmit)===-1) S._doneInc.push(_beteIdSubmit);
-          if (_allBeteIds.length > 0 && S._doneInc.length >= _allBeteIds.length) S._doneInc = [];
-        }
+        if (S._donePesee.indexOf(_beteIdSubmit)===-1) S._donePesee.push(_beteIdSubmit);
+        if (_allBeteIds.length > 0 && S._donePesee.length >= _allBeteIds.length) S._donePesee = [];
       }
     } else {
       S.msg='err:'+(res&&res.err?res.err:'Erreur');
@@ -5804,7 +5795,7 @@ function viewSaisie(){
       +(_incCount>0?'<div class="al al-o" style="margin-bottom:8px">'+_incCount+' incident(s) saisi(s) aujourd\'hui — vous pouvez en ajouter un autre</div>':'')
       +'<div class="frow">'
       +fl('Date','<input type="date" value="'+f.date+'" oninput="S.fin.date=this.value">',f.date)
-      +beteDropdown(f.id, 'S.fin.id', '', S._doneInc)
+      +beteDropdown(f.id, 'S.fin.id', '', [])
       +'</div>'
       +fl('Type incident','<input placeholder=" " value="'+f.type+'" oninput="S.fin.type=this.value">',f.type)
       +'<div class="fg"><label>Gravité</label><div class="rg">'
@@ -5939,7 +5930,7 @@ function viewSaisie(){
       })()
       +'<div class="frow">'
       +fl('Date','<input type="date" value="'+f.date+'" oninput="S.fsa.date=this.value">',f.date)
-      +beteDropdown(f.id, 'S.fsa.id', '', S._doneSante)
+      +beteDropdown(f.id, 'S.fsa.id', '', [])
       +'</div>'
       +fl('Symptôme','<input placeholder=" " value="'+f.sym+'" oninput="S.fsa.sym=this.value">',f.sym)
       +fl('Traitement','<input placeholder=" " value="'+f.tra+'" oninput="S.fsa.tra=this.value">',f.tra)
@@ -6068,7 +6059,11 @@ function viewSaisie(){
             }
           }
         });
-        _fait = _sopBeteIds.length > 0 && _betesDonePd.length >= _sopBeteIds.length;
+        // Sante SOP : 1 bête traitée = étape validée (le livrable couvre tout le troupeau)
+        // Pesée SOP : toutes les bêtes doivent être pesées
+        _fait = evt.type === 'sante'
+          ? _betesDonePd.length >= 1
+          : (_sopBeteIds.length > 0 && _betesDonePd.length >= _sopBeteIds.length);
       }
       var _nbBetesDone = _betesDonePd.length;
       var _nbBetesTotal = _sopBeteIds.length || 1;
@@ -6077,7 +6072,9 @@ function viewSaisie(){
       var _bg, _bdr, _col, _badge;
       if(_fait){
         _bg='#0f2a0f'; _bdr='#2d6a2d'; _col='#4caf50';
-        _badge = '✅ '+_nbBetesTotal+'/'+_nbBetesTotal+' traitées';
+        _badge = evt.type==='sante' && _nbBetesDone < _nbBetesTotal
+          ? '✅ '+_nbBetesDone+'/'+_nbBetesTotal+' traitée(s)'
+          : '✅ '+_nbBetesTotal+'/'+_nbBetesTotal+' traitées';
       } else if(_nbBetesDone > 0){
         _bg='#1a2a10'; _bdr='#4a7a1a'; _col='#aadd44';
         _badge = '🔄 '+_nbBetesDone+'/'+_nbBetesTotal+' traitées';
@@ -6257,12 +6254,8 @@ function _sopInlineSave(idx, tous){
   // Sauvegarder dans HISTORY
   _entries.forEach(function(e){ HISTORY.push(e); });
   lsSet('history', HISTORY);
-  // Fermer le form si toutes les bêtes traitées ou mode "tous"
-  var _nowDoneIds = _doneBetes.concat(_entries.map(function(e){ return e.id; }));
-  var _stillRem = _allBetes.filter(function(bid){ return _nowDoneIds.indexOf(bid)===-1; });
-  if(tous || _stillRem.length === 0){
-    S._sopInlineIdx = null;
-  }
+  // Sante SOP : 1 bête traitée = étape validée — fermer le formulaire immédiatement
+  S._sopInlineIdx = null;
   S._sopInlineData = {id:'', res:'Gu\u00e9ri'};
   // Sync vers Sheets (Sante_Mortalite) — même logique que doSubmit('sante')
   var _validSids = [SID.gerant, SID.fondateur, SID.rga].filter(Boolean);
