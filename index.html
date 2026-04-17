@@ -1554,17 +1554,6 @@ function loadLiveData() {
         }
       }
 
-      // 5 — Tréso estimé depuis coûts santé (fallback si KPI vide)
-      if (rowsSante && rowsSante.length) {
-        var totalCoutSante = rowsSante.reduce(function(sum, row) {
-          var c = parseFloat(row[4]);
-          return sum + (isNaN(c) ? 0 : c);
-        }, 0);
-        if (totalCoutSante > 0 && CYCLE.capital > 0) {
-          MOCK._tresoFromSante = CYCLE.capital - totalCoutSante;
-        }
-      }
-
       // KPI_Mensuels → MOCK.treso + SPARK.treso
       if (rowsKpi && rowsKpi.length) {
         for (var i = rowsKpi.length - 1; i >= 0; i--) {
@@ -1573,13 +1562,14 @@ function loadLiveData() {
             MOCK.treso = valTreso;
             MOCK.kpiDate = rowsKpi[i][0] || null; // col A = date de la ligne KPI
             SPARK.treso = rowsKpi.slice(-7).map(function(r){ return safeNum(r[7])||0; });
-            MOCK._tresoFromSante = null; // KPI a priorité sur l'estimation santé
             break;
           }
         }
-      } else if (MOCK._tresoFromSante !== null && MOCK._tresoFromSante !== undefined) {
-        // Fallback : KPI vide → utiliser estimation depuis coûts santé
-        MOCK.treso = Math.max(0, MOCK._tresoFromSante);
+      } else if (CYCLE.capital > 0) {
+        // Fallback : KPI_Mensuels vide → estimation complète depuis _calcDepSim()
+        // Inclut : achat bêtes + alim réel (STOCK_MVTS × prixAlim) + gardien + vét + imprévus + transport
+        var _simFallback = _calcDepSim();
+        MOCK.treso = Math.max(0, CYCLE.capital - _simFallback.dep);
       }
 
       LIVE.source = 'live';
