@@ -6047,7 +6047,10 @@ function viewSaisie(){
           if(h.sopLabel !== undefined && h.sopLabel !== null && h.sopLabel !== evt.label) return;
           var _p = h.date.split('/'); if(_p.length !== 3) return;
           var _hd = new Date(_p[2], _p[1]-1, _p[0]);
-          if(Math.abs(_hd - _td) <= 3*86400000){
+          // Entrées avec sopLabel explicite = liées définitivement à cette étape (quelle que soit la date)
+          // Entrées sans sopLabel = heuristique par proximité ±3j seulement
+          var _inWindow = (h.sopLabel === evt.label) || (Math.abs(_hd - _td) <= 3*86400000);
+          if(_inWindow){
             if(h.id === '__tous__'){
               _betesDonePd = _sopBeteIds.slice();
             } else if(_betesDonePd.indexOf(h.id) === -1){
@@ -6233,7 +6236,9 @@ function _sopInlineSave(idx, tous){
       if(h.sopLabel !== undefined && h.sopLabel !== null && h.sopLabel !== evt.label) return;
       var _p = h.date.split('/'); if(_p.length!==3) return;
       var _hd = new Date(_p[2],_p[1]-1,_p[0]);
-      if(Math.abs(_hd - _tdTgt) <= 3*86400000){
+      // Entrées avec sopLabel explicite = liées définitivement (pas de contrainte de date)
+      var _inW = (h.sopLabel === evt.label) || (Math.abs(_hd - _tdTgt) <= 3*86400000);
+      if(_inW){
         if(h.id === '__tous__') _doneBetes = _allBetes.slice();
         else if(_doneBetes.indexOf(h.id)===-1) _doneBetes.push(h.id);
       }
