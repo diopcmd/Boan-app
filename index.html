@@ -1688,9 +1688,15 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   (santes || []).forEach(function(r) {
     if (!r[0]) return;
     var id = r[1] || '—'; var sym = r[2] || '—';
+    // sopLabel : si sym correspond à un label SOP connu, l'associer pour le comptage SOP vet
+    var _sopLbl = (function(){
+      var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+      for(var _si=0;_si<_proto.length;_si++){ if(_proto[_si].label===sym) return sym; }
+      return undefined;
+    })();
     // id ET _id : _id pour la déduplication Sheets, id pour la reconnaissance SOP
     entries.push({ type:'sante', label:id+' \u2014 '+sym, icon:icons.sante,
-      date:r[0], time:'—', id:id, _id:id, _sym:sym, _src:'sheets' });
+      date:r[0], time:'—', id:id, _id:id, _sym:sym, sopLabel:_sopLbl, _src:'sheets' });
   });
 
   // Hebdomadaire [sem, nb, nou, stk, inc, poi, al, msg]
@@ -6099,7 +6105,12 @@ function viewSaisie(){
         +'<div style="font-size:11px;font-weight:700;color:'+_col+';white-space:nowrap;text-align:right">'+_badge+'</div>'
         +'</div>'
         +(function(){
-          if(!_pdDeb||_fait) return '';
+          // Sante : cacher seulement si TOUTES les bêtes sont traitées (pas juste _fait=true)
+          // Pesée/autre : cacher dès _fait=true
+          var _toutesTraitees = evt.type==='sante'
+            ? _nbBetesDone >= _nbBetesTotal
+            : _fait;
+          if(!_pdDeb || _toutesTraitees) return '';
           // Bêtes restantes à traiter pour cette étape
           var _beteRem = _sopBeteIds.filter(function(bid){ return _betesDonePd.indexOf(bid) === -1; });
           var _nbRem = _beteRem.length;
@@ -6254,8 +6265,10 @@ function _sopInlineSave(idx, tous){
   // Sauvegarder dans HISTORY
   _entries.forEach(function(e){ HISTORY.push(e); });
   lsSet('history', HISTORY);
-  // Sante SOP : 1 bête traitée = étape validée — fermer le formulaire immédiatement
-  S._sopInlineIdx = null;
+  // Fermer le form si toutes les bêtes traitées ou mode "tous"
+  var _nowDoneIds = _doneBetes.concat(_entries.map(function(e){ return e.id; }));
+  var _stillRem = _allBetes.filter(function(bid){ return _nowDoneIds.indexOf(bid)===-1; });
+  if(tous || _stillRem.length === 0) S._sopInlineIdx = null;
   S._sopInlineData = {id:'', res:'Gu\u00e9ri'};
   // Sync vers Sheets (Sante_Mortalite) — même logique que doSubmit('sante')
   var _validSids = [SID.gerant, SID.fondateur, SID.rga].filter(Boolean);
