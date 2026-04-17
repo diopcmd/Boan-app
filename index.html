@@ -1555,6 +1555,7 @@ function loadLiveData() {
       }
 
       // KPI_Mensuels → MOCK.treso + SPARK.treso
+      var _kpiTresoFound = false;
       if (rowsKpi && rowsKpi.length) {
         for (var i = rowsKpi.length - 1; i >= 0; i--) {
           var valTreso = safeNum(rowsKpi[i][7]);
@@ -1562,11 +1563,13 @@ function loadLiveData() {
             MOCK.treso = valTreso;
             MOCK.kpiDate = rowsKpi[i][0] || null; // col A = date de la ligne KPI
             SPARK.treso = rowsKpi.slice(-7).map(function(r){ return safeNum(r[7])||0; });
+            _kpiTresoFound = true;
             break;
           }
         }
-      } else if (CYCLE.capital > 0) {
-        // Fallback : KPI_Mensuels vide → estimation complète depuis _calcDepSim()
+      }
+      if (!_kpiTresoFound && CYCLE.capital > 0) {
+        // Fallback : aucune tréso réelle dans KPI_Mensuels → estimation complète depuis _calcDepSim()
         // Inclut : achat bêtes + alim réel (STOCK_MVTS × prixAlim) + gardien + vét + imprévus + transport
         var _simFallback = _calcDepSim();
         MOCK.treso = Math.max(0, CYCLE.capital - _simFallback.dep);
@@ -5254,11 +5257,15 @@ function viewDash(){
   })();
   // Dépenses proratisées depuis les charges du simulateur (alim + gardien + vét + imprévus)
   var _simDep = _calcDepSim();
-  // Tréso réelle si KPI_Mensuels saisie (MOCK.treso descend sous capital)
+  // Tréso réelle si KPI_Mensuels saisie (MOCK.treso descend sous capital) OU si estimation sim < capital
   var _hasRealTreso = CYCLE.capital > 0 && _tresoNette < (CYCLE.capital || 0) * 0.98;
   var _depADate = _hasRealTreso ? Math.round((CYCLE.capital || 0) - _tresoNette) : _simDep.dep;
-  var _budgetJour = _joursEcoules > 0 ? Math.round(_depADate / _joursEcoules) : null;
-  var _budgetJourCible = _simDep.joursTotal > 0 ? Math.round(_simDep.total / _simDep.joursTotal) : null;
+  // Burn rate : exclure les coûts one-shot (achat bêtes + transport) — ne compter que les charges récurrentes
+  var _depRecurrADate = _hasRealTreso
+    ? Math.max(0, _depADate - _simDep.veau - _simDep.trans)
+    : (_simDep.dep - _simDep.veau - _simDep.trans);
+  var _budgetJour = _joursEcoules > 0 ? Math.round(_depRecurrADate / _joursEcoules) : null;
+  var _budgetJourCible = _simDep.joursTotal > 0 ? Math.round((_simDep.total - _simDep.veau - _simDep.trans) / _simDep.joursTotal) : null;
   // Alertes (recalculées ici pour rester dans le scope viewDash)
   var _semRest = Math.max(0, totalSemCycle - semActuelle);
   var _alertFinCycle = (S.user==='fondateur'||S.user==='rga') && _semRest <= 2 && CYCLE.dateDebut;
@@ -6368,10 +6375,13 @@ function viewLiv(){
         var _nb  = CYCLE.nbBetes || 4;
         var _je  = _joursDepuisDebut();
         var _pveau = _sc.sveau !== undefined ? _sc.sveau : Math.round((CYCLE.capital||1450000)/(_nb||4));
-        var _depReal = (CYCLE.capital > 0 && MOCK.treso < CYCLE.capital * 0.98) ? (CYCLE.capital - MOCK.treso) : null;
+        // _depReal : déduit depuis MOCK.treso (KPI réel OU estimation sim — les deux sont fiables maintenant)
+        var _depReal = CYCLE.capital > 0 && MOCK.treso < CYCLE.capital * 0.98 ? (CYCLE.capital - MOCK.treso) : null;
         var _dep = _depReal !== null ? _depReal : _sd.dep;
-        var _budJ = _je > 0 ? Math.round(_dep / _je) : 0;
-        var _budCible = _sd.joursTotal > 0 ? Math.round(_sd.total / _sd.joursTotal) : 0;
+        // Burn rate : exclure one-shot (bêtes + transport) pour refléter les charges quotidiennes réelles
+        var _depRecurr = _depReal !== null ? Math.max(0, _depReal - _sd.veau - _sd.trans) : (_sd.dep - _sd.veau - _sd.trans);
+        var _budJ = _je > 0 ? Math.round(_depRecurr / _je) : 0;
+        var _budCible = _sd.joursTotal > 0 ? Math.round((_sd.total - _sd.veau - _sd.trans) / _sd.joursTotal) : 0;
         function fRow(date, lib, sortie, srcBadge) {
           return '<tr>'
             +'<td style="font-size:10px;color:#88aa88;white-space:nowrap">'+date+'</td>'
