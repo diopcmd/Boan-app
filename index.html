@@ -367,6 +367,63 @@ body.light .modal-body [style*="background:linear-gradient(135deg,#001525"]{back
 body.light .modal-body [style*="background:linear-gradient(135deg,#150020"]{background:linear-gradient(135deg,#f5e8ff,#ead4f8) !important}
 body.light .modal-body [style*="background:rgba(255,255,255,0.08)"]{background:rgba(0,0,0,0.05) !important}
 body.light .modal-body [style*="border-bottom:1px solid rgba(255,255,255"]{border-bottom-color:#c8dcc8 !important}
+/* ── AUDIT EXPERT MODE CLAIR — règles complémentaires ── */
+/* CRITIQUE : textes inline invisibles sur fond blanc */
+body.light [style*="color:#d0d0d0"]{color:#1a2e1a !important}
+body.light [style*="color:#bbb"]{color:#334433 !important}
+body.light [style*="color:#ff9800"]{color:#b86a00 !important}
+body.light [style*="color:#f44336"]{color:#c82020 !important}
+body.light [style*="color:#4fc3f7"]{color:#0d6ebc !important}
+body.light [style*="color:#4caf50"]{color:#1a7a1a !important}
+body.light [style*="color:#ff9090"]{color:#c82020 !important}
+body.light [style*="color:#C8A06A"]{color:#7a5010 !important}
+body.light [style*="color:#88bb88"]{color:#2d6a2d !important}
+/* CRITIQUE : fonds sombres inline non couverts */
+body.light [style*="background:#0c1c0c"]{background:#f0f5f0 !important;color:#1a2e1a !important}
+body.light [style*="background:#0c1c0c"] *{color:#1a2e1a !important}
+body.light [style*="background:#2e1a0a"]{background:#fff3e0 !important;color:#7a4800 !important}
+body.light [style*="background:#7a3a10"]{background:#c84000 !important;color:#fff !important}
+body.light [style*="background:#1a5c1a"]{background:#1a7a1a !important;color:#fff !important}
+body.light [style*="background:#2e2010"]{background:#fff8e1 !important;color:#7a4800 !important}
+body.light [style*="background:#2e2010"] [style*="color:#ff9800"]{color:#7a4800 !important}
+body.light [style*="background:#1a2a10"]{background:#f0f8e0 !important;color:#3a6010 !important}
+body.light [style*="background:#1a2a10"] [style*="color:#aadd44"]{color:#3a6010 !important}
+/* MOYEN : icônes sidebar et boutons colorés */
+body.light [style*="background:#1a2e3a"]{background:#d8eef8 !important;color:#1a3a5a !important}
+body.light [style*="background:#2a1a0a"]{background:#fff3e0 !important;color:#7a4800 !important}
+body.light [style*="background:#2a1f0a"]{background:#fff8e0 !important;color:#7a4800 !important}
+body.light [style*="background:#2a2a1a"]{background:#f5f5e0 !important;color:#5a5a10 !important}
+body.light [style*="background:#1a1a2e"]{background:#e8e8f5 !important;color:#2a2a6a !important}
+body.light [style*="background:#1a3a1a"]{background:#d8eed8 !important;color:#1a4a1a !important}
+/* MOYEN : livrables, trésorerie, marché */
+body.light [style*="background:#142714"]{background:#e8f5e8 !important;color:#1a2e1a !important}
+body.light [style*="background:#142714"] *{color:#1a2e1a !important}
+body.light [style*="background:#1a2a1a"]{background:#d0e8d0 !important}
+body.light [style*="background:#1a1800"]{background:#fff8e0 !important;color:#7a4800 !important}
+body.light [style*="background:#2a0f0f"]{background:#fff0f0 !important;color:#8b0000 !important}
+body.light [style*="background:#0a1a2a"]{background:#e8f0ff !important;color:#1a2a6a !important}
+body.light [style*="background:#0a1a2a"] [style*="color:#4fc3f7"]{color:#0d6ebc !important}
+body.light [style*="background:#1a1500"]{background:#fffde0 !important;color:#7a6000 !important}
+body.light [style*="background:#2e1500"]{background:#fff3e0 !important;color:#7a4800 !important}
+body.light [style*="background:#1a2e0a"]{background:#f0f8e0 !important;color:#3a6010 !important}
+/* MINEUR : éléments secondaires */
+body.light [style*="background:#0f200f"]{background:#e0ece0 !important;color:#1a2e1a !important}
+body.light [style*="background:#0f2a1f"]{background:#e8f5ee !important;color:#1a4a2a !important}
+body.light [style*="background:#201414"]{background:#fff0f0 !important;color:#8b0000 !important;border-color:#e0a0a0 !important}
+body.light [style*="background:#1a0f0f"]{background:#fff0f0 !important;color:#8b0000 !important}
+body.light [style*="background:#0a1a1a"]{background:#e8f0f0 !important;color:#1a3a3a !important}
+body.light [style*="background:#0a1e0a"]{background:#e8f5e8 !important;color:#1a4a1a !important}
+body.light [style*="background:#1a0a0a"]{background:#f8f0f0 !important;color:#556655 !important;border-color:#ddc0c0 !important}
+/* MINEUR : gradients boutons dashboard */
+body.light [style*="linear-gradient(135deg,#0f2a10"]{background:linear-gradient(135deg,#e8f5e8,#d4ead4) !important;color:#1a2e1a !important}
+body.light [style*="linear-gradient(135deg,#1a2e3a"]{background:linear-gradient(135deg,#d8eef8,#fff8e0) !important;color:#1a3a5a !important}
+/* MINEUR : rgba colorés semi-transparents */
+body.light [style*="background:rgba(76,175,80,0.07)"]{background:rgba(45,106,45,0.12) !important}
+body.light [style*="background:rgba(255,152,0,0.07)"]{background:rgba(184,106,0,0.12) !important}
+body.light [style*="background:rgba(244,67,54,0.07)"]{background:rgba(200,32,32,0.10) !important}
+body.light [style*="background:rgba(76,175,80,0.15)"]{background:rgba(45,106,45,0.20) !important}
+body.light [style*="background:rgba(200,160,106,0.12)"]{background:rgba(122,80,16,0.15) !important}
+body.light [style*="background:rgba(90,180,255,0.08)"]{background:rgba(26,58,122,0.10) !important}
 
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .ai-pulse{animation:spin 1.2s linear infinite;display:inline-block}
