@@ -2,6 +2,7 @@
 > Version finale — Prête pour implémentation
 > Statut : **BLOQUÉ — Prérequis métier non satisfaits** (voir section 0)
 > Dernière mise à jour : 20 Avril 2026 — aligné avec commit `9e5aca5`
+> Revue par : Architecte Backend, Expert UX Offline-first, Expert Sécurité OWASP, Expert Email/Délivrabilité Afrique, Expert Assurance/Droit Sénégalais, Expert Terrain Opérationnel
 
 > **Note de référence** : ce document est aligné sur l'état réel du code (`index.html`, ~8 600 lignes).
 > Les noms de variables, fonctions et structures de données correspondent à ceux de l'app.
@@ -35,7 +36,10 @@ Contacter la CNAAS (siège Dakar ou agence Thiès) et obtenir :
 - **Numéro de police** exact
 - **Email officiel** de déclaration de sinistres
 - **Téléphone et WhatsApp** du correspondant sinistres
-- **Délai contractuel** de déclaration (hypothèse : 24h — à confirmer)
+- **Délai contractuel de déclaration** (hypothèse : 24h — à confirmer)
+  > ⚠️ Le Code des Assurances CIMA (applicable au Sénégal) fixe un délai standard de **5 jours ouvrables**.
+  > Certaines polices imposent 24h contractuellement. À lire sur la police lors de la souscription.
+  > L'email automatique J+0 reste utile comme **preuve d'envoi horodatée** même si le délai légal est plus long.
 - **Liste exacte des pièces** requises pour décès et pour vol
 - **Grille officielle d'indemnisation** par race et classe d'âge — à obtenir impérativement (remplace le calcul `poids × prix_foirail` qui sera rejeté comme non conforme)
 - **Contact direct agent CNAAS Thiès** : un numéro de téléphone vocal (pas WhatsApp officiel — inexistant) pour les appels de déclaration urgente
@@ -43,6 +47,12 @@ Contacter la CNAAS (siège Dakar ou agence Thiès) et obtenir :
 ### Chantier 3 — Clause contractuelle critique : NE PAS ABATTRE NI ENTERRER
 
 > ⛔ **CLAUSE BLOQUANTE** : la CNAAS exige que l'animal décédé ne soit pas abattu ni enterré avant le passage de leur expert. Toute violation de cette clause peut invalider le remboursement.
+
+> ⚠️ **Règle sanitaire 48h** : par 35–40°C à Thiès, un animal décédé devient un risque sanitaire après 48h.
+> Si le vétérinaire/expert CNAAS n'est pas venu à J+2, le fondateur doit appeler la CNAAS pour obtenir
+> une **autorisation d'inhumation** sans perdre le droit à indemnisation. Ce point doit figurer
+> dans l'email J+0 et dans la bannière app. La bannière gérant doit afficher le compteur :
+> *−4h avant risque sanitaire — Vétérinaire non passé*.
 
 Ce que ça implique dans l'app :
 - Bannière rouge persistante affichée dès que décès = OUI, **avant** le bouton Enregistrer
@@ -203,12 +213,15 @@ Champs persistés dans `Config_App` (clé-valeur — même pattern que `gmqCible
 ```
 contact_vet_email         : Adresse email du vétérinaire
 contact_vet_tel           : +221XXXXXXXXX — WhatsApp + appel direct
+                           (⚠️ liens wa.me/ déclenchés manuellement — zéro risque ban WhatsApp)
 
 contact_cnaas_email       : Email officiel déclaration sinistres CNAAS
 contact_cnaas_tel         : Téléphone CNAAS (appel direct — canal principal)
 contact_cnaas_whatsapp    : N° WhatsApp CNAAS — si disponible (souvent absent)
 
 ferme_email_expediteur    : Adresse "De:" emails (verified sender SendGrid)
+                           Si pas de domaine propre → utiliser ferme_email_fondateur directement
+                           (Single Sender Verification SendGrid accepté sur adresse personnelle)
 ferme_responsable_nom     : Nom du fondateur/responsable
 ferme_responsable_tel     : Téléphone responsable
 ferme_email_fondateur     : Email fondateur → CC sur tous les emails
@@ -217,8 +230,10 @@ contact_rga_email         : Email RGA → CC sur tous les emails
 horaire_vet_dakar         : HH:MM heure d'intervention prévue (ex: 09:00)
 contact_gerant_tel        : +221XXXXXXXXX — pour WhatsApp notification gérant J-1
 jours_fermes              : JSON array de dates ISO (Tabaski, Magal…)
-                            ex: ["2026-03-30","2026-06-06"]
-cnaas_grille              : JSON {zebu_senegalais_18_36m: 1200000, ...}
+                            ex: ["2026-06-16","2026-06-17","2026-03-30","2026-04-04","2026-08-15"]
+                            (pré-rempli pour 2026 : Tabaski ~16-17 juin, Aid-el-Fitr ~30 mars,
+                             Indépendance 4 avril, Assomption 15 août, Tamkharit ~27 juillet)
+cnaas_grille              : JSON {zebu_senegalais_18_36m: 1200000, ...} — à obtenir à la souscription
 ```
 
 > **Note nommage** : `CYCLE.numCnaas` reste la source dans l'app. Dans les templates emails, utiliser
@@ -233,8 +248,18 @@ cnaas_grille              : JSON {zebu_senegalais_18_36m: 1200000, ...}
 ### 4.1 Compte SendGrid
 - Créer sur [sendgrid.com](https://sendgrid.com) — plan Free : 100 emails/jour
 - **Single Sender Verification** obligatoire (adresse expéditeur de la ferme)
-- Recommandé : **Domain Authentication** SPF + DKIM (délivrabilité Orange/Yahoo Sénégal)
-- Clé API → variable Vercel `SENDGRID_API_KEY`
+  > Si pas de domaine propre (ex: `ferme-boan.sn`) → utiliser directement `ferme_email_fondateur`.
+  > Un Gmail ou Yahoo personnel est accepté comme Single Sender. La Domain Authentication SPF+DKIM
+  > nécessite un accès DNS — facultative mais recommandée pour Orange Sénégal.
+- **Plain text uniquement** — NE PAS envoyer d'emails HTML :
+  > Les FAI africains (Orange Sénégal, Tigo, Expresso) filtrent agressivement les emails HTML.
+  > Pour des emails de déclaration CNAAS (crítiques), plain text = meilleure délivrabilité + zéro risque XSS.
+  > SendGrid : `content_type = 'text/plain'` dans l'appel API.
+- **Objet emails** : NE PAS utiliser les crochets `[BOAN]` — classés spam par certains filtres.
+  > ✅ Correct : `Déclaration sinistre BOAN — Décès [ID_ANIMAL] — Police n°[CYCLE.numCnaas]`
+  > ❌ Incorrect : `[BOAN] Déclaration sinistre — ...`
+- Recommandé : **Domain Authentication** SPF + DKIM (20 min, accès DNS)
+- Email test mensuel dans le cron (cron envoie un "heartbeat" à ferme_email_fondateur)
 - ⚠️ Compte suspendu après 30j d'inactivité → email test mensuel dans le cron
 
 ### 4.2 Onglets Google Sheets à créer manuellement
@@ -610,45 +635,90 @@ Fonctions :
 
 **`safeText` — obligatoire sur tous les champs libres :**
 ```js
-function safeText(s) { return String(s || '').replace(/[<>&"]/g, '').slice(0, 500); }
+// slice(0, 2000) : les champs 'circonstances' d'un vol ou 'sym' peuvent dépasser 500 chars
+function safeText(s) { return String(s || '').replace(/[<>&"\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000); }
+// IMPORTANT : plain text strict — NE PAS utiliser ce contenu dans des templates HTML
+// Les \r\n sont normalisés en espaces pour éviter les injections d'en-têtes email (CRLF injection)
 ```
 
 **Guard offline — décès saisi hors connexion :**
 ```js
-// Dans la ligne Sante_Mortalite : colonne M = 'email_pending' = 'OUI' si décès offline
-// checkAndSendDecesAlerts() lit cette colonne chaque matin et envoie les emails manqués
+// Problème : flushQueue() dans l'app n'écrit que via appendRow(SID.gerant, ...)
+// Un décès offline est dans OFFLINE_QUEUE — il arrive dans Sante_Mortalite du sheet gérant
+// quand la connexion revient, mais peut ne PAS être dans le sheet fondateur immédiatement.
+// Solution retenue (Option A) :
+//   au submit décès offline → lsSet('deces_pending', {id, date, sym, tra, cout})
+//   flushQueue() complet → lsRemove('deces_pending') + créer ligne Sinistres_CNAAS en fondateur
+//   checkAndSendDecesAlerts() lit Sinistres_CNAAS où email_pending=OUI → envoie l'email
+//
+// Stockage localStorage au submit décès offline :
+lsSet('deces_pending', { id: f.id, date: td, sym: safeText(f.sym), tra: safeText(f.tra),
+  cout: f.cout, ts: Date.now() });
+// A la reconnexion (window.addEventListener('online', ...)) :
+// 1. flushQueue() → écriture Sante_Mortalite
+// 2. createSinistrePending() → créer ligne Sinistres_CNAAS email_pending=OUI dans fondateur
+// 3. lsRemove('deces_pending')
 ```
 
 #### `/api/cron.js`
+
+> ⚠️ **TIMEOUT VERCEL PLAN GRATUIT** : les fonctions Vercel Hobby ont un timeout de **10 secondes**.
+> 3 fonctions await séquentielles (vet + décès + relances) × (2-3 lectures Sheets + 1-2 appels SendGrid)
+> = **estimé 15–25 secondes** → dépassement quasi certain.
+> **Solution** : passer au plan Vercel Pro (60s timeout) OU découper en 3 crons GitHub Actions
+> distincts qui appellent `/api/cron?type=vet`, `/api/cron?type=deces`, `/api/cron?type=relances`
+> chacun avec un déclenchement séparé (+2 min entre chaque).
+
 ```js
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {  // CommonJS requis pour Vercel
   if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  await checkAndSendVetReminders();
-  await checkAndSendDecesAlerts();   // rattrape les décès offline
-  await checkAndSendCnaasFollowups();
-  return res.status(200).json({ ok: true, ts: new Date().toISOString() });
-}
+  var type = req.query.type || 'all';
+  try {
+    if (type === 'vet'    || type === 'all') await checkAndSendVetReminders();
+    if (type === 'deces'  || type === 'all') await checkAndSendDecesAlerts();   // rattrape les décès offline
+    if (type === 'relances'||type === 'all') await checkAndSendCnaasFollowups();
+    return res.status(200).json({ ok: true, type: type, ts: new Date().toISOString() });
+  } catch(e) {
+    console.error('CRON ERROR', e);
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+};
 ```
 
 #### `/.github/workflows/cron-notifications.yml`
+
+> ⚠️ **Protection workflow_dispatch** : ajouter une garde `github.actor` pour éviter qu'une PR externe
+> puisse déclencher manuellement le workflow et ainsi provoquer des emails non voulus.
+
 ```yaml
 name: BOAN — Cron Notifications
 on:
   schedule:
-    - cron: '0 7 * * *'   # 07h00 UTC = 07h00 Dakar (UTC+0)
-  workflow_dispatch:        # déclenchement manuel pour tests
+    - cron: '0 7 * * *'    # 07h00 UTC = 07h00 Dakar (UTC+0)
+    - cron: '2 7 * * *'    # +2 min : cron type=deces
+    - cron: '4 7 * * *'    # +4 min : cron type=relances
+  workflow_dispatch:
+    inputs:
+      type:
+        description: 'Type de cron (vet | deces | relances | all)'
+        required: true
+        default: 'all'
 
 jobs:
   notify:
     runs-on: ubuntu-latest
+    # Protection : uniquement les membres du dépôt peuvent déclencher manuellement
+    if: github.event_name == 'schedule' || github.actor == 'diopcmd'
     steps:
       - name: Déclencher le cron BOAN
         run: |
+          TYPE=${{ github.event.inputs.type || 'all' }}
+          # Si schedule : déterminer le type selon l'index du cron
           curl -f -X GET \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
-            https://boan-app-ur3x.vercel.app/api/cron
+            "https://boan-app-ur3x.vercel.app/api/cron?type=$TYPE"
 ```
 
 ### 7.2 Fichiers `index.html` à modifier
@@ -665,12 +735,13 @@ jobs:
 | Section | Modification |
 |---|---|
 | Livrables — nouveau sous-onglet `contacts` | Bloc Config "Contacts & Assurance" (fondateur) — tous les champs section 4.3, persistés dans Config_App |
-| Saisie > Santé (décès = OUI) | Bannière rouge `⛔ NE PAS ENTERRER`, alerte photo avant submit, boutons WhatsApp/appel vet + CNAAS post-submit |
-| Saisie > Incident (type VOL) | Champ N° PV gendarmerie obligatoire bloquant, sélection multiple animaux, boutons WhatsApp/appel CNAAS post-submit |
-| Livrables > Incidents | Timeline dossier `Sinistres_CNAAS`, checkboxes fondateur, bouton "CNAAS confirmé" / "Arrêter relances", bannière NE PAS ENTERRER si expert não passé |
+| Saisie > Santé (décès = OUI) | Bannière rouge `⛔ NE PAS ENTERRER`, alerte photo avant submit, compteur 48h sanitaire, boutons WhatsApp/appel vet + CNAAS post-submit |
+| Saisie > Santé (décès = OUI, offline) | `lsSet('deces_pending', {...})` au submit offline — traité par `createSinistrePending()` à la reconnexion |
+| Saisie > Incident (type VOL) | Champ N° PV gendarmerie obligatoire bloquant, **`beteMultiSelect()`** (nouveau helper multi-select — `beteDropdown` ne supporte pas multi-select), boutons WhatsApp/appel CNAAS post-submit |
+| Livrables > Incidents | Timeline dossier `Sinistres_CNAAS`, checkboxes fondateur, bouton "CNAAS confirmé" / "Arrêter relances", bannière NE PAS ENTERRER si expert non passé, compteur 48h |
 | Livrables > SOP Vétérinaire | Bouton "Vétérinaire confirme" conditionnel (acte dans les 7j) |
 | Dashboard — bannière conditionnelle | `⛔ Dossier sinistre ouvert` si `Sinistres_CNAAS` a une ligne `EN_COURS` |
-| `doSubmit('sante')` côté offline | Marquer `email_pending=OUI` dans la ligne Sheets si offline au moment du décès |
+| Bouton annuler 30 min | `lsSet('last_deces_ts', Date.now())` au submit → vérifier `Date.now() - lsGet('last_deces_ts') < 30*60*1000` dans la vue pour afficher/masquer le bouton |
 
 ---
 
@@ -680,12 +751,20 @@ jobs:
 **Solution :** Créer manuellement (section 4.2). 2 min.
 
 ### #2 — Doublons emails si cron retry
-**Solution — idempotence double guard :**
+**Solution — idempotence double guard + TTL PENDING :**
 ```js
 // 1. Lire Notifications_Log + Sinistres_CNAAS en début de cron
 // 2. Vérifier Reference_ID + Date_Envoi = aujourd'hui + Statut ≠ ERREUR
 // 3. Logger Statut=PENDING AVANT l'appel SendGrid
 // 4. Mettre à jour Statut=SENT ou Statut=ERROR après réponse
+//
+// ⚠️ TTL PENDING : si une ligne est en statut PENDING depuis > 2 heures
+// (crash entre l'étape 3 et l'étape 4), la considérer comme ERROR et réessayer.
+// Sinon, le deadlock est silencieux : le cron croit l'email en cours — il ne l'est plus.
+var pendingTs = parseDate(row.Date_Envoi); // timestamp de création du PENDING
+var isPendingStale = row.Statut === 'PENDING' && (Date.now() - pendingTs > 2 * 3600 * 1000);
+if (row.Statut === 'PENDING' && !isPendingStale) { continue; } // en cours — skip
+if (isPendingStale) { updateNotificationStatus(rowIdx, 'ERROR_TIMEOUT'); } // libérer
 ```
 
 ### #3 — Délivrabilité SendGrid (Orange / Yahoo Sénégal)
@@ -695,9 +774,11 @@ jobs:
 - Email test mensuel dans le cron (cron envoie un "heartbeat" à ferme_email_fondateur)
 
 ### #4 — Email décès non envoyé si offline au moment du submit
-**Solution :**
-- `doSubmit('sante')` : si offline → écrire `email_pending=OUI` dans la ligne (colonne M de `Sante_Mortalite`)
-- `checkAndSendDecesAlerts()` dans le cron : lire toutes les lignes `email_pending=OUI` → envoyer l'email → effacer le flag
+**Solution — localStorage + Sinistres_CNAAS (Option A) :**
+- `doSubmit('sante')` si offline ET `S.fsa.dec === 'OUI'` → `lsSet('deces_pending', {id, date, sym, tra, cout, ts})`
+- À la reconnexion (`window.addEventListener('online', ...)`) : appel `createSinistrePending()` qui crée une ligne `Sinistres_CNAAS` dans le sheet fondateur avec `email_pending=OUI`
+- `checkAndSendDecesAlerts()` dans le cron : lire `Sinistres_CNAAS` où `email_pending=OUI` → envoyer l'email → effacer le flag
+- Si `lsGet('deces_pending')` non vide au démarrage app : afficher bannière à l'utilisateur loggé
 
 ### #5 — Vétérinaire ne lit probablement pas ses emails (terrain)
 **Solution UI (zéro infrastructure) :**
@@ -720,6 +801,7 @@ jobs:
 
 ### #8 — Injection contenu dans email depuis champs libres
 **Solution :** `safeText(s)` sur tous les champs gérant (symptômes, description, circonstances) avant composition du template email.
+**Renforcement (CRLF injection)** : les caractères `\r\n` dans un champ libre peuvent injecter des en-têtes email si le contenu est placé dans un sujet ou un CC. `safeText` normalise les `\r\n\t` en espaces. En-têtes (To, CC, Subject) — toujours construits depuis des variables contrôlées par le fondateur (Config_App), jamais depuis des saisies gérant.
 
 ### #9 — Âge animal non tracké dans `CYCLE.betes`
 **Contexte :** `CYCLE.betes = [{id, race, raceCustom, poidsEntree, dateIntro}]` — pas de date de naissance.
@@ -823,6 +905,105 @@ Le cron tourne avec le SID fondateur. `Sante_Mortalite` est écrite sur les shee
 - **Recommandé : Option A** — plus simple, découplage propre, `Sinistres_CNAAS` est la source de vérité CNAAS.
 ```
 
+### #17 — Timeout Vercel plan gratuit (Architecte Backend)
+
+Le cron appelle 3 fonctions `async` séquentiellement. Estimation par fonction : 2-3 lectures Sheets (~1-3s chacune) + 1-2 appels SendGrid (~300ms) = **~5-8s par fonction × 3 = 15-25s**. Timeout plan Hobby = 10s.
+
+**Solution :**
+- Découper en 3 endpoints distincts : `/api/cron?type=vet`, `/api/cron?type=deces`, `/api/cron?type=relances`
+- GitHub Actions : 3 crons à 07h00, 07h02, 07h04 UTC (voir section 7.1 cron.yml)
+- Alternative : passer au plan Vercel Pro (60s) si le fondateur est prêt à payer ~20$/mois
+- **Ne jamais mettre toutes les fonctions en `await` séquentiel dans un seul handler** — risk de timeout surtout si Sheets API est lente
+
+### #18 — `beteDropdown()` ne supporte pas la sélection multiple (cas VOL)
+
+`beteDropdown(val, stateKey, extra, excludeIds)` (L2902) génère un `<select>` HTML — sélection **unique** seulement. Le cas VOL nécessite de sélectionner plusieurs bêtes (vol d'un troupeau entier ou partiel).
+
+**Solution :** Créer `beteMultiSelect(stateKeyArr)` — nouveau helper dans `index.html` :
+```js
+// Principe : liste de checkboxes, stateKeyArr est un tableau dans S (ex: S.fin.beteIds = [])
+function beteMultiSelect(stateKeyArr) {
+  var beteIds = /* même logique que beteDropdown pour obtenir la liste */;
+  return beteIds.map(function(id) {
+    var checked = (stateKeyArr||[]).indexOf(id) !== -1;
+    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0">'
+      +'<input type="checkbox" '+(checked?'checked':'')
+      +' onchange="(function(c){var arr='+stateKeyArr+';var i=arr.indexOf(\''+id+'\');if(c&&i===-1)arr.push(\''+id+'\');if(!c&&i!==-1)arr.splice(i,1)})(this.checked)">'
+      +'<span>'+id+'</span></label>';
+  }).join('');
+}
+```
+> ⚠️ Ne pas utiliser des lambdas arrow functions — ES5 strict dans l'app.
+
+### #19 — Bannière "NE PAS ENTERRER" doit être offline-first et persistante entre rechargements
+
+La bannière décrite dans le roadmap (section 3.1) "disparaît seulement quand expert CNAAS coché" doit survivre à un rechargement de l'app et fonctionner même sans connexion.
+
+**Solution :**
+```js
+// Au submit décès confirmé (_submitActual), en PLUS de l'écriture Sheets :
+lsSet('sinistres_ouverts', lsGet('sinistres_ouverts') || []);
+var _so = lsGet('sinistres_ouverts') || [];
+_so.push({ id: f.id, date: td, expertPasse: false, ts: Date.now() });
+lsSet('sinistres_ouverts', _so);
+
+// Dans r() / viewDash() et viewSaisie() : lire lsGet('sinistres_ouverts') filtrer expertPasse=false
+var _souverts = (lsGet('sinistres_ouverts') || []).filter(function(s){ return !s.expertPasse; });
+if (_souverts.length > 0) {
+  // afficher bannière rouge persistante
+}
+
+// Quand fondateur coche "Expert CNAAS passé" :
+var _so2 = lsGet('sinistres_ouverts') || [];
+_so2.forEach(function(s){ if(s.id === id) s.expertPasse = true; });
+lsSet('sinistres_ouverts', _so2);
+```
+> Ce mécanisme fonctionne **offline** car basé sur localStorage. Synchronized avec Sinistres_CNAAS au chargement.
+
+### #20 — Chargement de `Sinistres_CNAAS` dans `loadLiveData()` non spécifié
+
+Le roadmap décrit une timeline dossier depuis `Sinistres_CNAAS` mais ne précise pas quand ni comment ces données sont chargées dans l'app.
+
+**Solution :** Ajouter la lecture de `Sinistres_CNAAS` en **Vague 2** de `loadLiveData()` (aux côtés des 7 autres onglets) :
+```js
+// Dans le Promise.all de la Vague 2 (L~1400) :
+readSheet(SID.fondateur, 'Sinistres_CNAAS!A2:K200')  // lit toutes les lignes
+// Résultat stocké dans LIVE.sinistres = rows
+// Utilisé dans viewLiv() > onglet incidents pour la timeline
+// ET dans viewDash() pour la bannière conditionnelle
+```
+> Accessible uniquement si `S.user === 'fondateur' || S.user === 'rga'` — le gérant n'a pas besoin de ces données.
+
+### #21 — Format email : plain text obligatoire (Sécurité + Délivrabilité)
+
+Les templates email de la section 5 sont en plain text — c'est correct. Confirmation explicite :
+
+**Règle absolue :** NE PAS construire de templates HTML pour les emails BOAN.
+- Délivrabilité : Orange Sénégal filtre agressivement les emails HTML
+- Sécurité : zéro risque XSS, injection HTML ou CRLF dans les en-têtes
+- Lisibilité : les appareils bas de gamme au Sénégal affichent mieux le plain text
+
+Dans le call SendGrid API :
+```js
+body: JSON.stringify({
+  personalizations: [{ to: [{email: to}], cc: cc.map(function(e){return {email:e};}) }],
+  from: { email: config.ferme_email_expediteur },
+  subject: subject,  // PAS de crochets [BOAN]
+  content: [{ type: 'text/plain', value: body }]  // TOUJOURS text/plain
+})
+```
+
+### #22 — Validité juridique de l'email automatique (Droit Sénégalais)
+
+Un email automatique n'a pas valeur d'**acte officiel de déclaration de sinistre** en droit sénégalais sans accusé de réception électronique signé par la CNAAS.
+
+**Considérations :**
+- L'email sert de **preuve d'envoi horodatée** (CC fondateur + RGA = 3 copies)
+- L'appel vocal fondateur à J+0 est l'acte déclencheur officiel — l'app doit afficher
+  clairement : *"L'email est une trace — l'appel vocal CNAAS est obligatoire"*
+- Mention à ajouter dans l'email J+0 : *"Ce message constitue une déclaration à titre
+  conservatoire. Une confirmation par voie officielle sera faite sous 24h."*
+
 ---
 
 ## 9. Ordre d'implémentation
@@ -844,25 +1025,29 @@ BLOC B — Config UI index.html
   ☑ Champ `veterinaire` (nom vétérinaire) — **déjà implémenté** : modal init step 2 + Config_Cycle
   □ Sous-onglet "Contacts & Assurance" dans Livrables (fondateur) — champs NOUVEAUX : email/tel vét, email/tel CNAAS, emails fondateur/RGA, horaire_vet, jours_fermes, cnaas_grille
   □ Persistance dans Config_App Sheets (clé/valeur — via `_syncConfigApp()` déjà en place)
-  □ Bannière rouge ⛔ NE PAS ENTERRER dans Santé (décès = OUI) + Dashboard
+  □ Bannière rouge ⛔ NE PAS ENTERRER dans Santé (décès = OUI) + compteur 48h sanitaire
+  □ lsSet('sinistres_ouverts', [...]) au submit décès — persistance offline pour la bannière (#19)
+  □ lsSet('last_deces_ts', Date.now()) au submit — pour bouton annuler 30 min
   □ Alerte photo ⚠️ avant bouton Enregistrer (décès = OUI)
-  □ Champ N° PV gendarmerie bloquant + sélection multiple animaux dans formulaire VOL
+  □ Champ N° PV gendarmerie bloquant + **beteMultiSelect()** (nouveau helper) dans formulaire VOL (#18)
   □ Alerte prix foirail obsolète > 30j dans formulaire décès
-  □ Config `horaire_vet_dakar`, `contact_gerant_tel`, `jours_fermes`, `cnaas_grille` dans sous-onglet Contacts & Assurance
+  □ Config `horaire_vet_dakar`, `contact_gerant_tel`, `jours_fermes` (pré-rempli 2026), `cnaas_grille` dans sous-onglet Contacts & Assurance
 
 BLOC C — API serveur
-  □ /api/notify.js — toutes les fonctions (section 7.1)
-  □ /api/cron.js — endpoint sécurisé, appelle les 3 check functions
-  □ Ajouter colonne M email_pending dans Sante_Mortalite (guard offline)
+  □ /api/notify.js — toutes les fonctions (section 7.1) — emails text/plain uniquement (#21)
+  □ /api/cron.js — endpoint sécurisé avec param ?type= (vet | deces | relances) pour éviter timeout (#17)
+  □ Logique offline : createSinistrePending() déclenché par l'app à la reconnexion (#4 + #19)
+  □ TTL PENDING > 2h → statut ERROR_TIMEOUT dans Notifications_Log (#2)
 
 BLOC D — GitHub Actions
-  □ .github/workflows/cron-notifications.yml (section 7.1)
+  □ .github/workflows/cron-notifications.yml avec 3 crons décalés (07h00/07h02/07h04) (#17)
   □ Ajouter CRON_SECRET dans GitHub Secrets
+  □ Guard `github.actor == 'diopcmd'` sur workflow_dispatch (#sécurité)
 
 BLOC E — Boutons et statuts index.html
   □ Bouton 1️⃣ 📞 Appeler CNAAS (primaire post-submit décès) + 2️⃣ Appeler Vét + 3️⃣ WhatsApp Vét
-  □ Bouton ⚠️ "Annuler — erreur de saisie" visible 30 min post-submit décès
-  □ Modal post-submit "✅ Emails envoyés — Appeler CNAAS vocalement maintenant"
+  □ Bouton ⚠️ "Annuler — erreur de saisie" visible 30 min post-submit décès (lsGet check)
+  □ Modal post-submit "✅ Emails envoyés — ⚠️ L'email est une trace — l'appel vocal CNAAS est OBLIGATOIRE"
   □ Bouton "✓ Vétérinaire a confirmé" (SOP Véto, conditionnel acte dans 7j) → Date_Confirmation Notifications_Log
   □ Bouton "🔔 Rappel urgent J-0" (gérant uniquement, affiché le jour J de l'acte SOP) → wa.me/ msg 6.3
   □ Bannière gérant J-1 dans app : "Intervention SOP demain [horaire_vet_dakar] — Préparer zone"
@@ -870,22 +1055,26 @@ BLOC E — Boutons et statuts index.html
   □ Timeline SOP Livrables > SOP Véto : J-3/J-2/J-1 ✓ envoyé / 🟢 confirmé / ⏳ en attente
   □ Statut CNAAS select (Livrables > Incidents) : En attente / Dossier reçu / Expert assigné / Expertise passée / Rejeté
   □ Colonne Appel_Fondateur_J0 dans Sinistres_CNAAS — à renseigner manuellement par fondateur
-  □ Checkboxes fondateur : Certif reçu / Certif transmis / Expert passé
-  □ Bouton "CNAAS a confirmé réception" (clôture dossier)
+  □ Checkboxes fondateur : Certif reçu / Certif transmis / Expert passé / Autorisation inhumation si > 48h
+  □ Bouton "CNAAS a confirmé réception" (clôture dossier) → lsSet sinistres_ouverts expertPasse=true
   □ Bouton "Arrêter les relances" (confirmation CNAAS par téléphone)
-  □ Timeline dossier sinistre (J+0 / Appel fondateur / J+7 relance / J+14) depuis Sinistres_CNAAS
-  □ Badge statut email (lecture Notifications_Log via loadLiveData)
+  □ Timeline dossier sinistre (J+0 / Appel fondateur / J+7 relance / J+14) depuis LIVE.sinistres (#20)
+  □ Badge statut email (lecture Notifications_Log via loadLiveData Vague 2)
   □ Badge numérique onglet Livrables si dossier(s) en attente
 
 BLOC F — Tests (ne jamais tester sur vrais emails CNAAS/vet)
-  □ Test curl /api/cron avec x-cron-secret → vérifier réponse 200
-  □ Test email vers adresses fondateur/RGA de test → vérifier CC
+  □ Test curl /api/cron?type=vet avec x-cron-secret → vérifier réponse 200 en < 10s
+  □ Test curl /api/cron?type=deces + /api/cron?type=relances — idem
+  □ Test email vers adresses fondateur/RGA de test → vérifier text/plain + objet sans crochets
   □ Test WhatsApp → vérifier ouverture conversation avec message pré-rempli
   □ Vérifier lignes créées dans Notifications_Log + Sinistres_CNAAS
   □ Tester idempotence : appeler /api/cron deux fois → une seule ligne dans Notifications_Log
-  □ Tester mode offline : soumettre décès hors connexion → email_pending=OUI → cron envoie
+  □ Tester TTL PENDING : créer ligne PENDING > 2h → relancer cron → statut ERROR_TIMEOUT
+  □ Tester mode offline : soumettre décès hors connexion → lsGet('deces_pending') non vide → reconnexion → email envoyé
   □ Tester N° police vide → alerte bloquante
   □ Tester prix foirail > 30j → alerte
+  □ Tester bannière NE PAS ENTERRER après rechargement app (lsGet sinistres_ouverts)
+  □ Tester beteMultiSelect() dans formulaire VOL — vérification sélection multiple
   □ Mise en production
 ```
 
