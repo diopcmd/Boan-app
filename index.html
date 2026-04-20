@@ -477,7 +477,8 @@ var CYCLE = lsGet('cycle') || {
   alerteSeuilTreso:100000,// plancher trésorerie — alerte si solde < X (FCFA)
   mixSon:          60,    // % son de blé dans la ration standard
   mixTourteau:     40,    // % tourteau arachide dans la ration standard
-  sopProtocol:     null   // protocole SOP personnalisé (null = utilise SOP_PROTOCOL_DEFAULT)
+  sopProtocol:     null,  // protocole SOP personnalisé (null = utilise SOP_PROTOCOL_DEFAULT)
+  _sopResetAt:     null   // date ISO du dernier reset — filtre les actes SOP antérieurs
 };
 // Seed MOCK depuis le cache localStorage — évite le flash "4 bêtes" avant la sync Sheets
 if (CYCLE.nbBetes  && CYCLE.nbBetes  > 0) MOCK.betes = CYCLE.nbBetes;
@@ -1412,6 +1413,7 @@ function loadLiveData() {
                 if (val === null) CYCLE.sopProtocol = null;                     // reset explicite depuis _sopReset()
                 else if (Array.isArray(val) && val.length) CYCLE.sopProtocol = val;
               }
+              if (key === 'sopResetAt' && val) CYCLE._sopResetAt = val;
               if (key === 'numCycle'    && val && parseInt(val) > 0) CYCLE.numCycle = parseInt(val);
               if (key === 'numCnaas'    && val !== null && val !== undefined) CYCLE.numCnaas = val;
               if (key === 'gonogo'      && val && typeof val === 'object') CYCLE.gonogo = Object.assign(CYCLE.gonogo||{}, val);
@@ -2193,7 +2195,8 @@ function _syncConfigApp() {
       ['numCycle',         JSON.stringify(CYCLE.numCycle           || 1)],
       ['numCnaas',         JSON.stringify(CYCLE.numCnaas           || '')],
       ['gonogo',           JSON.stringify(CYCLE.gonogo             || {})],
-      ['sopProtocol',      JSON.stringify(CYCLE.sopProtocol        || null)]
+      ['sopProtocol',      JSON.stringify(CYCLE.sopProtocol        || null)],
+      ['sopResetAt',       JSON.stringify(CYCLE._sopResetAt        || null)]
     ];
     // Tenter création de l'onglet (ignorer l'erreur s'il existe déjà)
     var addUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + ':batchUpdate';
@@ -2542,7 +2545,14 @@ function chTab(t){
     initSwipe();
   }, 10);
 }
-function chSub(s){S.sub=s;S.msg='';r();setTimeout(initSwipe,10);}
+function chSub(s){
+  S.sub=s; S.msg=''; r(); setTimeout(initSwipe,10);
+  // Auto-sync SOP_Protocol sheet à la première ouverture de l'onglet SOP Véto
+  if ((s==='sopvet'||s==='protocole') && !S._sopSyncDone) {
+    S._sopSyncDone = true;
+    setTimeout(_syncSopProtocol, 500); // décaler pour ne pas bloquer le rendu
+  }
+}
 function swUser(k){if(S.user!=='fondateur')return;S.user=k;S.dd=false;chTab(USERS[k].tabs[0]);}
 
 // Floating label field helper
@@ -6073,6 +6083,7 @@ function viewSaisie(){
         _daysTo = Math.round((_td - _pdToday) / 86400000);
         HISTORY.forEach(function(h){
           if(h.type !== evt.type) return;
+          if(!_sopEntryAfterReset(h)) return; // antérieur au dernier reset — ignorer
           // Si l'entrée porte un label SOP, ne l'associer qu'à cette étape précise
           if(h.sopLabel !== undefined && h.sopLabel !== null && h.sopLabel !== evt.label) return;
           var _p = h.date.split('/'); if(_p.length !== 3) return;
@@ -6219,12 +6230,22 @@ function _sopSave(isNew){
 function _sopReset(){
   if(!confirm('Réinitialiser le protocole SOP au standard ?')) return;
   CYCLE.sopProtocol = null;
+  CYCLE._sopResetAt = todayISO(); // filtre tous les actes SOP antérieurs à ce jour
   lsSet('cycle', CYCLE);
   // Persister le reset dans Config_App via _syncConfigApp (PUT atomique — efface les anciennes lignes)
   _syncConfigApp().catch(function(){});
   S._sopEd = null;
   _syncSopProtocol();
   r();
+}
+
+// ── HELPER : vérifie qu'une entrée HISTORY SOP n'est pas antérieure à un reset ──
+function _sopEntryAfterReset(h) {
+  if (!CYCLE._sopResetAt || !h.date) return true;
+  var _p = h.date.split('/'); if (_p.length !== 3) return true;
+  var _hd = new Date(_p[2], _p[1]-1, _p[0]);
+  var _rd = parseISO(CYCLE._sopResetAt);
+  return _rd ? (_hd >= _rd) : true;
 }
 
 // ── SYNC SOP_Protocol SHEET ─────────────────────────────────────────────────
@@ -6254,6 +6275,7 @@ function _syncSopProtocol() {
       _td = new Date(_pdDeb.getTime()); _td.setDate(_td.getDate() + evt.j);
       HISTORY.forEach(function(h) {
         if (h.type !== evt.type) return;
+        if (!_sopEntryAfterReset(h)) return; // antérieur au dernier reset — ignorer
         if (h.sopLabel !== undefined && h.sopLabel !== null && h.sopLabel !== evt.label) return;
         var _p = h.date.split('/'); if (_p.length !== 3) return;
         var _hd = new Date(_p[2], _p[1]-1, _p[0]);
@@ -7175,6 +7197,7 @@ function viewLiv(){
         rows += '<button onclick="S._sopEd={idx:-1,j:30,type:\'sante\',label:\'\',note:\'\'}; r()" style="width:100%;background:none;border:1px dashed #2a4a2a;border-radius:6px;color:#557755;font-size:12px;padding:7px;cursor:pointer;margin-top:6px">+ Ajouter une étape</button>';
       }
       rows += (_isCustom?'<button onclick="_sopReset()" style="width:100%;background:none;border:none;color:#554444;font-size:10px;margin-top:6px;cursor:pointer">↺ Réinitialiser au protocole standard</button>':'');
+      rows += '<button onclick="_syncSopProtocol();S.msg=\'ok:✅ Tableau SOP synchronisé dans Sheets\';r();setTimeout(function(){S.msg=\'\';r();},3000)" style="width:100%;background:none;border:1px solid #1a3a4a;border-radius:6px;color:#4488aa;font-size:10px;padding:5px;margin-top:4px;cursor:pointer">📤 Synchroniser le tableau SOP → Sheets</button>';
       view = '<div class="card">'
         +'<div class="stitle">📅 Protocole SOP vétérinaire'+(_isCustom?' <span style="font-size:9px;background:#1a2e1a;color:#88aa88;padding:2px 6px;border-radius:8px;margin-left:4px">Personnalisé</span>':' <span style="font-size:9px;background:#1a1a2a;color:#6688aa;padding:2px 6px;border-radius:8px;margin-left:4px">Standard</span>')+'</div>'
         +'<div style="font-size:10px;color:#7a9a7a;margin-bottom:10px">Les jours J+ sont calculés depuis la date de début de cycle. Modifiez selon votre contexte terrain (race, saison, disponibilité vétérinaire).</div>'
@@ -7192,7 +7215,7 @@ function viewLiv(){
         if(!_cb) return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #1a2e1a"><div style="font-size:20px;width:32px;text-align:center">'+evt.ico+'</div><div style="flex:1"><div style="font-size:13px;color:#88aa88;font-weight:600">J+'+evt.j+' — '+evt.label+'</div><div style="font-size:10px;color:#7a9a7a">'+evt.note+'</div></div><div style="font-size:11px;color:#2a4a2a">Non démarré</div></div>';
         var _td2 = new Date(_cb.getTime()); _td2.setDate(_td2.getDate()+evt.j);
         var _win = 3*86400000;
-        var _f = HISTORY.some(function(h){ if(h.type!==evt.type)return false; var _p=h.date.split('/'); if(_p.length!==3)return false; return Math.abs(new Date(_p[2],_p[1]-1,_p[0])-_td2)<=_win; });
+        var _f = HISTORY.some(function(h){ if(h.type!==evt.type)return false; if(!_sopEntryAfterReset(h))return false; var _p=h.date.split('/'); if(_p.length!==3)return false; return Math.abs(new Date(_p[2],_p[1]-1,_p[0])-_td2)<=_win; });
         var _dt = Math.round((_td2-_ct)/86400000);
         var _s,_sc,_sb,_sbd;
         if(_f){_s='✅ Fait';_sc='#4caf50';_sb='#0f2a0f';_sbd='#2d6a2d';}
