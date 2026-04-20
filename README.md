@@ -5,7 +5,7 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
 
 **Production** → https://boan-app-ur3x.vercel.app  
 **Stack** : Vanilla JS ES5 · Vercel Serverless · Google Sheets API v4  
-**État** : commit `c0f3b1e` — ~8 400 lignes — Avril 2026
+**État** : commit `e1aa293` — ~8 600 lignes — Avril 2026
 
 ---
 
@@ -46,12 +46,13 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
 - **KPI** — barres GMQ / stock / bêtes / poids / projection CA vs objectifs configurables
 - **Bêtes** — courbes de croissance individuelle, IC (indice consommation), GMQ prédictif (régression linéaire), seuil rentabilité/bête
 - **Incidents** — liste avec gravité, statut, clôture
-- **Go/No-Go** — checklist 8 critères : 3 automatiques (vétérinaire renseigné, N° CNAAS saisi, 0 incident ouvert) + 5 manuels (trésorerie, bêtes, contrats, infra, sécurité). Score /8. Champ de saisie N° CNAAS affiché si non confirmé.
+  - **N° contrat CNAAS** : saisie disponible dès l'initialisation du cycle (modal init step 2) et dans Go/No-Go. Active la validation automatique du critère CNAAS dans le Go/No-Go.
 - **Objectifs configurables** (fondateur + RGA) :
   - Zootechniques : GMQ cible/alerte, poids cible, poids vente min, taux mortalité max
   - Financiers : coût revient max, marge min/bête, plancher tréso
   - **Marché & Ration** *(nouveau)* : prix aliment mid-cycle, prix vente visé, mix son/tourteau lié (total=100%), badge date de modification
-  - **Protocole SOP vétérinaire** *(dans onglet Livrables > SOP Véto)* : éditeur complet ajout/modification/suppression étapes J+N, types santé/pesée, réinitialisation standard. Persisté via `saveObjectifs()`.
+  - **Protocole SOP vétérinaire** *(dans onglet Livrables > SOP Véto)* : éditeur complet ajout/modification/suppression étapes J+N, types santé/pesée, réinitialisation standard. Persisté via `saveObjectifs()` (synchronisation automatique vers Sheets incluse).
+  - **Réinitialisation SOP** : bouton Reset protocole — `_sopResetAt` enregistre la date du reset et filtre automatiquement les validations antérieures (actes effectués avant le reset ne comptent plus). Auto-sync de la feuille SOP_Protocol à l'ouverture du tab.
 - **SOP Véto** — calendrier timeline des actes J+N calculés depuis `CYCLE.dateDebut` :
   - Statuts : ✅ réalisé / ⚠️ en retard / 🔔 dans 3j / 📅 planifié
   - Tolérance **±3 jours** (comptent dans la conformité) ; seuil 4–21j = orange "hors délai"
@@ -124,7 +125,7 @@ Boan-app/
 | Onglet | Spreadsheet | Description |
 |---|---|---|
 | `Config_Cycle` A1:S1 | Fondateur | dateDebut, nbBetes, poidsDepart, race, ration, capital, objectifPrix, budgetSante, vétérinaire, foirail, commission, contactUrgence, peseeFreq, betes(JSON), stockLines(JSON), dureeMois, simCharges(JSON), prixAlim, **numCycle** |
-| `Config_App` A:B | Fondateur | Clé-valeur : gmqCible, gmqWarn, poidsCible, poidsVenteMin, tauxMortMax, coutRevientMax, margeParBeteMin, alerteSeuilTreso, mixSon, mixTourteau, prixAlim, objectifPrix, _mktUpdated, sopProtocol(JSON), dureeMois, cycleDebut, **numCycle** |
+| `Config_App` A:B | Fondateur | Clé-valeur : gmqCible, gmqWarn, poidsCible, poidsVenteMin, tauxMortMax, coutRevientMax, margeParBeteMin, alerteSeuilTreso, mixSon, mixTourteau, prixAlim, objectifPrix, _mktUpdated, sopProtocol(JSON), **sopResetAt**, dureeMois, cycleDebut, **numCnaas**, **numCycle** |
 | `Historique_Cycles` A:O | Fondateur | Début, Fin, Durée, Race, Foirail, NbBêtesDépart, NbBêtesFin, Décès, PoidsDépart, PoidsFin, GMQ, Capital, TrésoFin, Marge/tête, **N° cycle** *(à créer manuellement)* |
 | `Fiche_Quotidienne` | Gérant + Fondateur | Saisies journalières |
 | `SOP_Check` | Gérant + Fondateur | Checklist SOP quotidienne |
@@ -182,6 +183,9 @@ git push origin main
 
 | Commit | Description |
 |---|---|
+| `e1aa293` | optim: -1 readSheet Sante Vague2, TTL cache 5 min loadPrix/loadAlimPrix, flag _configAppTabOk skip addSheet |
+| `9766040` | fix: saveObjectifs sync SOP sheet automatique + champ CNAAS dans modal init cycle |
+| `ff578e2` | fix: SOP reset — _sopResetAt filtre les validations antérieures au reset |
 | `61fc2c0` | fix: sopLabel sur entrées SOP — Vitamine ADE et Déparasitage ne se valident plus mutuellement |
 | `f95b166` | fix: variables persistantes à l'init cycle — gonogo, simCharges, _mktUpdated, S._sop*, LIVE._histCycles |
 | `c357a07` | fix: numCycle input sans r() (clavier stable) + suppression carte SOP dans Objectifs |
