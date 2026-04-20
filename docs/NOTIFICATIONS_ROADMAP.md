@@ -1,7 +1,10 @@
 # BOAN — Roadmap Notifications Automatiques
 > Version finale — Prête pour implémentation
 > Statut : **BLOQUÉ — Prérequis métier non satisfaits** (voir section 0)
-> Dernière mise à jour : Avril 2026
+> Dernière mise à jour : 20 Avril 2026 — aligné avec commit `9e5aca5`
+
+> **Note de référence** : ce document est aligné sur l'état réel du code (`index.html`, ~8 600 lignes).
+> Les noms de variables, fonctions et structures de données correspondent à ceux de l'app.
 
 ---
 
@@ -25,6 +28,8 @@ Contractualiser avec un vétérinaire agréé de la région de Thiès. Rôle obl
 ### Chantier 2 — Contrat CNAAS
 
 Contacter la CNAAS (siège Dakar ou agence Thiès) et obtenir :
+
+> **✅ Dans l'app** : le champ `CYCLE.numCnaas` est déjà implémenté (clé `numCnaas` dans `Config_App`, modal init step 2, onglet Go/No-Go). Sa présence active automatiquement le critère CNAAS dans le Go/No-Go. Il n'y a donc **pas** de migration de données à faire — juste remplir le champ.
 
 - Police **"Assurance Mortalité Bétail Tout Risque"** souscrite AVANT tout sinistre
 - **Numéro de police** exact
@@ -57,7 +62,7 @@ Ce que ça implique dans l'app :
 | Certificat de constatation du décès | Vétérinaire attitré | J+1 à J+3 | ✅ Checkbox fondateur |
 | Fiche d'identification de l'animal (race, âge indicatif, poids, N°) | App BOAN | J+0 dans email | ✅ Généré depuis `CYCLE.betes[].id/race/poidsEntree/dateIntro` |
 | Historique des soins et vaccins | App BOAN | J+0 dans email | ✅ Généré depuis `Sante_Mortalite` + `SOP_Check` |
-| Numéro de police d'assurance | Fondateur (config) | J+0 dans email | ✅ `contact_cnaas_n_police` |
+| Numéro de police d'assurance | Fondateur (config) | J+0 dans email | ✅ `CYCLE.numCnaas` (clé `numCnaas` dans Config_App — déjà implémenté commit `9766040`) |
 | Photos de l'animal décédé | Gérant (manuel) | J+0 | ⚠️ Rappel dans l'app — pas de stockage (Option B) |
 | Animal non abattu ni enterré | Gérant (engagement) | Continu | ✅ Bannière rouge + mention email |
 
@@ -187,14 +192,39 @@ Clôture
 
 ### 3.5 Config "Contacts & Assurance" — Fondateur uniquement (nouveau sous-onglet dans Livrables)
 
-Champs persistés dans `Config_App` (clé-valeur) :
+Champs persistés dans `Config_App` (clé-valeur — même pattern que `gmqCible`, via `_syncConfigApp()`) :
+
+> **Champs déjà dans l'app (ne pas recréer) :**
+> - `CYCLE.numCnaas` (clé `numCnaas`) — déjà dans Config_App + modal init + Go/No-Go
+> - `CYCLE.veterinaire` (clé `veterinaire` dans Config_Cycle, pas Config_App) — champ texte nom du vétérinaire référent
+>
+> **À créer en tant que nouvelles clés dans Config_App :**
 
 ```
-contact_vet_nom, contact_vet_email, contact_vet_tel
-contact_cnaas_email, contact_cnaas_tel, contact_cnaas_whatsapp, contact_cnaas_n_police
-ferme_email_expediteur, ferme_responsable_nom, ferme_responsable_tel
-ferme_email_fondateur, contact_rga_email
+contact_vet_email         : Adresse email du vétérinaire
+contact_vet_tel           : +221XXXXXXXXX — WhatsApp + appel direct
+
+contact_cnaas_email       : Email officiel déclaration sinistres CNAAS
+contact_cnaas_tel         : Téléphone CNAAS (appel direct — canal principal)
+contact_cnaas_whatsapp    : N° WhatsApp CNAAS — si disponible (souvent absent)
+
+ferme_email_expediteur    : Adresse "De:" emails (verified sender SendGrid)
+ferme_responsable_nom     : Nom du fondateur/responsable
+ferme_responsable_tel     : Téléphone responsable
+ferme_email_fondateur     : Email fondateur → CC sur tous les emails
+contact_rga_email         : Email RGA → CC sur tous les emails
+
+horaire_vet_dakar         : HH:MM heure d'intervention prévue (ex: 09:00)
+contact_gerant_tel        : +221XXXXXXXXX — pour WhatsApp notification gérant J-1
+jours_fermes              : JSON array de dates ISO (Tabaski, Magal…)
+                            ex: ["2026-03-30","2026-06-06"]
+cnaas_grille              : JSON {zebu_senegalais_18_36m: 1200000, ...}
 ```
+
+> **Note nommage** : `CYCLE.numCnaas` reste la source dans l'app. Dans les templates emails, utiliser
+> `CYCLE.numCnaas` et non `contact_cnaas_n_police`. Les deux noms désignent le même champ.
+> `CYCLE.veterinaire` est le nom du vétérinaire — afficher ce champ dans le sous-onglet Contacts & Assurance
+> comme éditable (même valeur que dans Config_Cycle, synchronisé via `_syncCycle()`).
 
 ---
 
@@ -231,32 +261,34 @@ Valeurs `Statut_CNAAS` : `EN_COURS` / `DOSSIER_RECU` / `EXPERT_ASSIGNE` / `EXPER
 
 ### 4.3 Contacts à collecter auprès du fondateur
 ```
-contact_vet_nom          : Nom complet du vétérinaire
-contact_vet_email        : Adresse email du vétérinaire
-contact_vet_tel          : +221XXXXXXXXX — WhatsApp + appel direct
+— Références CYCLE existantes (déjà dans l'app, pas à recréer) :
+  CYCLE.veterinaire        : Nom du vétérinaire (clé 'veterinaire' dans Config_Cycle!A1:S1, col I)
+  CYCLE.numCnaas           : N° police CNAAS (clé 'numCnaas' dans Config_App)
 
-contact_cnaas_email      : Email officiel déclaration sinistres CNAAS
-contact_cnaas_tel        : Téléphone CNAAS (appel direct — canal principal)
-contact_cnaas_whatsapp   : N° WhatsApp CNAAS — si disponible (souvent absent)
-contact_cnaas_n_police   : Numéro de police d'assurance — OBLIGATOIRE
-contact_cnaas_delai_h    : Délai contractuel déclaration en heures (ex: 24)
+— Nouvelles clés à stocker dans Config_App via _syncConfigApp() :
+  contact_vet_email        : Adresse email du vétérinaire
+  contact_vet_tel          : +221XXXXXXXXX — WhatsApp + appel direct
 
-ferme_email_expediteur   : Adresse "De:" emails (verified sender SendGrid)
-ferme_responsable_nom    : Nom du fondateur/responsable
-ferme_responsable_tel    : Téléphone responsable
-ferme_email_fondateur    : Email fondateur → CC sur tous les emails
-contact_rga_email        : Email RGA → CC sur tous les emails
+  contact_cnaas_email      : Email officiel déclaration sinistres CNAAS
+  contact_cnaas_tel        : Téléphone CNAAS (appel direct — canal principal)
+  contact_cnaas_whatsapp   : N° WhatsApp CNAAS — si disponible (souvent absent)
+  contact_cnaas_delai_h    : Délai contractuel déclaration en heures (ex: 24)
 
-— Nouveaux champs (ajout panel experts) :
-horaire_vet_dakar        : HH:MM heure d'intervention prévue (ex: 09:00)
-                           → affiché dans bannière gérant J-1 "Vét arrive demain à 09h00"
-contact_gerant_tel       : +221XXXXXXXXX — pour WhatsApp notification gérant J-1
-jours_fermes             : JSON array de dates ISO YYYY-MM-DD (Tabaski, Magal, Gamou,
-                           jours fériés nationaux SN) → cron skip avant d'envoyer rappels vet
-                           ex: ["2026-03-30","2026-06-06"]
+  ferme_email_expediteur   : Adresse "De:" emails (verified sender SendGrid)
+  ferme_responsable_nom    : Nom du fondateur/responsable
+  ferme_responsable_tel    : Téléphone responsable
+  ferme_email_fondateur    : Email fondateur → CC sur tous les emails
+  contact_rga_email        : Email RGA → CC sur tous les emails
+
+  horaire_vet_dakar        : HH:MM heure d'intervention prévue (ex: 09:00)
+                             → affiché dans bannière gérant J-1 "Vét arrive demain à 09h00"
+  contact_gerant_tel       : +221XXXXXXXXX — pour WhatsApp notification gérant J-1
+  jours_fermes             : JSON array de dates ISO YYYY-MM-DD (Tabaski, Magal, Gamou,
+                             jours fériés nationaux SN) → cron skip avant d'envoyer rappels vet
+                             ex: ["2026-03-30","2026-06-06"]
 ```
 
-> **Note technique critique :** `CYCLE.dateDebut` doit être stockée au format **`YYYY-MM-DD`** dans `Config_Cycle!A1` (pas `DD/MM/YYYY`) pour que le cron puisse calculer J-N côté serveur : `Math.floor((Date.now() - new Date(dateDebut + 'T00:00:00Z')) / 86400000)`. Voir point bloquant #12.
+> **Note technique critique :** `CYCLE.dateDebut` est déjà stocké au format **`YYYY-MM-DD`** dans `Config_Cycle!A1` (col A) dans l'app — voir point #12 ci-dessous (résolu). Pas de migration nécessaire.
 
 > **Règle CC systématique :** tout email envoyé par BOAN met fondateur + RGA en copie. Leur boîte mail constitue une **preuve d'envoi horodatée indépendante** de Notifications_Log — opposable en cas de litige CNAAS.
 
@@ -343,43 +375,46 @@ Ferme BOAN, Thiès, Sénégal
 ```
 À    : [contact_cnaas_email]
 CC   : [ferme_email_fondateur], [contact_rga_email]
-Objet : [BOAN] Déclaration sinistre — Décès [ID_ANIMAL] — Police n°[N_POLICE]
+Objet : [BOAN] Déclaration sinistre — Décès [ID_ANIMAL] — Police n°[CYCLE.numCnaas]
 
 Madame, Monsieur,
 
-La Ferme BOAN déclare le sinistre suivant dans le délai contractuel de [delai_h]h.
+La Ferme BOAN déclare le sinistre suivant dans le délai contractuel de [contact_cnaas_delai_h]h.
 
 TYPE DE SINISTRE  : Décès animal
-N° POLICE         : [contact_cnaas_n_police]
+N° POLICE         : [CYCLE.numCnaas]
 DATE DU DÉCÈS     : [date]
 HEURE             : [heure]
 LIEU              : Ferme BOAN, Thiès, Sénégal
 
 ─── IDENTIFICATION DE L'ANIMAL ───
-  Identifiant     : [ID_ANIMAL]
-  Race            : [race]
-  Poids entrée    : [poidsEntree] kg (entrée le [dateIntro])
-  Poids actuel    : [poids_dernier_pesee] kg (pesée du [date_derniere_pesee])
-  Valeur estimée  : [GRILLE_CNAAS_race_age] FCFA
+  Identifiant     : [ID_ANIMAL]       ← CYCLE.betes[i].id  (format: C1-001)
+  Race            : [race]            ← CYCLE.betes[i].race (ou raceCustom si race=Autre)
+  Poids entrée    : [poidsEntree] kg  ← CYCLE.betes[i].poidsEntree
+  Date d'entrée   : [dateIntro]       ← CYCLE.betes[i].dateIntro (format ISO YYYY-MM-DD → afficher DD/MM/YYYY)
+  Poids actuel    : [poids_dernier] kg ← dernier enregistrement LIVE.pesees où p.id = ID_ANIMAL
+  Date pesee      : [date_derniere_pesee] ← même enregistrement
+  Valeur estimée  : [cnaas_grille[race_classe]] FCFA
     ⚠️ Valeur déterminée selon grille officielle CNAAS par race/classe d'âge.
-    Si grille non disponible : [poids × prix_foirail] FCFA au prorata —
+    Si grille non disponible : [poidsEntree × prix_foirail] FCFA au prorata —
     "Valeur estimée au prorata marché, sujette à expertise CNAAS"
-    (basé sur relevé foirail du [date_dernier_prix_foirail])
+    (basé sur relevé foirail du [date_dernier_prix_foirail]) ← LIVE.prix derniers enregistrement
 
 ─── HISTORIQUE DES SOINS ───
-  Symptômes déclarés    : [symptomes]
-  Traitements effectués : [traitements] — Coût total : [cout] FCFA
-  Vaccinations SOP      : [liste actes SOP validés depuis Sante_Mortalite + SOP_Check]
+  Symptômes déclarés    : [symptomes]         ← S.fsa.sym (champ libre gerant)
+  Traitements effectués : [traitements]       ← S.fsa.tra
+  Coût total            : [cout] FCFA         ← S.fsa.cout
+  Vaccinations SOP      : [liste actes SOP validés] ← HISTORY où type='sante' + sopLabel + id = ID_ANIMAL
 
 ─── HISTORIQUE DES PESÉES ───
-  [tableau : date | poids (kg) | gain (kg) | GMQ (kg/j)]
+  [tableau : date | poids (kg) | gain (kg) | GMQ (kg/j)] ← LIVE.pesees filtré par p.id = ID_ANIMAL
 
 ─── ENGAGEMENT ───
   ⛔ L'animal N'A PAS été abattu ni enterré.
   Il est disponible pour constatation par votre expert.
 
 Pièces à transmettre séparément dès disponibilité :
-  □ Certificat de décès signé par Dr [contact_vet_nom]
+  □ Certificat de décès signé par Dr [CYCLE.veterinaire]
   □ Photos de l'animal décédé (transmises par WhatsApp ou email de suivi)
 
 [ferme_responsable_nom] — [ferme_responsable_tel]
@@ -390,14 +425,14 @@ Ferme BOAN, Thiès, Sénégal
 ```
 À    : [contact_cnaas_email]
 CC   : [ferme_email_fondateur], [contact_rga_email]
-Objet : [BOAN] Déclaration sinistre — Vol bétail — Police n°[N_POLICE]
+Objet : [BOAN] Déclaration sinistre — Vol bétail — Police n°[CYCLE.numCnaas]
 
 Madame, Monsieur,
 
 La Ferme BOAN déclare le sinistre suivant dans le délai contractuel.
 
 TYPE DE SINISTRE  : Vol de bétail
-N° POLICE         : [contact_cnaas_n_police]
+N° POLICE         : [CYCLE.numCnaas]
 N° PV GENDARMERIE : [no_pv_gendarmerie]
 DATE DU VOL       : [date] à [heure]
 LIEU              : Ferme BOAN, Thiès, Sénégal
@@ -424,14 +459,14 @@ Ferme BOAN, Thiès, Sénégal
 ```
 À    : [contact_cnaas_email]
 CC   : [ferme_email_fondateur], [contact_rga_email]
-Objet : [BOAN] Suivi sinistre — Police n°[N_POLICE] — Déclaration du [date_sinistre]
+Objet : [BOAN] Suivi sinistre — Police n°[CYCLE.numCnaas] — Déclaration du [date_sinistre]
 
 Madame, Monsieur,
 
 Nous revenons vers vous au sujet de notre déclaration du [date_J0],
 restée sans accusé de réception à ce jour.
 
-Réf. sinistre : [Type] — [ID_ANIMAL ou N°_PV] — Police n°[N_POLICE]
+Réf. sinistre : [Type] — [ID_ANIMAL ou N°_PV] — Police n°[CYCLE.numCnaas]
 
 Nous restons à votre disposition pour tout complément de dossier.
 
@@ -514,7 +549,7 @@ Ferme BOAN — [ferme_responsable_tel]
 📋 *BOAN — Déclaration sinistre (email envoyé)*
 
 Type : Décès animal
-Police : [N_POLICE]
+Police : [CYCLE.numCnaas]
 Animal : [ID_ANIMAL] — [race] — [poids] kg
 Date : [date]
 
@@ -529,7 +564,7 @@ Email de déclaration envoyé à [contact_cnaas_email].
 📋 *BOAN — Déclaration sinistre (email envoyé)*
 
 Type : Vol de bétail
-Police : [N_POLICE]
+Police : [CYCLE.numCnaas]
 N° PV gendarmerie : [no_pv_gendarmerie]
 Date : [date]
 Animaux : [liste IDs]
@@ -543,6 +578,18 @@ Email de déclaration envoyé à [contact_cnaas_email].
 ## 7. Architecture technique
 
 ### 7.1 Nouveaux fichiers à créer
+
+> **Référence code existant dans `index.html`** :
+> - `appendRow(sid, range, vals)` (L1163) — écriture ligne Sheets, pattern principal
+> - `readSheet(sid, range)` (L1228) — lecture plage Sheets avec `UNFORMATTED_VALUE`
+> - `writeAll(sids, range, vals)` (L1991) — écriture multi-SIDs en `Promise.all`
+> - `_syncConfigApp()` (L2048) — lire/écrire Config_App, pattern à adapter côté cron pour lire les contacts
+> - `beteDropdown(val, stateKey, extra, excludeIds)` (L2902) — dropdown bêtes vivantes (filtre `LIVE.deceased`)
+> - `partagerRapportJourWhatsApp()` — pattern `wa.me/?text=encodeURIComponent(msg)` déjà dans l'app
+> - `safeText(s)` — à créer dans `/api/notify.js` (pattern ci-dessous)
+
+> **Accès token côté serveur** : le cron doit obtenir un token Google via le même mécanisme que
+> `/api/token.js` (Service Account JWT). Réutiliser `/api/token.js` en import interne dans `/api/notify.js`.
 
 #### `/api/notify.js`
 ```
@@ -606,6 +653,15 @@ jobs:
 
 ### 7.2 Fichiers `index.html` à modifier
 
+> **Structure colonnes `Sante_Mortalite` actuelle (A:I)** :
+> ```
+> A=date (DD/MM/YYYY)  B=id_bete  C=sym  D=tra  E=cout  F=res  G=dec (OUI/NON)
+> H=bcs  I=muqueuses  J=sopLabel (ajouté par commit 61fc2c0 — lu à la lecture Vague 2)
+> ```
+> L'écriture dans l'app se fait sur `Sante_Mortalite!A:I` (9 colonnes, J=sopLabel écrit uniquement par `_sopInlineSave`).
+> Pour le flag `email_pending` : **utiliser Option A** (colonne dans `Sinistres_CNAAS`, sheet fondateur)
+> plutôt qu'ajouter une colonne K dans `Sante_Mortalite` — voir point bloquant #16.
+
 | Section | Modification |
 |---|---|
 | Livrables — nouveau sous-onglet `contacts` | Bloc Config "Contacts & Assurance" (fondateur) — tous les champs section 4.3, persistés dans Config_App |
@@ -666,8 +722,9 @@ jobs:
 **Solution :** `safeText(s)` sur tous les champs gérant (symptômes, description, circonstances) avant composition du template email.
 
 ### #9 — Âge animal non tracké dans `CYCLE.betes`
-**Contexte :** `CYCLE.betes = [{id, race, poidsEntree, dateIntro}]` — pas de date de naissance.
-**Solution :** L'email utilise `dateIntro` comme "Date d'entrée en élevage" — suffisant pour la CNAAS. Si un âge précis est requis, ajouter un champ `anneeNaissance` optionnel dans la fiche bête (modal init cycle).
+**Contexte :** `CYCLE.betes = [{id, race, raceCustom, poidsEntree, dateIntro}]` — pas de date de naissance.
+Le champ `raceCustom` contient la race en texte libre quand `race === 'Autre'`.
+**Solution :** L'email utilise `dateIntro` comme "Date d'entrée en élevage" — suffisant pour la CNAAS. Si un âge précis est requis, ajouter un champ `anneeNaissance` optionnel dans la fiche bête (modal init cycle step 3).
 
 ### #10 — `sopProtocol` JSON corrompu côté serveur
 **Solution :**
@@ -686,6 +743,16 @@ try {
 ### #11 — 5 validations pre-cron obligatoires (VET)
 
 > Sans ces gardes, `checkAndSendVetReminders()` crashe silencieusement ou envoie des rappels absurdes.
+
+> **Note sur `sopProtocol`** : dans l'app, `CYCLE.sopProtocol` est persisté en JSON dans Config_App
+> (clé `sopProtocol`). Chaque acte a la structure : `{j: number, label: string, type: 'sante'|'pesee', note: string}`.
+> Le champ `id` d'un acte est son index dans le tableau (généré au runtime — pas persisté). Pour l'idempotence
+> cron, identifier un acte par la combinaison `{j, label}` plutôt que par `id`.
+
+> **Note sur la validation SOP** : dans l'app, un acte SOP est considéré "validé" quand une entrée
+> `HISTORY` existe avec `type='sante'`, `sopLabel === acte.label`, et date dans la fenêtre `±7j`
+> (logique `_sopEntryAfterReset` + `_pdDone`). Le cron doit répliquer cette logique en lisant
+> `Sante_Mortalite` + `SOP_Check` directement depuis Sheets.
 
 ```js
 // 1. sopProtocol vide → pas de crash, alerte fondateur
@@ -708,13 +775,14 @@ if ((joursFermes || []).indexOf(todayISO) !== -1) {
 
 ### #12 — `CYCLE.dateDebut` doit être en ISO UTC côté serveur (VET + CNAAS)
 
-Le navigateur client affiche `DD/MM/YYYY` — mais le cron Node.js doit calculer J-N arithmétiquement sans accès à `_nowDakar()`.
+> ✅ **RÉSOLU** — `CYCLE.dateDebut` est déjà stocké au format `YYYY-MM-DD` dans `Config_Cycle!A1` (colonne A). Pas de migration nécessaire.
 
-**Solution :**
-- Stocker `dateDebut` au format **`YYYY-MM-DD`** dans `Config_Cycle!A1`.
-- Si format actuel `DD/MM/YYYY` → adapter `_syncCycle()` : normaliser avant PUT Sheets.
-- Calcul cron : `Math.floor((Date.now() - new Date(dateDebut + 'T00:00:00Z').getTime()) / 86400000)`
-- Dakar = UTC+0 aujourd'hui — coder comme si ça peut changer (pas d'hypothèse hard-codée).
+Le cron Node.js peut calculer directement :
+```js
+// dateDebut lu depuis Config_Cycle!A1 est déjà 'YYYY-MM-DD' — pas de conversion nécessaire
+var joursEcoules = Math.floor((Date.now() - new Date(dateDebut + 'T00:00:00Z').getTime()) / 86400000);
+// Dakar = UTC+0 — mais coder robuste pour un changement éventuel
+```
 
 ### #13 — `vet_confirmed` : arrêt des rappels après confirmation vétérinaire (VET)
 
@@ -747,12 +815,12 @@ Décès pendant Tabaski/Magal/Gamou → administrations fermées 3-5 jours → e
 
 ### #16 — Cron : accès à `Sante_Mortalite` (SID gérant) pour `email_pending` (CNAAS)
 
-Le cron tourne avec le SID fondateur. `Sante_Mortalite` est dans la sheet gérant.
+Le cron tourne avec le SID fondateur. `Sante_Mortalite` est écrite sur les sheets gérant ET fondateur via `writeAll([SID.gerant, SID.fondateur, SID.rga], 'Sante_Mortalite!A:I', ...)`. Le sheet fondateur contient donc déjà une copie de `Sante_Mortalite`.
 
 **Solution :**
 - Option A : ajouter colonne `email_pending` dans `Sinistres_CNAAS` (sheet fondateur) plutôt que dans `Sante_Mortalite` gérant — le cron a les droits.
-- Option B : partager `Sante_Mortalite` en lecture avec le service account fondateur — configuration Sheets.
-- **Recommandé : Option A** — plus simple, pas de modification des droits Sheets.
+- Option B : lire `Sante_Mortalite` depuis `SID.fondateur` (copie écrite par `writeAll`) — pas de modification des droits Sheets.
+- **Recommandé : Option A** — plus simple, découplage propre, `Sinistres_CNAAS` est la source de vérité CNAAS.
 ```
 
 ---
@@ -772,8 +840,10 @@ BLOC A — HORS CODE (prérequis absolus)
   □ Ajouter SENDGRID_API_KEY + CRON_SECRET dans Vercel + GitHub Secrets
 
 BLOC B — Config UI index.html
-  □ Sous-onglet "Contacts & Assurance" dans Livrables (fondateur) — tous les champs 4.3
-  □ Persistance dans Config_App Sheets (clé/valeur — même pattern que gmqCible etc.)
+  ☑ Champ `numCnaas` (N° police CNAAS) — **déjà implémenté** : modal init step 2 + Config_App + Go/No-Go
+  ☑ Champ `veterinaire` (nom vétérinaire) — **déjà implémenté** : modal init step 2 + Config_Cycle
+  □ Sous-onglet "Contacts & Assurance" dans Livrables (fondateur) — champs NOUVEAUX : email/tel vét, email/tel CNAAS, emails fondateur/RGA, horaire_vet, jours_fermes, cnaas_grille
+  □ Persistance dans Config_App Sheets (clé/valeur — via `_syncConfigApp()` déjà en place)
   □ Bannière rouge ⛔ NE PAS ENTERRER dans Santé (décès = OUI) + Dashboard
   □ Alerte photo ⚠️ avant bouton Enregistrer (décès = OUI)
   □ Champ N° PV gendarmerie bloquant + sélection multiple animaux dans formulaire VOL
@@ -833,4 +903,7 @@ BLOC F — Tests (ne jamais tester sur vrais emails CNAAS/vet)
 | Onglet Sinistres_CNAAS | ⛔ Non fait |
 | Contacts collectés (section 4.3) | ⛔ Non fait |
 | Variables Vercel + GitHub Secrets | ⛔ Non fait |
+| **`CYCLE.numCnaas` (N° police)** | **✅ Implémenté** — modal init + Config_App + Go/No-Go (commit `9766040`) |
+| **`CYCLE.veterinaire` (nom vétérinaire)** | **✅ Implémenté** — modal init + Config_Cycle (commit antérieur) |
+| **`CYCLE.dateDebut` format ISO** | **✅ Déjà YYYY-MM-DD** — point bloquant #12 résolu |
 | Code implémenté (Blocs C–E) | ⬛ En attente des prérequis |
