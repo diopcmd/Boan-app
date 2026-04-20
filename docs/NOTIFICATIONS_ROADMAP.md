@@ -1,7 +1,7 @@
 # BOAN — Roadmap Notifications Automatiques
 > Version finale — Prête pour implémentation
 > Statut : **BLOQUÉ — Prérequis métier non satisfaits** (voir section 0)
-> Dernière mise à jour : 20 Avril 2026 — section 11 lacunes résiduelles + correction coordination vét/CNAAS
+> Dernière mise à jour : 20 Avril 2026 — section 3.6 bannières WhatsApp proactives gérant + templates 6.7/6.8 + coordination vét/CNAAS
 > Revue par : Architecte Backend, Expert UX Offline-first, Expert Sécurité OWASP, Expert Email/Délivrabilité Afrique, Expert Assurance/Droit Sénégalais, Expert Terrain Opérationnel
 
 > **Note de référence** : ce document est aligné sur l'état réel du code (`index.html`, ~8 600 lignes).
@@ -220,6 +220,188 @@ Clôture
 |---|---|
 | Bannière rouge `⛔ Dossier sinistre ouvert — NE PAS ENTERRER` | Tant que dossier décès non clôturé |
 | Badge numérique sur onglet Livrables | Dossiers en attente de confirmation fondateur |
+
+### 3.6 Dashboard gérant — Bannières WhatsApp proactives à l'ouverture de l'app
+
+> **Principe** : à chaque chargement du dashboard gérant (`S.user === 'gerant'`), l'app
+> vérifie si des actions WhatsApp sont en attente et affiche des bannières avec un bouton
+> "1 tap → ouvre WhatsApp message pré-rempli". Pas de modal bloquant — la bannière est
+> intégrée en haut du dashboard, sous la bannière sinistre si applicable.
+>
+> **Contrainte navigateur** : `window.open()` via WhatsApp est bloqué sur événement non-interactif
+> (chargement page). Le lien doit impérativement être **déclenché par un tap utilisateur** —
+> afficher le bouton, ne jamais appeler `window.open` dans `loadLiveData` ou `r()`.
+>
+> **Anti-harcèlement** : chaque bannière est dismissée par un flag `localStorage` par acte + date.
+> Elle réapparaît le lendemain si l'action n'a pas été effectuée.
+
+---
+
+#### Contexte A — Rappel vétérinaire J-1 SOP (acte planifié demain)
+
+**Quand s'affiche :** `S.user === 'gerant'` ET un acte SOP a `dateActe = today + 1j` ET
+le flag `lsGet('wa_vet_j1_[acteKey]_[dateISO]')` est absent/false.
+
+**`acteKey`** = `acte.label.toLowerCase().replace(/\s+/g,'-')` — identifiant stable de l'acte.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ 🔔 Vétérinaire demain — Préparer la zone                │
+│ Acte : [label_acte] — prévu demain [dateActe DD/MM]     │
+│                                                         │
+│  [💬 Envoyer rappel WhatsApp au vétérinaire]            │
+│  [✓ J'ai déjà prévenu — masquer]                        │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Comportement du bouton WhatsApp :**
+```js
+// Dans viewDash(), section gérant — après loadLiveData Vague 2
+function _checkVetJ1Banners() {
+  if (S.user !== 'gerant') return '';
+  var today = new Date();
+  var todayISO = today.toISOString().slice(0, 10);
+  var demain = new Date(today.getTime() + 86400000);
+  var demainISO = demain.toISOString().slice(0, 10);
+  var html = '';
+  var dateDebut = CYCLE.dateDebut || '';
+  if (!dateDebut) return '';
+  var sopProt = CYCLE.sopProtocol || [];
+  sopProt.forEach(function(acte) {
+    var dateActeMs = new Date(dateDebut + 'T00:00:00Z').getTime() + acte.j * 86400000;
+    var dateActeISO = new Date(dateActeMs).toISOString().slice(0, 10);
+    if (dateActeISO !== demainISO) return; // pas demain
+    var acteKey = String(acte.label || '').toLowerCase().replace(/\s+/g, '-');
+    var flagKey = 'wa_vet_j1_' + acteKey + '_' + demainISO;
+    if (lsGet(flagKey)) return; // gérant a déjà tapé aujourd'hui
+    var vetTel = (CYCLE.contact_vet_tel || '').replace(/\D/g, '');
+    var msg = encodeURIComponent(
+      '🔔 *BOAN — Rappel acte SOP demain*\n\n'
+      + 'Bonjour ' + (CYCLE.veterinaire || 'Docteur') + ',\n\n'
+      + 'Rappel : acte SOP prévu DEMAIN à la Ferme BOAN.\n\n'
+      + 'Acte : ' + acte.label + '\n'
+      + 'Date : ' + demain.toLocaleDateString('fr-FR') + '\n'
+      + 'Troupeau : ' + ((CYCLE.betes || []).length) + ' bêtes actives\n\n'
+      + 'Ferme BOAN — ' + (CYCLE.contact_gerant_tel || CYCLE.ferme_responsable_tel || '')
+    );
+    var waUrl = vetTel ? ('https://wa.me/' + vetTel + '?text=' + msg)
+                       : ('https://wa.me/?text=' + msg);
+    html += '<div class="msg-load" style="border-left-color:#f0a500">'
+      + '<strong>🔔 Vétérinaire demain</strong> — ' + acte.label
+      + ' prévu le ' + demain.toLocaleDateString('fr-FR') + '<br>'
+      + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'
+      + '<a href="' + waUrl + '" target="_blank" rel="noopener"'
+      + ' onclick="lsSet(\'' + flagKey + '\',true);r();"'
+      + ' style="background:#25d366;color:#fff;padding:7px 14px;border-radius:6px;'
+      + 'text-decoration:none;font-size:13px">💬 Rappel WhatsApp vétérinaire</a>'
+      + '<button onclick="lsSet(\'' + flagKey + '\',true);r();"'
+      + ' style="background:#1a2e1a;color:#aaa;border:1px solid #2a4a2a;'
+      + 'padding:7px 14px;border-radius:6px;font-size:13px;cursor:pointer">'
+      + '✓ Déjà prévenu</button>'
+      + '</div></div>';
+  });
+  return html;
+}
+```
+
+---
+
+#### Contexte B — Vétérinaire non confirmé 24h après un décès
+
+**Quand s'affiche :** `S.user === 'gerant'` ET `lsGet('sinistres_ouverts')` a une entrée
+`expertPasse=false` ET `Date.now() - so.ts > 24 * 3600 * 1000` (24h écoulées depuis le décès)
+ET flag `lsGet('wa_vet_deces_relance_[id]_[dateISO]')` absent.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ ⚠️ Bête [C1-001] décédée hier — Vétérinaire non encore  │
+│    confirmé. Relancer pour le certificat CNAAS.         │
+│                                                         │
+│  [💬 Relancer le vétérinaire sur WhatsApp]              │
+│  [✓ Vétérinaire a confirmé — masquer]                   │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Comportement du bouton WhatsApp :**
+```js
+function _checkDecesVetBanners() {
+  if (S.user !== 'gerant') return '';
+  var souverts = (lsGet('sinistres_ouverts') || []).filter(function(s) {
+    return !s.expertPasse;
+  });
+  var html = '';
+  var todayISO = new Date().toISOString().slice(0, 10);
+  souverts.forEach(function(so) {
+    var heuresEcoulees = (Date.now() - (so.ts || 0)) / 3600000;
+    if (heuresEcoulees < 24) return; // trop tôt — laisser J+0 se passer
+    var flagKey = 'wa_vet_deces_relance_' + so.id + '_' + todayISO;
+    if (lsGet(flagKey)) return; // déjà relancé aujourd'hui
+    var vetTel = (CYCLE.contact_vet_tel || '').replace(/\D/g, '');
+    var joursStr = Math.floor(heuresEcoulees / 24) === 1 ? 'hier' : ('il y a ' + Math.floor(heuresEcoulees / 24) + ' jours');
+    var msg = encodeURIComponent(
+      '⚠️ *BOAN — Relance certificat décès*\n\n'
+      + 'Bonjour ' + (CYCLE.veterinaire || 'Docteur') + ',\n\n'
+      + 'La bête ' + so.id + ' est décédée ' + joursStr + ' à la Ferme BOAN.\n'
+      + 'Le dossier CNAAS attend votre certificat de constatation.\n\n'
+      + '⛔ L\'animal n\'a pas été enterré.\n\n'
+      + 'Pouvez-vous confirmer votre venue ?\n'
+      + 'Ferme BOAN — ' + (CYCLE.contact_gerant_tel || CYCLE.ferme_responsable_tel || '')
+    );
+    var waUrl = vetTel ? ('https://wa.me/' + vetTel + '?text=' + msg)
+                       : ('https://wa.me/?text=' + msg);
+    html += '<div class="msg-err">'
+      + '<strong>⚠️ Décès ' + so.id + '</strong> — Vétérinaire non confirmé'
+      + ' (' + Math.floor(heuresEcoulees / 24) + 'j)<br>'
+      + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'
+      + '<a href="' + waUrl + '" target="_blank" rel="noopener"'
+      + ' onclick="lsSet(\'' + flagKey + '\',true);r();"'
+      + ' style="background:#25d366;color:#fff;padding:7px 14px;border-radius:6px;'
+      + 'text-decoration:none;font-size:13px">💬 Relancer vétérinaire</a>'
+      + '<button onclick="lsSet(\'' + flagKey + '\',true);r();"'
+      + ' style="background:#1a2e1a;color:#aaa;border:1px solid #3a2a2a;'
+      + 'padding:7px 14px;border-radius:6px;font-size:13px;cursor:pointer">'
+      + '✓ Vétérinaire a confirmé</button>'
+      + '</div></div>';
+  });
+  return html;
+}
+```
+
+---
+
+#### Intégration dans `viewDash()` — gérant
+
+```js
+// Dans la fonction viewDash(), section role=gerant, en haut du HTML généré :
+// (après la bannière sinistre existante, avant les KPI cards)
+var waAlerts = _checkVetJ1Banners() + _checkDecesVetBanners();
+if (waAlerts) {
+  html += '<div style="margin-bottom:12px">' + waAlerts + '</div>';
+}
+```
+
+#### Flags localStorage utilisés
+
+| Clé | Valeur | TTL naturel |
+|---|---|---|
+| `boanr_wa_vet_j1_[acteKey]_[YYYY-MM-DD]` | `true` | Expire le lendemain (date dans la clé) |
+| `boanr_wa_vet_deces_relance_[id]_[YYYY-MM-DD]` | `true` | Expire le lendemain |
+
+> Les flags expirent naturellement : la clé contient la date du jour. Le lendemain, la clé
+> ne correspond plus à `todayISO` → la bannière réapparaît si l'action est toujours requise.
+> Pas besoin de TTL ou de nettoyage — les vieilles clés sont simplement ignorées.
+
+#### Checklist BLOC B index.html (à ajouter)
+
+```
+□ Fonctions _checkVetJ1Banners() et _checkDecesVetBanners() ajoutées dans index.html
+□ Appel dans viewDash() section gérant — avant les KPI cards
+□ CYCLE.contact_vet_tel et CYCLE.contact_gerant_tel lus depuis Config_App (_syncConfigApp)
+□ Préfixe boanr_ respecté sur les clés lsSet (helpers lsGet/lsSet de l'app)
+□ Tester : acte SOP J-1 → bannière orange → tap WhatsApp → flagKey présent → disparaît
+□ Tester : décès > 24h, vetConfirme absent → bannière rouge → tap → disparaît
+□ Tester : si aucune action requise → aucune bannière (dashboard propre)
+```
 
 ### 3.5 Config "Contacts & Assurance" — Fondateur uniquement (nouveau sous-onglet dans Livrables)
 
@@ -666,6 +848,44 @@ Email de déclaration envoyé à [contact_cnaas_email].
 [ferme_responsable_nom] — [ferme_responsable_tel]
 ```
 
+### 6.7 WhatsApp gérant — Rappel SOP vét J-1 (section 3.6 contexte A)
+
+> Message pré-rempli déclenché par le bouton dashboard gérant (bannière orange).
+> Variables résolues côté client depuis `CYCLE.*`.
+
+```
+🔔 *BOAN — Rappel acte SOP demain*
+
+Bonjour [CYCLE.veterinaire],
+
+Rappel : acte SOP prévu DEMAIN à la Ferme BOAN.
+
+Acte : [acte.label]
+Date : [demain DD/MM/YYYY]
+Troupeau : [CYCLE.betes.length] bêtes actives
+
+Ferme BOAN — [contact_gerant_tel ou ferme_responsable_tel]
+```
+
+### 6.8 WhatsApp gérant — Relance vétérinaire post-décès (section 3.6 contexte B)
+
+> Message pré-rempli déclenché par le bouton dashboard gérant (bannière rouge), 24h après décès
+> si le vétérinaire n'a pas encore confirmé sa venue.
+
+```
+⚠️ *BOAN — Relance certificat décès*
+
+Bonjour [CYCLE.veterinaire],
+
+La bête [ID_ANIMAL] est décédée [hier / il y a N jours] à la Ferme BOAN.
+Le dossier CNAAS attend votre certificat de constatation.
+
+⛔ L'animal n'a pas été enterré.
+
+Pouvez-vous confirmer votre venue ?
+Ferme BOAN — [contact_gerant_tel ou ferme_responsable_tel]
+```
+
 ---
 
 ## 7. Architecture technique
@@ -1101,8 +1321,13 @@ BLOC B — Config UI index.html
   □ Champ N° PV gendarmerie bloquant + **beteMultiSelect()** (nouveau helper) dans formulaire VOL (#18)
   □ Alerte prix foirail obsolète > 30j dans formulaire décès
   □ Config `horaire_vet_dakar`, `contact_gerant_tel`, `jours_fermes` (pré-rempli 2026), `cnaas_grille` dans sous-onglet Contacts & Assurance
-
-BLOC C — API serveur
+  □ **[Section 3.6A]** Bannière dashboard gérant J-1 SOP — `_checkVetJ1Banners()` dans `viewDash()`
+      → détecte acte SOP dont dateActe = demain, affiche bouton WhatsApp msg 6.7
+      → flag `boanr_wa_vet_j1_[acteKey]_[YYYY-MM-DD]` via lsSet à l'onclick
+  □ **[Section 3.6B]** Bannière dashboard gérant post-décès — `_checkDecesVetBanners()` dans `viewDash()`
+      → détecte sinistres_ouverts avec expertPasse=false ET > 24h, affiche bouton WhatsApp msg 6.8
+      → flag `boanr_wa_vet_deces_relance_[id]_[YYYY-MM-DD]` via lsSet à l'onclick
+      → bouton "Vétérinaire a confirmé" marque le flag local uniquement (pas d'écriture Sheets)
   □ /api/notify.js — toutes les fonctions (section 7.1) — emails text/plain uniquement (#21)
   □ /api/cron.js — endpoint sécurisé avec param ?type= (vet | deces | relances) pour éviter timeout (#17)
   □ Rappel vét J+1 décès : dans checkAndSendDecesAlerts(), si Date_Confirmation vide pour VET_DECES_[ID] → envoyer 5.2b (template section 5.2b)
