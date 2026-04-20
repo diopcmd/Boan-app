@@ -898,6 +898,9 @@ function bilanDejaFaitCetteSemaine() {
 // Inactivité 8h + auto-refresh Sheets toutes les 5 minutes
 var LAST_ACTIVITY = Date.now();
 var _lastAutoRefresh = 0;
+var _lastPrixLoad    = 0; // timestamp dernier loadPrix réussi
+var _lastAlimLoad    = 0; // timestamp dernier loadAlimPrix réussi
+var _configAppTabOk  = false; // flag : onglet Config_App déjà créé ce cycle
 function resetActivity() { LAST_ACTIVITY = Date.now(); }
 document.addEventListener('touchstart', resetActivity);
 document.addEventListener('click', resetActivity);
@@ -1597,10 +1600,12 @@ function loadLiveData() {
       // Lire depuis SID.gerant : source de vérité complète (données gérant avant ET après writeAll fix)
       // Le fondateur a SID.gerant dans son objet SID — writeAll écrit les soumissions gérant ET fondateur dans les deux sheets
       var sidHisto = sidGerant || sidFondateur;
+      // Optim : Sante_Mortalite déjà lue en Vague 1 depuis le même SID — réutiliser le résultat
+      var _rowsSanteV1 = rowsSante;
       return Promise.all([
         sidHisto ? readSheet(sidHisto, 'Fiche_Quotidienne!A4:G500')  : Promise.resolve(null),
         sidHisto ? readSheet(sidHisto, 'Incidents!A4:G200')          : Promise.resolve(null),
-        sidHisto ? readSheet(sidHisto, 'Sante_Mortalite!A4:G200')    : Promise.resolve(null),
+        Promise.resolve(_rowsSanteV1), // réutilise Vague 1 — évite 1 appel Sheets inutile
         // Hebdomadaire : lecture avec fallback sidFondateur si sidHisto (gérant) est vide
         // (couvre le cas où writeAll a écrit sur fondateur mais pas gérant)
         (sidHisto ? readSheet(sidHisto,'Hebdomadaire!A4:H200').then(function(rows){
@@ -2126,7 +2131,7 @@ function _submitActual(type) {
       if (type==='bilan')  CYCLE._lastBilanSem  = String(calcSemaine());
       lsSet('cycle', CYCLE);
       // Attendre que Config_App soit mis à jour avant de recharger (évite race condition step1)
-      _syncConfigApp().then(function(){ loadLiveData(); setTimeout(loadPesees, 300); if(type==='marche') setTimeout(loadPrix, 400); });
+      _syncConfigApp().then(function(){ loadLiveData(); setTimeout(loadPesees, 300); if(type==='marche'){ setTimeout(function(){ loadPrix(true); }, 400); setTimeout(function(){ loadAlimPrix(true); }, 500); } });
       // Reset formulaire après soumission réussie
       var td = todayISO();
       if(type==='fiche') S.fi={date:td,nb:'',nourris:'',eau:'',enclos:'',incident:'',desc:''};
@@ -2198,13 +2203,15 @@ function _syncConfigApp() {
       ['sopProtocol',      JSON.stringify(CYCLE.sopProtocol        || null)],
       ['sopResetAt',       JSON.stringify(CYCLE._sopResetAt        || null)]
     ];
-    // Tenter création de l'onglet (ignorer l'erreur s'il existe déjà)
-    var addUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + ':batchUpdate';
-    fetch(addUrl, {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requests: [{ addSheet: { properties: { title: 'Config_App' } } }] })
-    }).catch(function(){});
+    // Créer l'onglet Config_App uniquement si pas encore confirmé ce cycle (optim : évite 1 appel Sheets inutile à chaque enregistrement)
+    if (!_configAppTabOk) {
+      var addUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + ':batchUpdate';
+      fetch(addUrl, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: 'Config_App' } } }] })
+      }).then(function(){ _configAppTabOk = true; }).catch(function(){ _configAppTabOk = true; }); // marquer OK dans les 2 cas (l'onglet existe ou vient d'être créé)
+    }
     // PUT direct — précédé d'un clear pour purger les lignes parasites (anciennes appendRow)
     // clear et PUT sont chaînés séquentiellement pour éviter que le clear n'efface le PUT
     var _clearUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + '/values/' + encodeURIComponent('Config_App!A1:B200') + ':clear';
@@ -2419,9 +2426,10 @@ function loadPesees() {
   });
 }
 
-// Charge les derniers prix foirail depuis Suivi_Marche
-function loadPrix() {
+// Charge les derniers prix foirail depuis Suivi_Marche (cache 5 min)
+function loadPrix(force) {
   if (!S.user) return;
+  if (!force && _lastPrixLoad && Date.now() - _lastPrixLoad < 5 * 60 * 1000 && LIVE.prix && LIVE.prix.length) return;
   // Fondateur = source primaire (Suivi_Marche toujours présent), commerciale en fallback
   var _sidPrix = SID.fondateur || SID.commerciale;
   if (!_sidPrix) return;
@@ -2444,6 +2452,7 @@ function loadPrix() {
           haut: parseFloat(r[4])||0
         };
       });
+    _lastPrixLoad = Date.now();
     r();
   });
 }
@@ -2461,9 +2470,10 @@ function _livePrixMax() {
   return _le.reduce(function(mx,e){ return (e.moy||0)>(mx.moy||0)?e:mx; }, _le[0]);
 }
 
-// Charge les derniers prix aliments depuis Suivi_Aliments
-function loadAlimPrix() {
+// Charge les derniers prix aliments depuis Suivi_Aliments (cache 5 min)
+function loadAlimPrix(force) {
   if (!S.user) return;
+  if (!force && _lastAlimLoad && Date.now() - _lastAlimLoad < 5 * 60 * 1000 && LIVE.alimPrix && LIVE.alimPrix.length) return;
   var _sidAlim = SID.fondateur || SID.commerciale || SID.rga;
   if (!_sidAlim) return;
   readSheet(_sidAlim, 'Suivi_Aliments!A4:C500').then(function(rows) {
@@ -2484,6 +2494,7 @@ function loadAlimPrix() {
         };
       });
     lsSet('alimPrix', LIVE.alimPrix);
+    _lastAlimLoad = Date.now();
     r();
   });
 }
