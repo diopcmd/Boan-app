@@ -2573,6 +2573,8 @@ function swUser(k){if(S.user!=='fondateur')return;S.user=k;S.dd=false;chTab(USER
 // Floating label field helper
 function fl(label, inputHtml, val) {
   return '<div class="fl'+(val?' has-val':'')+'">'
+    +inputHtml
+    +'<label>'+label+'</label>'
     +'</div>';
 }
 
