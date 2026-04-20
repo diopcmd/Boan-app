@@ -1,6 +1,6 @@
 # BOAN — Documentation Complète de l'Application
-> Version 1.0 — Rédigée le 20 Avril 2026
-> Commit HEAD : `a77177a` · App en prod : `https://boan-app-ur3x.vercel.app`
+> Version 1.1 — Mise à jour le 20 Avril 2026 (commits `5bad4a0`, `0255434`, `d45fc68`)
+> Commit HEAD : `d45fc68` · App en prod : `https://boan-app-ur3x.vercel.app`
 > Codebase : `index.html` ~8 623 lignes · ES5 strict (`var`, pas `const`/`let`/arrow)
 
 ---
@@ -248,7 +248,7 @@ Synchronisé vers les 4 sheets par `_syncCycle()`.
 | `Fiche_Quotidienne` | A:G | Date, NbBetes, Nourris, Eau, Enclos, Incident, Description | Fiche journalière gérant |
 | `SOP_Check` | A:H | Date, Nettoyage, Désinfection, Ration, Eau, Stock, Santé, Problème | Checklist SOP |
 | `Stock_Nourriture` | A:F | Date, Type, Mode, Kg, CycleDebut, (réservé) | Mouvements stock aliments |
-| `Incidents` | A:G | Date, ID_Bête, Type, Gravité, Description, Action, Clôturé | Incidents terrain |
+| `Incidents` | A:G | Date, **ID_Bête (optionnel)**, Type, Gravité, Description, Action, Clôturé | Incidents terrain ou infrastructure |
 | `Pesees` | A:G | Date, ID, Race, RaceCustom, Poids, PoidsPrécédent, DatePrécédente | Pesées individuelles |
 | `Sante_Mortalite` | A:J | Date, ID, Symptômes, Traitement, Coût, Résultat, Décès, BCS, Muqueuse, SopLabel | Suivi santé |
 | `Hebdomadaire` | A:H | Semaine, NbBêtes, Nourris, Stock, Incidents, PoidsVérifiés, Message, (réservé) | Bilan hebdo |
@@ -340,7 +340,7 @@ Plages définies dans `TABLE_RANGES` :
 |---|---|---|
 | `S.fi` | Fiche quotidienne | date, nb, nourris, eau, enclos, incident, desc |
 | `S.fs` | SOP check | date, net, des, rat, eau, stk, san, prob |
-| `S.fst` | Stock | date, mvts[], stockInput, stockKg, rat |
+| `S.fst` | Stock | date, mvts[], stockInput, stockKg, rat, _stkAutre |
 | `S.fin` | Incident | date, id, type, grav, desc, act, clos |
 | `S.fp` | Pesée | date, id, race, raceCustom, poids, prev, datePrev, _autoFilled |
 | `S.fsa` | Santé | date, id, sym, tra, cout, res, dec, bcs, muq |
@@ -622,8 +622,8 @@ Gérés par `S.sub`, changement via `chSub(s)`.
 |---|---|---|---|
 | **Fiche quotidienne** | Gérant | 1x/jour | Date, nb bêtes, nourris/eau/enclos/incident (OUI/NON) |
 | **SOP Check** | Gérant | 1x/14j | 6 points sanitaires OUI/NON + score conformité |
-| **Stock** | Gérant | Multi/jour (type unique) | Mouvements ajouter/consommer par type d'aliment + ration/j |
-| **Incident** | Gérant | 1x/bête/type | Bête + type + gravité (1-3) + description + action |
+| **Stock** | Gérant | Multi/jour (type unique) | Select natif aliments (6 défauts + personnalisés) + quantité + ration/j |
+| **Incident** | Gérant | 1x/bête/type | **Bête optionnelle** + type + gravité (1-3) + description + action |
 | **Pesée** | Gérant | 1x/bête/semaine | Bête + race + poids actuel + auto-fill précédent → calcul gain/GMQ |
 | **Santé** | Gérant | 1x/bête/symptôme | Bête + symptômes + traitement + coût + résultat + décès? + BCS + muqueuse |
 | **Bilan hebdo** | Gérant | 1x/semaine | Résumé semaine + message libre + partage WhatsApp |
@@ -823,7 +823,7 @@ function flushQueue() {
 | `formProgress(filled,total)` | 2296 | Barre de progression formulaire |
 | `countFilled(fields)` | 2300 | Compte champs remplis |
 | `_escHtml(s)` | 643 | Échappe `& < > "` pour innerHTML |
-| `fl(label,input,val)` | 2554 | Wrapper floating-label input |
+| `fl(label,input,val)` | 2574 | Wrapper floating-label input (`inputHtml` + `<label>` dans `.fl`) |
 | `yn(val,k,obj)` | 2559 | Boutons radio OUI/NON |
 | `calBadge(done,msg,resetFn)` | 886 | Badge calendrier fait/à faire |
 | `msgHtml()` | 2577 | Message de statut envoi (loading/ok/error) |
@@ -880,8 +880,8 @@ function flushQueue() {
 | `calcStockLocal()` | 720 | Calcule semaines de stock depuis STOCK_MVTS |
 | `calcStockParAliment()` | 741 | Net kg par type d'aliment |
 | `stockSyntheseHtml(compact)` | 749 | Tableau HTML synthèse stock |
-| `rebuildAlimList()` | 703 | Reconstruit les datalists types d'aliment |
-| `addStockLigne(mode)` | 2942 | Ajoute une ligne de mouvement stock |
+| `rebuildAlimList()` | 703 | Reconstruit la liste interne des aliments connus (défauts + CYCLE + STOCK_MVTS) |
+| `addStockLigne(mode)` | 2936 | Ajoute une ligne de mouvement stock (lit `S.fst.stockInput` + `stk-kg-inp`) |
 | `saveMvts()` | 634 | Persiste STOCK_MVTS en localStorage |
 
 ### 13.8 Bêtes
@@ -1030,6 +1030,7 @@ if (!S.fp.poids || S.fp.poids <= 0) { S.msg = 'err:Poids invalide'; r(); return;
 | `flushQueue` SID unique | Offline queue écrit seulement sur SID.gerant | Données incomplètes |
 | `CYCLE` non sauvé | Si `lsSet('cycle', CYCLE)` oublié → perte au rechargement | Données |
 | `appendRow` row overflow | Si la table range est pleine → écriture silencieuse échoue | Données |
+| `fl()` corps vide | Si `inputHtml`/`label` omis dans le return → tous les champs `fl()` invisibles (regression `f7a962b`, corrigé `5bad4a0`) | Critique |
 
 ---
 
