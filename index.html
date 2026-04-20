@@ -2703,7 +2703,8 @@ function pageModal(){
       +'<div class="fg"><label>Budget santé (FCFA)</label><input type="number" inputmode="decimal" value="'+(MODAL.data.budgetSante||200000)+'" oninput="MODAL.data.budgetSante=isNaN(parseInt(this.value))?MODAL.data.budgetSante:parseInt(this.value)"></div>'
       +'</div>'
       +'<div class="fg"><label>Prix aliment (FCFA/kg) <span style="font-size:11px;color:#888">pour calcul tréso réelle</span></label><input type="number" inputmode="decimal" placeholder="Ex : 120" value="'+(MODAL.data.prixAlim||'')+'" oninput="MODAL.data.prixAlim=isNaN(parseInt(this.value))?0:parseInt(this.value)"></div>'
-      +'<div class="fg"><label>Vétérinaire référent</label><input placeholder="Nom / contact" value="'+(MODAL.data.veterinaire||'')+'" oninput="MODAL.data.veterinaire=this.value"></div>';
+      +'<div class="fg"><label>Vétérinaire référent</label><input placeholder="Nom / contact" value="'+(MODAL.data.veterinaire||'')+'" oninput="MODAL.data.veterinaire=this.value"></div>'
+      +'<div class="fg"><label>N° contrat assurance CNAAS <span style="font-size:10px;color:#888">(optionnel — active le Go/No-Go auto)</span></label><input placeholder="Ex: CNAAS-2025-00123" value="'+(MODAL.data.numCnaas||'')+'" oninput="MODAL.data.numCnaas=this.value.trim()"></div>';
   } else if(MODAL.step===3){
     body='<div class="fg"><label>Foirail principal</label><select onchange="MODAL.data.foirail=this.value"><option'+((!MODAL.data.foirail||MODAL.data.foirail==='Thiès')?' selected':'')+'>Thiès</option><option'+(MODAL.data.foirail==='Tivaouane'?' selected':'')+'>Tivaouane</option><option'+(MODAL.data.foirail==='Diourbel'?' selected':'')+'>Diourbel</option></select></div>'
       +'<div class="fg"><label>Commission Commerciale (%)</label><input type="number" inputmode="decimal" value="'+(MODAL.data.commission||2)+'" oninput="MODAL.data.commission=isNaN(parseFloat(this.value))?MODAL.data.commission:parseFloat(this.value)"></div>';
@@ -6486,14 +6487,14 @@ function _sopInlineSave(idx, tous){
 function saveObjectifs(){
   if(!SID.fondateur && !SID.rga){ alert('SID non configuré'); return; }
   lsSet('cycle', CYCLE);
-  // Déléguer à _syncConfigApp qui fait un PUT atomique A1:Bn — pas de race condition,
-  // pas d'accumulation de lignes parasites dans Config_App.
+  // PUT atomique Config_App + sync SOP_Protocol sheet en parallèle
   _syncConfigApp().then(function(d){
     if (d && d.error) {
       S.msg='err:Erreur lors de l\'enregistrement (' + (d.error.message||'') + ')'; r();
       setTimeout(function(){ S.msg=''; r(); }, 4000);
     } else {
-      S.msg='ok:\u2705 Objectifs enregistr\u00e9s'; r();
+      _syncSopProtocol(); // Mettre à jour le tableau SOP Sheets en même temps
+      S.msg='ok:\u2705 Enregistré et synchronisé'; r();
       setTimeout(function(){ S.msg=''; r(); }, 3000);
     }
   });
@@ -7197,7 +7198,6 @@ function viewLiv(){
         rows += '<button onclick="S._sopEd={idx:-1,j:30,type:\'sante\',label:\'\',note:\'\'}; r()" style="width:100%;background:none;border:1px dashed #2a4a2a;border-radius:6px;color:#557755;font-size:12px;padding:7px;cursor:pointer;margin-top:6px">+ Ajouter une étape</button>';
       }
       rows += (_isCustom?'<button onclick="_sopReset()" style="width:100%;background:none;border:none;color:#554444;font-size:10px;margin-top:6px;cursor:pointer">↺ Réinitialiser au protocole standard</button>':'');
-      rows += '<button onclick="_syncSopProtocol();S.msg=\'ok:✅ Tableau SOP synchronisé dans Sheets\';r();setTimeout(function(){S.msg=\'\';r();},3000)" style="width:100%;background:none;border:1px solid #1a3a4a;border-radius:6px;color:#4488aa;font-size:10px;padding:5px;margin-top:4px;cursor:pointer">📤 Synchroniser le tableau SOP → Sheets</button>';
       view = '<div class="card">'
         +'<div class="stitle">📅 Protocole SOP vétérinaire'+(_isCustom?' <span style="font-size:9px;background:#1a2e1a;color:#88aa88;padding:2px 6px;border-radius:8px;margin-left:4px">Personnalisé</span>':' <span style="font-size:9px;background:#1a1a2a;color:#6688aa;padding:2px 6px;border-radius:8px;margin-left:4px">Standard</span>')+'</div>'
         +'<div style="font-size:10px;color:#7a9a7a;margin-bottom:10px">Les jours J+ sont calculés depuis la date de début de cycle. Modifiez selon votre contexte terrain (race, saison, disponibilité vétérinaire).</div>'
