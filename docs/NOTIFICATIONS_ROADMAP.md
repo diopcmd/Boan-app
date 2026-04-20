@@ -1,1424 +1,930 @@
-# BOAN — Roadmap Notifications Automatiques
-> Version finale — Prête pour implémentation
+# BOAN — Roadmap Notifications & Sinistres
+> Version 2.0 — Intégralement refondue le 20 Avril 2026
 > Statut : **BLOQUÉ — Prérequis métier non satisfaits** (voir section 0)
-> Dernière mise à jour : 20 Avril 2026 — section 3.6 bannières WhatsApp proactives gérant + templates 6.7/6.8 + coordination vét/CNAAS
-> Revue par : Architecte Backend, Expert UX Offline-first, Expert Sécurité OWASP, Expert Email/Délivrabilité Afrique, Expert Assurance/Droit Sénégalais, Expert Terrain Opérationnel
+> Revue par : Architecte Backend · Expert UX Offline-first · Sécurité OWASP
+>             Expert Email Afrique · Expert Assurance/Droit Sénégalais · Expert Terrain
 
-> **Note de référence** : ce document est aligné sur l'état réel du code (`index.html`, ~8 600 lignes).
-> Les noms de variables, fonctions et structures de données correspondent à ceux de l'app.
+> **Référence code** : `index.html` ~8 600 lignes, ES5 strict (`var`, pas `const`/`let`/arrow).
+> Commit HEAD : `f4fb2e3`. App en prod : `https://boan-app-ur3x.vercel.app`
 
 ---
 
-## 0. Contraintes fondamentales — À résoudre AVANT tout code
+## 0. Prérequis métier — BLOQUANTS avant tout code
 
-> ⛔ Sans ces trois éléments, le système tournera à vide ou produira des déclarations invalides.
+> ⛔ Sans ces éléments, le système tourne à vide ou produit des déclarations invalides.
 
-### Chantier 1 — Vétérinaire attitré (Thiès)
+### 0.1 Vétérinaire attitré (Thiès)
+Contractualiser un vétérinaire agréé région de Thiès :
+- Rôle : suivre le troupeau selon le SOP + **signer le certificat de constatation du décès** (pièce CNAAS obligatoire)
+- Coordonnées requises : nom, email, +221XXXXXXXXX (WhatsApp = canal principal terrain)
+- ⚠️ Sans certificat vét → dossier CNAAS rejeté
 
-Contractualiser avec un vétérinaire agréé de la région de Thiès. Rôle obligatoire :
+> **Déjà dans l'app** : `CYCLE.veterinaire` (clé `veterinaire` dans `Config_Cycle`, col I). Ne pas recréer.
 
-- Suivre le troupeau selon le protocole SOP (actes planifiés J+N)
-- **Signer le certificat de constatation du décès** — pièce obligatoire CNAAS
-- Répondre aux rappels automatiques (WhatsApp **prioritaire** + email trace écrite) aux jalons **J-3 / J-2 / J-1**
-- ⚠️ **WhatsApp = seul canal fiable** pour un vétérinaire rural à Thiès — l'email reste envoyé comme preuve opposable mais ne pas compter dessus comme action principale
-- Confirmer sa venue → `vet_confirmed = TRUE` dans Notifications_Log → arrêt automatique des rappels suivants
-- Constituer un historique de suivi opposable pour tout sinistre
-
-> Sans vétérinaire contractualisé : pas de certificat → dossier CNAAS rejeté.
-
-### Chantier 2 — Contrat CNAAS
-
-Contacter la CNAAS (siège Dakar ou agence Thiès) et obtenir :
-
-> **✅ Dans l'app** : le champ `CYCLE.numCnaas` est déjà implémenté (clé `numCnaas` dans `Config_App`, modal init step 2, onglet Go/No-Go). Sa présence active automatiquement le critère CNAAS dans le Go/No-Go. Il n'y a donc **pas** de migration de données à faire — juste remplir le champ.
-
+### 0.2 Contrat CNAAS
+Contacter CNAAS (siège Dakar ou agence Thiès) et obtenir :
 - Police **"Assurance Mortalité Bétail Tout Risque"** souscrite AVANT tout sinistre
-- **Numéro de police** exact
-- **Email officiel** de déclaration de sinistres
-- **Téléphone et WhatsApp** du correspondant sinistres
-- **Délai contractuel de déclaration** (hypothèse : 24h — à confirmer)
-  > ⚠️ Le Code des Assurances CIMA (applicable au Sénégal) fixe un délai standard de **5 jours ouvrables**.
-  > Certaines polices imposent 24h contractuellement. À lire sur la police lors de la souscription.
-  > L'email automatique J+0 reste utile comme **preuve d'envoi horodatée** même si le délai légal est plus long.
-- **Liste exacte des pièces** requises pour décès et pour vol
-- **Grille officielle d'indemnisation** par race et classe d'âge — à obtenir impérativement (remplace le calcul `poids × prix_foirail` qui sera rejeté comme non conforme)
-- **Contact direct agent CNAAS Thiès** : un numéro de téléphone vocal (pas WhatsApp officiel — inexistant) pour les appels de déclaration urgente
+- Numéro de police exact
+- Email officiel de déclaration sinistres + téléphone agent Thiès
+- **Délai contractuel** : Code CIMA = 5 jours ouvrables standard. Certaines polices imposent 24h — lire la police. L'email J+0 sert dans tous les cas de preuve horodatée.
+- Liste exacte des pièces requises
+- **Grille officielle d'indemnisation** par race/classe d'âge (`poids × prix_foirail` sera rejeté)
 
-### Chantier 3 — Clause contractuelle critique : NE PAS ABATTRE NI ENTERRER
+> **Déjà dans l'app** : `CYCLE.numCnaas` (clé `numCnaas` dans `Config_App` — modal init step 2 + Go/No-Go, commit `9766040`). Ne pas recréer.
 
-> ⛔ **CLAUSE BLOQUANTE** : la CNAAS exige que l'animal décédé ne soit pas abattu ni enterré avant le passage de leur expert. Toute violation de cette clause peut invalider le remboursement.
+### 0.3 Clause critique : NE PAS ABATTRE NI ENTERRER
+La CNAAS exige que l'animal décédé reste intact jusqu'au passage de leur expert.
+- ⚠️ Chaleur Thiès 35–40°C : après **48h**, risque sanitaire. Si expert CNAAS absent > 48h → contacter CNAAS pour autorisation d'inhumation.
+- L'app affiche une bannière rouge persistante dès qu'un décès est saisi.
 
-> ⚠️ **Règle sanitaire 48h** : par 35–40°C à Thiès, un animal décédé devient un risque sanitaire après 48h.
-> Si le vétérinaire/expert CNAAS n'est pas venu à J+2, le fondateur doit appeler la CNAAS pour obtenir
-> une **autorisation d'inhumation** sans perdre le droit à indemnisation. Ce point doit figurer
-> dans l'email J+0 et dans la bannière app. La bannière gérant doit afficher le compteur :
-> *−4h avant risque sanitaire — Vétérinaire non passé*.
+### 0.4 Coordination vétérinaire / expert CNAAS
+> ⚠️ **Dépendance critique** : le certificat vétérinaire doit être disponible LORS du passage de l'expert CNAAS. Le vétérinaire terrain Thiès arrive en J+5-7 réel. L'expert CNAAS peut venir plus tôt.
+>
+> **Mitigation** : l'email CNAAS J+0 demande explicitement de coordonner la date expert avec la venue du vétérinaire. L'appel vocal fondateur J+0 aligne les deux rendez-vous. L'app affiche une alerte croisée si les dates prévues sont incohérentes.
 
-Ce que ça implique dans l'app :
-- Bannière rouge persistante affichée dès que décès = OUI, **avant** le bouton Enregistrer
-- La bannière reste visible sur le dashboard (gérant + fondateur) tant que le dossier est ouvert
-- Mention explicite dans l'email déclaration CNAAS J+0 : _"L'animal n'a pas été abattu ni enterré — en attente de votre expert"_
-- Checkbox fondateur : "Expert CNAAS passé — animal peut être retiré"
+### 0.5 Infrastructure technique
+- [ ] Compte SendGrid + Single Sender Verification (adresse fondateur acceptée — domaine propre non requis)
+- [ ] `SENDGRID_API_KEY` dans les variables d'environnement Vercel
+- [ ] `CRON_SECRET` dans les Secrets Vercel + GitHub
+- [ ] `SID_FONDATEUR` dans les Variables Vercel (valeur de `SID.fondateur` dans l'app)
+- [ ] Onglets `Notifications_Log` et `Sinistres_CNAAS` → **auto-créés au 1er run cron** (section 4.1)
 
 ---
 
-## 1. Pièces requises par la CNAAS pour un décès
+## 1. Schémas de données Google Sheets
 
-> Source : pratique standard CNAAS Sénégal. À confirmer lors de la souscription (chantier 2).
+### 1.1 `Notifications_Log` (Sheet fondateur — auto-créé)
 
-| Pièce | Qui la produit | Quand | Pris en compte dans BOAN |
+| Col | Nom | Valeurs |
+|---|---|---|
+| A | Date_Envoi | YYYY-MM-DD HH:MM |
+| B | Type | `SOP_VET_J-3` `SOP_VET_J-2` `SOP_VET_J-1` `VET_DECES_J0` `VET_DECES_RAPPEL_J1` `CNAAS_DECES_J0` `CNAAS_VOL_J0` `CNAAS_RELANCE_J7` `CNAAS_RELANCE_J14` `VET_ERROR` `VET_SKIPPED` |
+| C | Reference_ID | Clé idempotence ex: `SOP_VET_J-1_pesee-j30_2026-04-21` |
+| D | Destinataire | email |
+| E | Canal | `EMAIL` |
+| F | Statut | `PENDING` `SENT` `ERROR` `ERROR_TIMEOUT` `CONFIRME` `SKIPPED` `INCOMPLET_POLICE` |
+| G | Tentative_N | entier |
+| H | Date_Confirmation | YYYY-MM-DD — bouton "Vét a confirmé" ou "CNAAS a confirmé" |
+| I | Notes | texte libre — erreurs, infos |
+
+### 1.2 `Sinistres_CNAAS` (Sheet fondateur — auto-créé)
+
+| Col | Index | Nom | Valeurs / Notes |
 |---|---|---|---|
-| Déclaration dans les 24h | App BOAN (email auto J+0) | J+0 | ✅ Email + WhatsApp auto |
-| Certificat de constatation du décès | Vétérinaire attitré | J+1 à J+5-7 ⚠️ délai réel terrain Thiès | ✅ Email vét urgent J+0 + rappel vét J+1 si pas de confirmation → ⬛ Checkbox fondateur réception |
-| Fiche d'identification de l'animal (race, âge indicatif, poids, N°) | App BOAN | J+0 dans email | ✅ Généré depuis `CYCLE.betes[].id/race/poidsEntree/dateIntro` |
-| Historique des soins et vaccins | App BOAN | J+0 dans email | ✅ Généré depuis `Sante_Mortalite` + `SOP_Check` |
-| Numéro de police d'assurance | Fondateur (config) | J+0 dans email | ✅ `CYCLE.numCnaas` (clé `numCnaas` dans Config_App — déjà implémenté commit `9766040`) |
-| Photos de l'animal décédé | Gérant (manuel) | J+0 | ⚠️ Rappel dans l'app — pas de stockage (Option B) |
-| Animal non abattu ni enterré | Gérant (engagement) | Continu | ✅ Bannière rouge + mention email |
-
-> ⚠️ **Dépendance critique — coordination vét/expert CNAAS :**
-> Le certificat vétérinaire doit être obtenu AVANT ou EN MÊME TEMPS que le passage de l'expert CNAAS.
-> L'email vét J+0 (urgent) ne garantit pas sa venue avant l'expert CNAAS — délai terrain Thiès = 5-7 jours.
-> Si l'expert CNAAS arrive sans certificat vét → risque de rejet du dossier ou blocage en attente.
-> **Mitigation :** l'appel vocal fondateur J+0 (étape 5 section 2.1) doit explicitement coordonner
-> les deux rendez-vous. L'email CNAAS J+0 demande à la CNAAS de caler la date expert APRÈS le vét.
-> L'app ajoute une alerte croisée dans Livrables > Incidents si date expert < date visite vét prévue.
+| A | 0 | Date | DD/MM/YYYY — date du sinistre |
+| B | 1 | Type | `DECES` `VOL` |
+| C | 2 | ID_Animal_s | `C1-001` ou `C1-001,C1-002` (multi pour VOL) |
+| D | 3 | N_PV_Gendarmerie | VOL uniquement — obligatoire |
+| E | 4 | Statut_CNAAS | `EN_COURS` `DOSSIER_RECU` `EXPERT_ASSIGNE` `EXPERTISE_PASSEE` `CONFIRME` `REJETE` `CLOTURE` `ANNULE` |
+| F | 5 | Date_Email_J0 | YYYY-MM-DD |
+| G | 6 | Appel_Fondateur_J0 | date/heure appel vocal fondateur — **saisi manuellement** |
+| H | 7 | Certif_Vet_Recu | `OUI` / vide |
+| I | 8 | Expert_Passe | `OUI` / vide |
+| J | 9 | Relances_Stop | `OUI` / vide |
+| K | 10 | email_pending | `OUI` / `NON` — flag décès offline, lu par le cron |
+| L | 11 | Date_Visite_Vet_Prevue | YYYY-MM-DD — saisi par fondateur après appel J+0 |
+| M | 12 | Date_Visite_Expert_CNAAS_Prevue | YYYY-MM-DD — saisi par fondateur après appel CNAAS J+0 |
 
 ---
 
-## 2. Processus complet
+## 2. Processus métier bout en bout
 
-### 2.1 CAS DÉCÈS — Bout en bout
+### 2.1 CAS DÉCÈS
 
 ```
 J+0 — Gérant constate le décès
 
-  ⚠️  AVANT DE SAISIR : photographier l'animal maintenant
-      [Bannière rouge dans l'app dès que décès = OUI]
-      ⛔ NE PAS ABATTRE NI ENTERRER L'ANIMAL — Attendre l'expert CNAAS
+  ⚠️ AVANT DE SAISIR : photographier l'animal maintenant
+     ⛔ NE PAS ABATTRE NI ENTERRER — attendre expert CNAAS
 
-  1. Gérant saisit dans BOAN (Saisie > Santé) :
-     - ID animal, race, poids, symptoms, traitements, décès = OUI
-  2. [App] Email CNAAS envoyé automatiquement (À: CNAAS, CC: Fondateur, RGA)
-     → Contient : fiche animal, historique soins/vaccins, valeur estimée,
-       engagement "animal non abattu ni enterré"
-     → Phrase clé : "Constatation vétérinaire en cours de planification.
-       Nous vous demandons de coordonner la date de passage de votre expert
-       avec la disponibilité du vétérinaire référent afin que le certificat
-       de constatation puisse vous être remis lors de votre venue."
-  3. [App] Email Vétérinaire envoyé automatiquement (CC: Fondateur, RGA)
-     → "URGENT — Décès constaté ce jour. Certificat de constatation requis
-       avant passage expert CNAAS (attendu sous 5-7 jours).
-       Merci de confirmer votre disponibilité dans les 48h."
-  3b. [Cron J+1] Si aucune confirmation vét (Date_Confirmation vide dans Notifications_Log)
-      → Email + WhatsApp de relance vét : "⚠️ Rappel urgent — confirmation de venue requise"
-  4. [App] Affiche modal : "✅ Emails envoyés. ⚠️ APPEL VOCAL FONDATEUR REQUIS maintenant —
-     la CNAAS n'actionne pas sur email seul."
-  5. [Fondateur en France] Appelle CNAAS Thiès vocalement — objectif double :
-     a) Déclarer le sinistre oralement
-     b) Demander à la CNAAS de caler la date expert APRÈS confirmation venue du vétérinaire
-     → Colonne Sinistres_CNAAS : Appel_Fondateur_J0 = date/heure
-  6. [App] Affiche boutons par priorité :
-     1️⃣ 📞 Appeler CNAAS (bouton primaire)   — fondateur France + gérant terrain
-     2️⃣ 📞 Appeler Vétérinaire (secondaire)
-     3️⃣ 💬 WhatsApp Vétérinaire (secondaire)
-  7. [Gérant] Envoie photos par WhatsApp au vétérinaire et/ou CNAAS agence
+  1. Gérant saisit dans BOAN (Saisie > Santé, décès = OUI)
+     → App affiche bannière rouge ⛔ + alerte photo dès décès = OUI
 
-J+1 à J+5-7 — Vétérinaire constate ⚠️ délai réel terrain Thiès = 5-7 jours
+  [Si ONLINE au submit]
+  2a. App écrit Sante_Mortalite via writeAll([gerant, fondateur, rga])
+  2b. App crée ligne Sinistres_CNAAS (email_pending=OUI) dans sheet fondateur
+  2c. Cron 07h02 du lendemain envoie emails VET + CNAAS
 
-  6. Vétérinaire vient constater → signe le certificat de décès
-  7. Fondateur scanne/photo le certificat
-     → Joint manuellement à un email de suivi CNAAS (objet: "Suite dossier [ID]")
-  8. Fondateur coche dans app :
-     ☑ "Certificat vétérinaire reçu"
-     ☑ "Certificat transmis à CNAAS le [date]"
+  [Si OFFLINE au submit]
+  2a. App écrit dans OFFLINE_QUEUE (flushQueue au retour connexion)
+  2b. App stocke lsSet('deces_pending', {id,date,sym,tra,cout,ts})
+  2c. Au retour connexion : flushQueue() + createSinistrePending()
+      → ligne Sinistres_CNAAS email_pending=OUI dans sheet fondateur
+  2d. Cron suivant 07h02 envoie les emails
 
-Relances automatiques (cron matinal, si Statut_CNAAS = EN_COURS)
-  J+7  → Email relance courtois CNAAS (CC: Fondateur, RGA)
-  J+14 → Email relance + notification fondateur "Appel vocal requis"
-  ❌ La mention "saisine Direction Régionale" est supprimée — contre-productive
-     en administration sénégalaise, brûle les ponts. Rester courtois.
+  3. App affiche post-submit :
+     Modal : "✅ Dossier créé. ⚠️ APPEL VOCAL FONDATEUR OBLIGATOIRE"
+     Boutons (par priorité) :
+       1️⃣ 📞 Appeler CNAAS — tel:[contact_cnaas_tel]
+       2️⃣ 📞 Appeler Vétérinaire — tel:[contact_vet_tel]
+       3️⃣ 💬 WhatsApp Vétérinaire — wa.me msg 6.1
+       ⚠️ Annuler (erreur de saisie) — visible 30 min seulement
 
-Expert CNAAS
-  9. Expert CNAAS vient constater
-  10. Fondateur coche : ☑ "Expert CNAAS passé — animal peut être retiré"
-  11. Fondateur clique "CNAAS a confirmé réception" → dossier clôturé dans app
+J+0 — Fondateur reçoit notification
+  4. Fondateur appelle CNAAS Thiès vocalement
+     → Demande coordination date expert APRÈS venue vétérinaire
+     → Note heure appel dans app (Sinistres_CNAAS col G)
+  5. Fondateur appelle vétérinaire pour confirmer date de venue
+
+J+1 — Cron 07h02 : checkAndSendDecesAlerts()
+  6. Envoie email VET (section 5.2) + email CNAAS (section 5.3) si email_pending=OUI
+  7. Si Date_Confirmation vide dans Notifications_Log : envoie rappel vét (section 5.2b)
+  8. Si col M < col L dans Sinistres_CNAAS : notifie fondateur "⚠️ Expert avant vét"
+
+Dashboard gérant (J+1 et au-delà)
+  9. Si sinistres_ouverts[expertPasse=false] ET > 24h depuis le décès :
+     → Bannière rouge + bouton WhatsApp vét (msg 6.8) — un tap, message pré-rempli
+
+J+1 à J+5-7 — Vétérinaire constate
+  10. Vétérinaire signe le certificat de constatation
+  11. Fondateur scanne → joint par email de suivi "Suite dossier [ID]"
+  12. Fondateur coche : ☑ Certif reçu + ☑ Certif transmis CNAAS le [date]
+
+Expert CNAAS (J+5 à J+10)
+  13. Expert CNAAS vient constater
+  14. Fondateur coche : ☑ Expert passé → bannière NE PAS ENTERRER libérée
+      → lsSet('sinistres_ouverts') expertPasse=true
+
+Relances automatiques (cron 07h04, si Statut_CNAAS = EN_COURS)
+  J+7  → Email relance courtois (section 5.5)
+  J+14 → Email relance + notification fondateur "Appel vocal recommandé"
 
 Clôture
-  12. Indemnisation
+  15. Fondateur clique "CNAAS a confirmé" → Statut_CNAAS = CLOTURE
 ```
 
-### 2.2 CAS VOL — Bout en bout
+### 2.2 CAS VOL
 
 ```
 J+0 — Gérant constate le vol
 
   1. Gérant va IMMÉDIATEMENT à la gendarmerie de Thiès
-     → Récupère le récépissé/PV avec numéro (SANS ce numéro : pas de remboursement)
-  2. Gérant saisit dans BOAN (Saisie > Incident > type = VOL) :
-     - Animaux concernés (sélection multiple depuis liste bêtes)
-     - N° PV gendarmerie — champ OBLIGATOIRE BLOQUANT
-     - Date et heure du vol, circonstances
-  3. [App] Email CNAAS envoyé automatiquement (CC: Fondateur, RGA)
-  4. [App] Affiche boutons : 💬 WhatsApp CNAAS  📞 Appeler CNAAS
+     → Récupère récépissé PV (SANS ce numéro : pas de remboursement)
 
-Relances automatiques
-  J+7  → Email relance courtois CNAAS
-  J+14 → Email relance + notification fondateur "Appel vocal requis"
+  2. Gérant saisit dans BOAN (Saisie > Incident > type = VOL) :
+     - Animaux concernés — beteMultiSelect() (sélection multiple)
+     - N° PV gendarmerie — champ OBLIGATOIRE BLOQUANT
+     - Date/heure vol, circonstances
+
+  3. App envoie email CNAAS auto (section 5.4) + affiche :
+     1️⃣ 📞 Appeler CNAAS    2️⃣ 💬 WhatsApp CNAAS (msg 6.5)
+
+Relances automatiques (cron 07h04)
+  J+7 + J+14 → Email relance courtois
 
 Clôture
-  5. Fondateur clique "CNAAS a confirmé réception" → dossier clôturé
+  4. Fondateur clique "CNAAS a confirmé réception"
+```
+
+### 2.3 SOP VÉTÉRINAIRE — rappels planifiés
+
+```
+Cron 07h00 quotidien — checkAndSendVetReminders()
+
+  Pour chaque acte SOP :
+    Si dateActe = today + 3j → email J-3 (section 5.1) + log
+    Si dateActe = today + 2j → email J-2 (section 5.1) + log
+    Si dateActe = today + 1j → email J-1 (section 5.1) + log
+    → Skip si : acte validé OU vet_confirmed OU jour férié
+
+Dashboard gérant (jour J-1)
+  Bannière orange : "🔔 Vétérinaire demain — [acte.label]"
+  Bouton WhatsApp (msg 6.7) — un tap, message pré-rempli
+  → Flag lsSet('boanr_wa_vet_j1_[acteKey]_[YYYY-MM-DD]') après tap
 ```
 
 ---
 
-## 3. Interface utilisateur requise
+## 3. Interface utilisateur — modifications index.html
 
-### 3.1 Saisie Santé/Mortalité (décès = OUI) — Gérant
+### 3.1 Saisie > Santé (décès = OUI) — Gérant
 
-| Élément UI | Détail | Déclencheur |
+| Élément | Détail | Déclencheur |
 |---|---|---|
-| Bannière rouge `⛔ NE PAS ABATTRE NI ENTERRER` | Persistante — disparaît seulement quand expert CNAAS coché | Dès que décès = OUI |
-| Alerte photo `📸 Photographiez l'animal MAINTENANT` | Affichée juste au-dessus du bouton Enregistrer | Dès que décès = OUI |
-| `📧 Email CNAAS + Vétérinaire envoyés automatiquement` | Badge vert/spinner après submit | Post-submit |
-| Modal "Appel fondateur requis" | Texte : "✅ Emails envoyés. Prévenez le fondateur — il doit appeler la CNAAS vocalement." | Post-submit immédiat |
-| `1️⃣ 📞 Appeler CNAAS` | Bouton **primaire** — `tel:[contact_cnaas_tel]` | Post-submit |
-| `2️⃣ 📞 Appeler Vétérinaire` | Bouton secondaire — `tel:[contact_vet_tel]` | Post-submit |
-| `3️⃣ 💬 WhatsApp Vétérinaire` | Bouton tertiaire — `wa.me/[contact_vet_tel]?text=...` | Post-submit |
-| `⚠️ Annuler — erreur de saisie` | Bouton visible 30 min — envoi email correctif CNAAS | Post-submit, timeout 30 min |
+| Bannière rouge ⛔ NE PAS ABATTRE NI ENTERRER | Persistante dans la vue | `S.fsa.dec === 'OUI'` |
+| Alerte photo 📸 Photographiez MAINTENANT | Au-dessus du bouton Enregistrer | `S.fsa.dec === 'OUI'` |
+| Alerte prix foirail obsolète | "⚠️ Prix non mis à jour depuis N jours" | `_lastPrixLoad` > 30j |
+| Alerte N° police absent | Soft warning — n'empêche pas le submit | `!CYCLE.numCnaas` |
+| Modal post-submit | "✅ Dossier créé. ⚠️ APPEL VOCAL FONDATEUR OBLIGATOIRE" | Post-submit |
+| 1️⃣ 📞 Appeler CNAAS | `tel:[contact_cnaas_tel]` | Post-submit |
+| 2️⃣ 📞 Appeler Vétérinaire | `tel:[contact_vet_tel]` | Post-submit |
+| 3️⃣ 💬 WhatsApp Vétérinaire | `wa.me/[contact_vet_tel]?text=...` msg 6.1 | Post-submit |
+| ⚠️ Annuler — erreur de saisie | Visible 30 min — email correctif CNAAS | `Date.now() - lsGet('last_deces_ts') < 30*60*1000` |
 
-### 3.2 Livrables > Incidents (dossier sinistre actif) — Fondateur
-
-| Élément UI | Détail |
-|---|---|
-| Bannière `⛔ NE PAS ENTERRER — Expert CNAAS n'est pas encore passé` | Visible jusqu'au coche "Expert passé" — délai réel 5-7 jours |
-| Modal post-submit "Appel fondateur requis" | S'affiche après submit décès : "✅ Email parti — ⚠️ Appeler CNAAS vocalement maintenant (la CNAAS n'actionne pas sur email seul)" |
-| Bouton `⚠️ Annuler — erreur de saisie` | Visible 30 min après submit — déclenche email correctif CNAAS "fausse alerte" + marque ligne ANNULÉ |
-| Timeline dossier (J+0 email / Appel fondateur / J+7 relance / J+14 relance) | Dates réelles depuis `Sinistres_CNAAS` — délais mis à jour |
-| Statut CNAAS | Select fondateur : `En attente` / `Dossier reçu` / `Expert assigné` / `Expertise passée` / `Rejeté` — stoppe les relances auto dès ≠ `En attente` |
-| Champ `Date visite vétérinaire prévue` | Date estimée saisie par fondateur après appel J+0 — stockée en `Sinistres_CNAAS` col `Date_Visite_Vet_Prevue` |
-| Champ `Date visite expert CNAAS prévue` | Date estimée après appel J+0 — stockée en `Sinistres_CNAAS` col `Date_Visite_Expert_CNAAS_Prevue` |
-| ⚠️ Alerte croisée dates | Si `Date_Visite_Expert_CNAAS_Prevue < Date_Visite_Vet_Prevue` → bannière rouge : "L'expert CNAAS arrive avant le certificat vétérinaire → Risque de rejet. Appeler CNAAS pour reporter." |
-| Checkbox `☑ Certificat vétérinaire reçu` | Étape clé avant indemnisation |
-| Champ `Certificat transmis à CNAAS le [date]` | Texte libre + date |
-| Checkbox `☑ Expert CNAAS passé — animal peut être retiré` | Libère la bannière NE PAS ENTERRER |
-| Bouton `✅ CNAAS a confirmé réception` | Clôture le dossier — fondateur uniquement |
-| Bouton `⏸ Arrêter les relances` | Si confirmation CNAAS par téléphone (sans email) |
-
-### 3.3 Saisie Incident VOL — Gérant
-
-| Élément UI | Détail |
-|---|---|
-| Champ N° PV gendarmerie — **BLOQUANT si vide** | `required` — submit impossible sans |
-| Champ date/heure dépôt de plainte | Preuve du délai |
-| Sélection multiple animaux volés | Depuis `LIVE.beteIds` filtré décès |
-| `💬 WhatsApp CNAAS` + `📞 Appeler CNAAS` | Post-submit, même logique décès |
-
-### 3.4 Dashboard — Tous rôles
-
-| Élément UI | Condition d'affichage |
-|---|---|
-| Bannière rouge `⛔ Dossier sinistre ouvert — NE PAS ENTERRER` | Tant que dossier décès non clôturé |
-| Badge numérique sur onglet Livrables | Dossiers en attente de confirmation fondateur |
-
-### 3.6 Dashboard gérant — Bannières WhatsApp proactives à l'ouverture de l'app
-
-> **Principe** : à chaque chargement du dashboard gérant (`S.user === 'gerant'`), l'app
-> vérifie si des actions WhatsApp sont en attente et affiche des bannières avec un bouton
-> "1 tap → ouvre WhatsApp message pré-rempli". Pas de modal bloquant — la bannière est
-> intégrée en haut du dashboard, sous la bannière sinistre si applicable.
->
-> **Contrainte navigateur** : `window.open()` via WhatsApp est bloqué sur événement non-interactif
-> (chargement page). Le lien doit impérativement être **déclenché par un tap utilisateur** —
-> afficher le bouton, ne jamais appeler `window.open` dans `loadLiveData` ou `r()`.
->
-> **Anti-harcèlement** : chaque bannière est dismissée par un flag `localStorage` par acte + date.
-> Elle réapparaît le lendemain si l'action n'a pas été effectuée.
-
----
-
-#### Contexte A — Rappel vétérinaire J-1 SOP (acte planifié demain)
-
-**Quand s'affiche :** `S.user === 'gerant'` ET un acte SOP a `dateActe = today + 1j` ET
-le flag `lsGet('wa_vet_j1_[acteKey]_[dateISO]')` est absent/false.
-
-**`acteKey`** = `acte.label.toLowerCase().replace(/\s+/g,'-')` — identifiant stable de l'acte.
-
-```
-┌─────────────────────────────────────────────────────────┐
-│ 🔔 Vétérinaire demain — Préparer la zone                │
-│ Acte : [label_acte] — prévu demain [dateActe DD/MM]     │
-│                                                         │
-│  [💬 Envoyer rappel WhatsApp au vétérinaire]            │
-│  [✓ J'ai déjà prévenu — masquer]                        │
-└─────────────────────────────────────────────────────────┘
-```
-
-**Comportement du bouton WhatsApp :**
+**Logique submit décès — ajouts dans doSubmit('sante') :**
 ```js
-// Dans viewDash(), section gérant — après loadLiveData Vague 2
+// Si S.fsa.dec === 'OUI' :
+lsSet('last_deces_ts', Date.now());
+var _so = lsGet('sinistres_ouverts') || [];
+_so.push({ id: S.fsa.id, date: td, expertPasse: false, ts: Date.now() });
+lsSet('sinistres_ouverts', _so);
+if (!ONLINE) {
+  lsSet('deces_pending', { id: S.fsa.id, date: td,
+    sym: safeTextClient(S.fsa.sym), tra: safeTextClient(S.fsa.tra),
+    cout: S.fsa.cout, ts: Date.now() });
+}
+// window.addEventListener('online', ...) → si lsGet('deces_pending') : createSinistrePending()
+
+function safeTextClient(s) {
+  return String(s || '').replace(/[\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+```
+
+### 3.2 Saisie > Incident (type VOL) — Gérant
+
+| Élément | Détail |
+|---|---|
+| Champ N° PV gendarmerie | `required` — submit bloqué si vide |
+| Champ date/heure dépôt plainte | Preuve délai |
+| Sélection bêtes concernées | `beteMultiSelect()` — helper section 3.8 |
+| Post-submit | 1️⃣ 📞 Appeler CNAAS + 2️⃣ 💬 WhatsApp CNAAS (msg 6.5) |
+
+**Initialisation** : ajouter `S.fin.beteIds = []` dans le reset de `S.fin` (~L1899).
+
+### 3.3 Dashboard gérant — Bannières WhatsApp proactives
+
+> **Règle navigateur** : `window.open()` WhatsApp est bloqué sur événement non-interactif.
+> Le bouton doit être tapé par l'utilisateur — ne jamais appeler `window.open()` dans `r()`.
+
+**Contexte A — Rappel vét J-1 SOP (bannière orange)**
+Condition : `S.user === 'gerant'` ET acte SOP avec `dateActe = today + 1j` ET flag absent.
+
+```js
 function _checkVetJ1Banners() {
   if (S.user !== 'gerant') return '';
   var today = new Date();
-  var todayISO = today.toISOString().slice(0, 10);
   var demain = new Date(today.getTime() + 86400000);
   var demainISO = demain.toISOString().slice(0, 10);
-  var html = '';
   var dateDebut = CYCLE.dateDebut || '';
   if (!dateDebut) return '';
-  var sopProt = CYCLE.sopProtocol || [];
-  sopProt.forEach(function(acte) {
-    var dateActeMs = new Date(dateDebut + 'T00:00:00Z').getTime() + acte.j * 86400000;
-    var dateActeISO = new Date(dateActeMs).toISOString().slice(0, 10);
-    if (dateActeISO !== demainISO) return; // pas demain
+  var html = '';
+  (CYCLE.sopProtocol || []).forEach(function(acte) {
+    var dateActeISO = new Date(
+      new Date(dateDebut + 'T00:00:00Z').getTime() + acte.j * 86400000
+    ).toISOString().slice(0, 10);
+    if (dateActeISO !== demainISO) return;
     var acteKey = String(acte.label || '').toLowerCase().replace(/\s+/g, '-');
-    var flagKey = 'wa_vet_j1_' + acteKey + '_' + demainISO;
-    if (lsGet(flagKey)) return; // gérant a déjà tapé aujourd'hui
-    var vetTel = (CYCLE.contact_vet_tel || '').replace(/\D/g, '');
+    var flagKey = 'boanr_wa_vet_j1_' + acteKey + '_' + demainISO;
+    if (lsGet(flagKey)) return;
+    var vetTel = (lsGet('cfg_contact_vet_tel') || '').replace(/\D/g, '');
     var msg = encodeURIComponent(
-      '🔔 *BOAN — Rappel acte SOP demain*\n\n'
-      + 'Bonjour ' + (CYCLE.veterinaire || 'Docteur') + ',\n\n'
-      + 'Rappel : acte SOP prévu DEMAIN à la Ferme BOAN.\n\n'
-      + 'Acte : ' + acte.label + '\n'
-      + 'Date : ' + demain.toLocaleDateString('fr-FR') + '\n'
-      + 'Troupeau : ' + ((CYCLE.betes || []).length) + ' bêtes actives\n\n'
-      + 'Ferme BOAN — ' + (CYCLE.contact_gerant_tel || CYCLE.ferme_responsable_tel || '')
+      '\uD83D\uDD14 *BOAN \u2014 Rappel acte SOP demain*\n\nBonjour '
+      + (CYCLE.veterinaire || 'Docteur') + ',\n\nActe : ' + acte.label
+      + '\nDate : ' + demain.toLocaleDateString('fr-FR')
+      + '\nTroupeau : ' + (CYCLE.betes || []).length + ' b\xEAtes actives\n\n'
+      + 'Ferme BOAN \u2014 ' + (lsGet('cfg_contact_gerant_tel') || '')
     );
-    var waUrl = vetTel ? ('https://wa.me/' + vetTel + '?text=' + msg)
-                       : ('https://wa.me/?text=' + msg);
+    var waUrl = vetTel ? 'https://wa.me/' + vetTel + '?text=' + msg : 'https://wa.me/?text=' + msg;
     html += '<div class="msg-load" style="border-left-color:#f0a500">'
-      + '<strong>🔔 Vétérinaire demain</strong> — ' + acte.label
-      + ' prévu le ' + demain.toLocaleDateString('fr-FR') + '<br>'
+      + '<strong>\uD83D\uDD14 V\xE9t\xE9rinaire demain</strong> \u2014 ' + acte.label
+      + ' le ' + demain.toLocaleDateString('fr-FR')
       + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'
       + '<a href="' + waUrl + '" target="_blank" rel="noopener"'
       + ' onclick="lsSet(\'' + flagKey + '\',true);r();"'
       + ' style="background:#25d366;color:#fff;padding:7px 14px;border-radius:6px;'
-      + 'text-decoration:none;font-size:13px">💬 Rappel WhatsApp vétérinaire</a>'
+      + 'text-decoration:none;font-size:13px">\uD83D\uDCAC Rappel WhatsApp</a>'
       + '<button onclick="lsSet(\'' + flagKey + '\',true);r();"'
       + ' style="background:#1a2e1a;color:#aaa;border:1px solid #2a4a2a;'
       + 'padding:7px 14px;border-radius:6px;font-size:13px;cursor:pointer">'
-      + '✓ Déjà prévenu</button>'
+      + '\u2713 D\xE9j\xE0 pr\xE9venu</button>'
       + '</div></div>';
   });
   return html;
 }
 ```
 
----
+**Contexte B — Relance vét post-décès > 24h (bannière rouge)**
 
-#### Contexte B — Vétérinaire non confirmé 24h après un décès
-
-**Quand s'affiche :** `S.user === 'gerant'` ET `lsGet('sinistres_ouverts')` a une entrée
-`expertPasse=false` ET `Date.now() - so.ts > 24 * 3600 * 1000` (24h écoulées depuis le décès)
-ET flag `lsGet('wa_vet_deces_relance_[id]_[dateISO]')` absent.
-
-```
-┌─────────────────────────────────────────────────────────┐
-│ ⚠️ Bête [C1-001] décédée hier — Vétérinaire non encore  │
-│    confirmé. Relancer pour le certificat CNAAS.         │
-│                                                         │
-│  [💬 Relancer le vétérinaire sur WhatsApp]              │
-│  [✓ Vétérinaire a confirmé — masquer]                   │
-└─────────────────────────────────────────────────────────┘
-```
-
-**Comportement du bouton WhatsApp :**
 ```js
 function _checkDecesVetBanners() {
   if (S.user !== 'gerant') return '';
-  var souverts = (lsGet('sinistres_ouverts') || []).filter(function(s) {
-    return !s.expertPasse;
-  });
-  var html = '';
   var todayISO = new Date().toISOString().slice(0, 10);
-  souverts.forEach(function(so) {
-    var heuresEcoulees = (Date.now() - (so.ts || 0)) / 3600000;
-    if (heuresEcoulees < 24) return; // trop tôt — laisser J+0 se passer
-    var flagKey = 'wa_vet_deces_relance_' + so.id + '_' + todayISO;
-    if (lsGet(flagKey)) return; // déjà relancé aujourd'hui
-    var vetTel = (CYCLE.contact_vet_tel || '').replace(/\D/g, '');
-    var joursStr = Math.floor(heuresEcoulees / 24) === 1 ? 'hier' : ('il y a ' + Math.floor(heuresEcoulees / 24) + ' jours');
+  var html = '';
+  (lsGet('sinistres_ouverts') || []).forEach(function(so) {
+    if (so.expertPasse) return;
+    var h = (Date.now() - (so.ts || 0)) / 3600000;
+    if (h < 24) return;
+    var flagKey = 'boanr_wa_vet_deces_relance_' + so.id + '_' + todayISO;
+    if (lsGet(flagKey)) return;
+    var vetTel = (lsGet('cfg_contact_vet_tel') || '').replace(/\D/g, '');
+    var joursStr = Math.floor(h / 24) === 1 ? 'hier' : 'il y a ' + Math.floor(h / 24) + ' jours';
     var msg = encodeURIComponent(
-      '⚠️ *BOAN — Relance certificat décès*\n\n'
-      + 'Bonjour ' + (CYCLE.veterinaire || 'Docteur') + ',\n\n'
-      + 'La bête ' + so.id + ' est décédée ' + joursStr + ' à la Ferme BOAN.\n'
-      + 'Le dossier CNAAS attend votre certificat de constatation.\n\n'
-      + '⛔ L\'animal n\'a pas été enterré.\n\n'
-      + 'Pouvez-vous confirmer votre venue ?\n'
-      + 'Ferme BOAN — ' + (CYCLE.contact_gerant_tel || CYCLE.ferme_responsable_tel || '')
+      '\u26A0\uFE0F *BOAN \u2014 Relance certificat d\xE9c\xE8s*\n\nBonjour '
+      + (CYCLE.veterinaire || 'Docteur') + ',\n\nLa b\xEAte ' + so.id
+      + ' est d\xE9c\xE9d\xE9e ' + joursStr + '.\n'
+      + 'Le dossier CNAAS attend votre certificat de constatation.\n'
+      + '\u26D4 L\'animal n\'a pas \xE9t\xE9 enterr\xE9.\n\n'
+      + 'Ferme BOAN \u2014 ' + (lsGet('cfg_contact_gerant_tel') || '')
     );
-    var waUrl = vetTel ? ('https://wa.me/' + vetTel + '?text=' + msg)
-                       : ('https://wa.me/?text=' + msg);
+    var waUrl = vetTel ? 'https://wa.me/' + vetTel + '?text=' + msg : 'https://wa.me/?text=' + msg;
     html += '<div class="msg-err">'
-      + '<strong>⚠️ Décès ' + so.id + '</strong> — Vétérinaire non confirmé'
-      + ' (' + Math.floor(heuresEcoulees / 24) + 'j)<br>'
+      + '<strong>\u26A0\uFE0F D\xE9c\xE8s ' + so.id + '</strong>'
+      + ' \u2014 V\xE9t\xE9rinaire non confirm\xE9 (' + Math.floor(h / 24) + 'j)'
       + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'
       + '<a href="' + waUrl + '" target="_blank" rel="noopener"'
       + ' onclick="lsSet(\'' + flagKey + '\',true);r();"'
       + ' style="background:#25d366;color:#fff;padding:7px 14px;border-radius:6px;'
-      + 'text-decoration:none;font-size:13px">💬 Relancer vétérinaire</a>'
+      + 'text-decoration:none;font-size:13px">\uD83D\uDCAC Relancer v\xE9t\xE9rinaire</a>'
       + '<button onclick="lsSet(\'' + flagKey + '\',true);r();"'
       + ' style="background:#1a2e1a;color:#aaa;border:1px solid #3a2a2a;'
       + 'padding:7px 14px;border-radius:6px;font-size:13px;cursor:pointer">'
-      + '✓ Vétérinaire a confirmé</button>'
+      + '\u2713 V\xE9t\xE9rinaire confirm\xE9</button>'
       + '</div></div>';
   });
   return html;
 }
 ```
 
----
-
-#### Intégration dans `viewDash()` — gérant
-
+**Intégration dans viewDash() :**
 ```js
-// Dans la fonction viewDash(), section role=gerant, en haut du HTML généré :
-// (après la bannière sinistre existante, avant les KPI cards)
-var waAlerts = _checkVetJ1Banners() + _checkDecesVetBanners();
-if (waAlerts) {
-  html += '<div style="margin-bottom:12px">' + waAlerts + '</div>';
+// En haut du contenu viewDash(), avant les KPI cards :
+if (S.user === 'gerant') {
+  var _waBanners = _checkVetJ1Banners() + _checkDecesVetBanners();
+  if (_waBanners) html += '<div style="margin-bottom:12px">' + _waBanners + '</div>';
 }
 ```
 
-#### Flags localStorage utilisés
+**Flags localStorage — TTL naturel (date dans la clé) :**
 
-| Clé | Valeur | TTL naturel |
-|---|---|---|
-| `boanr_wa_vet_j1_[acteKey]_[YYYY-MM-DD]` | `true` | Expire le lendemain (date dans la clé) |
-| `boanr_wa_vet_deces_relance_[id]_[YYYY-MM-DD]` | `true` | Expire le lendemain |
+| Clé localStorage | Expire naturellement |
+|---|---|
+| `boanr_wa_vet_j1_[acteKey]_[YYYY-MM-DD]` | Le lendemain (date dans la clé change) |
+| `boanr_wa_vet_deces_relance_[id]_[YYYY-MM-DD]` | Le lendemain |
 
-> Les flags expirent naturellement : la clé contient la date du jour. Le lendemain, la clé
-> ne correspond plus à `todayISO` → la bannière réapparaît si l'action est toujours requise.
-> Pas besoin de TTL ou de nettoyage — les vieilles clés sont simplement ignorées.
+### 3.4 Dashboard — Tous rôles
 
-#### Checklist BLOC B index.html (à ajouter)
+- Bannière rouge ⛔ : si `(lsGet('sinistres_ouverts')||[]).some(function(s){return !s.expertPasse;})`
+- Badge numérique onglet Livrables (fondateur/rga) : `(LIVE.sinistres||[]).filter(function(r){return r[4]==='EN_COURS';}).length > 0`
 
-```
-□ Fonctions _checkVetJ1Banners() et _checkDecesVetBanners() ajoutées dans index.html
-□ Appel dans viewDash() section gérant — avant les KPI cards
-□ CYCLE.contact_vet_tel et CYCLE.contact_gerant_tel lus depuis Config_App (_syncConfigApp)
-□ Préfixe boanr_ respecté sur les clés lsSet (helpers lsGet/lsSet de l'app)
-□ Tester : acte SOP J-1 → bannière orange → tap WhatsApp → flagKey présent → disparaît
-□ Tester : décès > 24h, vetConfirme absent → bannière rouge → tap → disparaît
-□ Tester : si aucune action requise → aucune bannière (dashboard propre)
-```
+### 3.5 Livrables > "Contacts & Assurance" — Fondateur uniquement
 
-### 3.5 Config "Contacts & Assurance" — Fondateur uniquement (nouveau sous-onglet dans Livrables)
+Nouveau sous-onglet dans `viewLiv()`. Champs persistés dans `Config_App` via `_syncConfigApp()`.
 
-Champs persistés dans `Config_App` (clé-valeur — même pattern que `gmqCible`, via `_syncConfigApp()`) :
-
-> **Champs déjà dans l'app (ne pas recréer) :**
-> - `CYCLE.numCnaas` (clé `numCnaas`) — déjà dans Config_App + modal init + Go/No-Go
-> - `CYCLE.veterinaire` (clé `veterinaire` dans Config_Cycle, pas Config_App) — champ texte nom du vétérinaire référent
->
-> **À créer en tant que nouvelles clés dans Config_App :**
+> **Cache localStorage** : `_syncConfigApp()` doit écrire chaque valeur sous `lsSet('cfg_[key]', val)`
+> pour accès client sans lecture Sheets (bannières WA, templates).
 
 ```
-contact_vet_email         : Adresse email du vétérinaire
-contact_vet_tel           : +221XXXXXXXXX — WhatsApp + appel direct
-                           (⚠️ liens wa.me/ déclenchés manuellement — zéro risque ban WhatsApp)
+— Déjà dans l'app (ne pas recréer) :
+  CYCLE.numCnaas     → clé 'numCnaas' dans Config_App
+  CYCLE.veterinaire  → clé 'veterinaire' dans Config_Cycle
 
-contact_cnaas_email       : Email officiel déclaration sinistres CNAAS
-contact_cnaas_tel         : Téléphone CNAAS (appel direct — canal principal)
-contact_cnaas_whatsapp    : N° WhatsApp CNAAS — si disponible (souvent absent)
-
-ferme_email_expediteur    : Adresse "De:" emails (verified sender SendGrid)
-                           Si pas de domaine propre → utiliser ferme_email_fondateur directement
-                           (Single Sender Verification SendGrid accepté sur adresse personnelle)
-ferme_responsable_nom     : Nom du fondateur/responsable
-ferme_responsable_tel     : Téléphone responsable
-ferme_email_fondateur     : Email fondateur → CC sur tous les emails
-contact_rga_email         : Email RGA → CC sur tous les emails
-
-horaire_vet_dakar         : HH:MM heure d'intervention prévue (ex: 09:00)
-contact_gerant_tel        : +221XXXXXXXXX — pour WhatsApp notification gérant J-1
-jours_fermes              : JSON array de dates ISO (Tabaski, Magal…)
-                            ex: ["2026-06-16","2026-06-17","2026-03-30","2026-04-04","2026-08-15"]
-                            (pré-rempli pour 2026 : Tabaski ~16-17 juin, Aid-el-Fitr ~30 mars,
-                             Indépendance 4 avril, Assomption 15 août, Tamkharit ~27 juillet)
-cnaas_grille              : JSON {zebu_senegalais_18_36m: 1200000, ...} — à obtenir à la souscription
+— Nouvelles clés Config_App à ajouter :
+  contact_vet_email         email vétérinaire
+  contact_vet_tel           +221XXXXXXXXX
+  contact_cnaas_email       email CNAAS déclarations
+  contact_cnaas_tel         téléphone agent CNAAS Thiès
+  contact_cnaas_delai_h     délai contractuel en heures (120 = 5j ouvrables)
+  ferme_email_expediteur    adresse "De:" SendGrid (verified sender)
+  ferme_responsable_nom     nom fondateur
+  ferme_responsable_tel     téléphone fondateur
+  ferme_email_fondateur     email fondateur → CC tous emails
+  contact_rga_email         email RGA → CC tous emails
+  horaire_vet_dakar         HH:MM heure intervention (ex: 09:00)
+  contact_gerant_tel        +221XXXXXXXXX — WA bannières dashboard gérant
+  jours_fermes              JSON ["2026-06-16","2026-06-17","2026-03-30","2026-04-04","2026-08-15"]
+                            (Tabaski ~16-17 juin, Aid ~30 mars, Indép. 4 avril, Assomption 15 août)
+  cnaas_grille              JSON {zebu_senegalais_18_36m: 1200000, ...}
 ```
 
-> **Note nommage** : `CYCLE.numCnaas` reste la source dans l'app. Dans les templates emails, utiliser
-> `CYCLE.numCnaas` et non `contact_cnaas_n_police`. Les deux noms désignent le même champ.
-> `CYCLE.veterinaire` est le nom du vétérinaire — afficher ce champ dans le sous-onglet Contacts & Assurance
-> comme éditable (même valeur que dans Config_Cycle, synchronisé via `_syncCycle()`).
-
----
-
-## 4. Prérequis techniques
-
-### 4.1 Compte SendGrid
-- Créer sur [sendgrid.com](https://sendgrid.com) — plan Free : 100 emails/jour
-- **Single Sender Verification** obligatoire (adresse expéditeur de la ferme)
-  > Si pas de domaine propre (ex: `ferme-boan.sn`) → utiliser directement `ferme_email_fondateur`.
-  > Un Gmail ou Yahoo personnel est accepté comme Single Sender. La Domain Authentication SPF+DKIM
-  > nécessite un accès DNS — facultative mais recommandée pour Orange Sénégal.
-- **Plain text uniquement** — NE PAS envoyer d'emails HTML :
-  > Les FAI africains (Orange Sénégal, Tigo, Expresso) filtrent agressivement les emails HTML.
-  > Pour des emails de déclaration CNAAS (crítiques), plain text = meilleure délivrabilité + zéro risque XSS.
-  > SendGrid : `content_type = 'text/plain'` dans l'appel API.
-- **Objet emails** : NE PAS utiliser les crochets `[BOAN]` — classés spam par certains filtres.
-  > ✅ Correct : `Déclaration sinistre BOAN — Décès [ID_ANIMAL] — Police n°[CYCLE.numCnaas]`
-  > ❌ Incorrect : `[BOAN] Déclaration sinistre — ...`
-- Recommandé : **Domain Authentication** SPF + DKIM (20 min, accès DNS)
-- Email test mensuel dans le cron (cron envoie un "heartbeat" à ferme_email_fondateur)
-- ⚠️ Compte suspendu après 30j d'inactivité → email test mensuel dans le cron
-
-### 4.2 Onglets Google Sheets à créer manuellement
-
-#### `Notifications_Log` (Sheet fondateur)
-En-têtes ligne 1 :
-
-| A | B | C | D | E | F | G | H | I |
-|---|---|---|---|---|---|---|---|---|
-| Date_Envoi | Type | Reference_ID | Destinataire | Canal | Statut | Tentative_N | Date_Confirmation | Notes |
-
-> Sans cet onglet, le premier run cron échoue silencieusement (erreur 400 Sheets).
-
-#### `Sinistres_CNAAS` (Sheet fondateur)
-En-têtes ligne 1 :
-
-| A | B | C | D | E | F | G | H | I | J | K | L | M |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Date | Type | ID_Animal(s) | N°_PV_Gendarmerie | Statut_CNAAS | Date_Email_J0 | Appel_Fondateur_J0 | Certif_Vet_Recu | Expert_Passe | Relances_Stop | email_pending | Date_Visite_Vet_Prevue | Date_Visite_Expert_CNAAS_Prevue |
-
-Valeurs `Statut_CNAAS` : `EN_COURS` / `DOSSIER_RECU` / `EXPERT_ASSIGNE` / `EXPERTISE_PASSEE` / `CONFIRME` / `REJETE` / `CLOTURE`
-
-> ⚠️ `Appel_Fondateur_J0` (col G) : date/heure de l'appel vocal fondateur vers CNAAS — doit être rempli manuellement par le fondateur. Les relances automatiques vérifient cette colonne : si vide à J+2, notification fondateur "Appel requis".
-> 
-> `Date_Visite_Vet_Prevue` (col L) : date estimée venue vétérinaire — saisie par fondateur après appel J+0. Format `YYYY-MM-DD`.
-> 
-> `Date_Visite_Expert_CNAAS_Prevue` (col M) : date estimée passage expert CNAAS — saisie par fondateur après appel CNAAS J+0. Format `YYYY-MM-DD`.
-> Si col M < col L : l'app affiche une alerte croisée rouge dans Livrables > Incidents.
-
-### 4.3 Contacts à collecter auprès du fondateur
-```
-— Références CYCLE existantes (déjà dans l'app, pas à recréer) :
-  CYCLE.veterinaire        : Nom du vétérinaire (clé 'veterinaire' dans Config_Cycle!A1:S1, col I)
-  CYCLE.numCnaas           : N° police CNAAS (clé 'numCnaas' dans Config_App)
-
-— Nouvelles clés à stocker dans Config_App via _syncConfigApp() :
-  contact_vet_email        : Adresse email du vétérinaire
-  contact_vet_tel          : +221XXXXXXXXX — WhatsApp + appel direct
-
-  contact_cnaas_email      : Email officiel déclaration sinistres CNAAS
-  contact_cnaas_tel        : Téléphone CNAAS (appel direct — canal principal)
-  contact_cnaas_whatsapp   : N° WhatsApp CNAAS — si disponible (souvent absent)
-  contact_cnaas_delai_h    : Délai contractuel déclaration en heures (ex: 24)
-
-  ferme_email_expediteur   : Adresse "De:" emails (verified sender SendGrid)
-  ferme_responsable_nom    : Nom du fondateur/responsable
-  ferme_responsable_tel    : Téléphone responsable
-  ferme_email_fondateur    : Email fondateur → CC sur tous les emails
-  contact_rga_email        : Email RGA → CC sur tous les emails
-
-  horaire_vet_dakar        : HH:MM heure d'intervention prévue (ex: 09:00)
-                             → affiché dans bannière gérant J-1 "Vét arrive demain à 09h00"
-  contact_gerant_tel       : +221XXXXXXXXX — pour WhatsApp notification gérant J-1
-  jours_fermes             : JSON array de dates ISO YYYY-MM-DD (Tabaski, Magal, Gamou,
-                             jours fériés nationaux SN) → cron skip avant d'envoyer rappels vet
-                             ex: ["2026-03-30","2026-06-06"]
-```
-
-> **Note technique critique :** `CYCLE.dateDebut` est déjà stocké au format **`YYYY-MM-DD`** dans `Config_Cycle!A1` (col A) dans l'app — voir point #12 ci-dessous (résolu). Pas de migration nécessaire.
-
-> **Règle CC systématique :** tout email envoyé par BOAN met fondateur + RGA en copie. Leur boîte mail constitue une **preuve d'envoi horodatée indépendante** de Notifications_Log — opposable en cas de litige CNAAS.
-
-### 4.4 Variables d'environnement
-```
-Vercel > Settings > Environment Variables :
-  SENDGRID_API_KEY = SG.xxxxxxxxxxxx
-  CRON_SECRET      = [chaîne aléatoire ≥ 32 chars — ex: openssl rand -hex 32]
-
-GitHub > Settings > Secrets > Actions :
-  CRON_SECRET      = [même valeur]
-```
-
-> Contacts et emails (fondateur, RGA) sont dans `Config_App` Sheets — modifiables sans redéploiement.
-
----
-
-## 5. Templates emails
-
-> **En-tête CC sur tous les emails :**
-> ```
-> À  : [destinataire principal]
-> CC : [ferme_email_fondateur], [contact_rga_email]
-> De : [ferme_email_expediteur]
-> ```
-
-### 5.1 Rappel SOP vétérinaire (J-3 / J-2 / J-1)
-
-> ❌ **J-7 supprimé** — Un vétérinaire rural planifie à la semaine, pas 7 jours à l'avance. Message ignoré, quota SendGrid gaspillé.
-> ✅ **J-1 ajouté** — La veille est le jalon le plus efficace pour ancrer le RDV.
-> ⚠️ **Si `vet_confirmed = TRUE`** (colonne `Date_Confirmation` renseignée dans Notifications_Log) → sauter l'envoi. Ne pas relancer un vétérinaire qui a déjà confirmé.
-
-```
-À    : [contact_vet_email]
-CC   : [ferme_email_fondateur], [contact_rga_email]
-Objet : [BOAN] Rappel acte vétérinaire dans [N] jours — [TYPE_ACTE]
-
-Bonjour [contact_vet_nom],
-
-Rappel automatique — Ferme BOAN, Thiès, Sénégal.
-
-Acte prévu     : [label_acte]
-Date prévue    : [dateActe DD/MM/YYYY]
-Dans           : [N] jours
-
-Troupeau actuel :
-  - Bêtes actives  : [MOCK.betes]
-  - Poids moyen    : [calculé depuis Pesees] kg
-  - Races          : [races du CYCLE]
-
-[Si vaccination] ⚠️ Conservation vaccin requise : 2°C–8°C
-
-[ferme_responsable_nom] — [ferme_responsable_tel]
-Ferme BOAN, Thiès, Sénégal
----
-Message automatique. Répondre à [ferme_email_expediteur].
-```
-
-### 5.2 Alerte vétérinaire — Décès constaté (J+0 immédiat)
-
-> ⚠️ **Niveau d'urgence renforcé** : le certificat vét doit précéder le passage expert CNAAS
-> (attendu J+5-7). La phrase de confirmation dans les 48h est obligatoire.
-
-```
-À    : [contact_vet_email]
-CC   : [ferme_email_fondateur], [contact_rga_email]
-Objet : URGENT — Décès animal — Certificat CNAAS requis — [ID_ANIMAL] — Ferme BOAN
-
-Bonjour [contact_vet_nom],
-
-URGENT — Un animal est décédé aujourd'hui à la Ferme BOAN.
-Votre présence est requise pour établir le certificat de constatation
-du décès destiné à la CNAAS avant le passage de leur expert (attendu
-sous 5 à 7 jours).
-
-Animal        : [ID_ANIMAL] — [race] — [poids_dernier] kg
-Date/heure    : [date] à [heure]
-Entrée élevage: [dateIntro]
-Symptômes     : [symptomes]
-Traitements   : [traitements_historique]
-
-⛔ L'animal N'A PAS été abattu ni enterré — en attente de votre constat.
-
-Merci de confirmer votre disponibilité dans les 48h au
-[ferme_responsable_tel] ou par retour de ce message.
-
-[ferme_responsable_nom] — [ferme_responsable_tel]
-Ferme BOAN, Thiès, Sénégal
-```
-
-### 5.2b Rappel vétérinaire J+1 — si aucune confirmation reçue
-
-> Déclenché par le cron `type=deces` du lendemain si `Date_Confirmation` est vide
-> dans Notifications_Log pour `Reference_ID = VET_DECES_[ID_ANIMAL]`.
-
-```
-À    : [contact_vet_email]
-CC   : [ferme_email_fondateur]
-Objet : Rappel URGENT — Décès [ID_ANIMAL] — Confirmation de venue requise
-
-Bonjour [contact_vet_nom],
-
-Nous n'avons pas reçu de confirmation suite à notre message d'hier
-concernant le décès de [ID_ANIMAL] à la Ferme BOAN.
-
-Le dossier CNAAS est ouvert — le certificat de constatation est
-nécessaire avant le passage de l'expert CNAAS.
-
-Merci de confirmer votre disponibilité par retour ou au
-[ferme_responsable_tel].
-
-[ferme_responsable_nom]
-Ferme BOAN, Thiès, Sénégal
-```
-
-> **Idempotence** : ce rappel utilise `Reference_ID = VET_DECES_RAPPEL_[ID_ANIMAL]_J1`
-> dans Notifications_Log — envoyé une seule fois. Arrêt dès `Date_Confirmation` renseignée.
-
-### 5.3 Déclaration CNAAS — Décès (J+0)
-```
-À    : [contact_cnaas_email]
-CC   : [ferme_email_fondateur], [contact_rga_email]
-Objet : [BOAN] Déclaration sinistre — Décès [ID_ANIMAL] — Police n°[CYCLE.numCnaas]
-
-Madame, Monsieur,
-
-La Ferme BOAN déclare le sinistre suivant dans le délai contractuel de [contact_cnaas_delai_h]h.
-
-TYPE DE SINISTRE  : Décès animal
-N° POLICE         : [CYCLE.numCnaas]
-DATE DU DÉCÈS     : [date]
-HEURE             : [heure]
-LIEU              : Ferme BOAN, Thiès, Sénégal
-
-─── IDENTIFICATION DE L'ANIMAL ───
-  Identifiant     : [ID_ANIMAL]       ← CYCLE.betes[i].id  (format: C1-001)
-  Race            : [race]            ← CYCLE.betes[i].race (ou raceCustom si race=Autre)
-  Poids entrée    : [poidsEntree] kg  ← CYCLE.betes[i].poidsEntree
-  Date d'entrée   : [dateIntro]       ← CYCLE.betes[i].dateIntro (format ISO YYYY-MM-DD → afficher DD/MM/YYYY)
-  Poids actuel    : [poids_dernier] kg ← dernier enregistrement LIVE.pesees où p.id = ID_ANIMAL
-  Date pesee      : [date_derniere_pesee] ← même enregistrement
-  Valeur estimée  : [cnaas_grille[race_classe]] FCFA
-    ⚠️ Valeur déterminée selon grille officielle CNAAS par race/classe d'âge.
-    Si grille non disponible : [poidsEntree × prix_foirail] FCFA au prorata —
-    "Valeur estimée au prorata marché, sujette à expertise CNAAS"
-    (basé sur relevé foirail du [date_dernier_prix_foirail]) ← LIVE.prix derniers enregistrement
-
-─── HISTORIQUE DES SOINS ───
-  Symptômes déclarés    : [symptomes]         ← S.fsa.sym (champ libre gerant)
-  Traitements effectués : [traitements]       ← S.fsa.tra
-  Coût total            : [cout] FCFA         ← S.fsa.cout
-  Vaccinations SOP      : [liste actes SOP validés] ← HISTORY où type='sante' + sopLabel + id = ID_ANIMAL
-
-─── HISTORIQUE DES PESÉES ───
-  [tableau : date | poids (kg) | gain (kg) | GMQ (kg/j)] ← LIVE.pesees filtré par p.id = ID_ANIMAL
-
-─── ENGAGEMENT ───
-  ⛔ L'animal N'A PAS été abattu ni enterré.
-  Il est disponible pour constatation par votre expert.
-
-COORDINATION REQUISE :
-  La constatation vétérinaire est en cours de planification.
-  Nous vous demandons de coordonner la date de passage de votre expert
-  avec la disponibilité du vétérinaire référent Dr [CYCLE.veterinaire]
-  afin que le certificat de constatation soit disponible lors de votre venue.
-
-Pièces à transmettre séparément dès disponibilité :
-  □ Certificat de décès signé par Dr [CYCLE.veterinaire]
-  □ Photos de l'animal décédé (transmises par WhatsApp ou email de suivi)
-
-[ferme_responsable_nom] — [ferme_responsable_tel]
-Ferme BOAN, Thiès, Sénégal
-```
-
-### 5.4 Déclaration CNAAS — Vol (J+0)
-```
-À    : [contact_cnaas_email]
-CC   : [ferme_email_fondateur], [contact_rga_email]
-Objet : [BOAN] Déclaration sinistre — Vol bétail — Police n°[CYCLE.numCnaas]
-
-Madame, Monsieur,
-
-La Ferme BOAN déclare le sinistre suivant dans le délai contractuel.
-
-TYPE DE SINISTRE  : Vol de bétail
-N° POLICE         : [CYCLE.numCnaas]
-N° PV GENDARMERIE : [no_pv_gendarmerie]
-DATE DU VOL       : [date] à [heure]
-LIEU              : Ferme BOAN, Thiès, Sénégal
-
-─── ANIMAUX VOLÉS ───
-  [tableau : ID | Race | Poids | Valeur FCFA]
-  TOTAL estimé : [somme] FCFA
-
-Circonstances : [description]
-Dépôt de plainte : Gendarmerie de Thiès, le [date_plainte]
-
-[ferme_responsable_nom] — [ferme_responsable_tel]
-Ferme BOAN, Thiès, Sénégal
-```
-
-### 5.5 Relances CNAAS — J+7 / J+14
-
-> ❌ **Ancien calendrier J+2/J+5/J+10 supprimé** — trop agressif, harcèlement bureaucratique.
-> La CNAAS a un délai interne de traitement de 3-5 jours. La 2e relance à J+2 arrivait avant
-> que le dossier J+0 soit classé. Résultat : agents ignoraient toutes les relances.
-> ❌ **Mention "saisine Direction Régionale" supprimée** — contre-productive en administration
-> sénégalaise, génère des blocages volontaires. Rester courtois jusqu'à J+14.
-
-```
-À    : [contact_cnaas_email]
-CC   : [ferme_email_fondateur], [contact_rga_email]
-Objet : [BOAN] Suivi sinistre — Police n°[CYCLE.numCnaas] — Déclaration du [date_sinistre]
-
-Madame, Monsieur,
-
-Nous revenons vers vous au sujet de notre déclaration du [date_J0],
-restée sans accusé de réception à ce jour.
-
-Réf. sinistre : [Type] — [ID_ANIMAL ou N°_PV] — Police n°[CYCLE.numCnaas]
-
-Nous restons à votre disposition pour tout complément de dossier.
-
-[ferme_responsable_nom] — [ferme_responsable_tel]
-```
-
-> **J+14 uniquement :** en plus de l'email, le système envoie une notification au fondateur :
-> "⚠️ Dossier [ID] sans réponse CNAAS à J+14 — Appel vocal recommandé."
-
----
-
-## 6. Templates WhatsApp (messages courts, adapté mobile)
-
-> Technologie : `window.open('https://wa.me/[numero]?text=' + encodeURIComponent(msg), '_blank')`
-> Même pattern que `partagerRapportJourWhatsApp()` déjà dans l'app.
-> Si `numero` non configuré → `wa.me/?text=` (l'utilisateur choisit le contact).
-
-### 6.1 WhatsApp Vétérinaire — Décès (J+0)
-```
-🚨 *BOAN — DÉCÈS ANIMAL*
-
-Bête : [ID_ANIMAL] ([race], [poids] kg)
-Date : [date] à [heure]
-Symptômes : [symptomes]
-
-⛔ Animal non enterré — présence requise pour certificat CNAAS.
-
-Ferme BOAN — [ferme_responsable_nom] — [ferme_responsable_tel]
-```
-
-### 6.2 WhatsApp Vétérinaire — Rappel SOP (J-3 / J-2 / J-1, cron automatique)
-```
-📅 *BOAN — Rappel SOP*
-
-Acte : [label_acte]
-Date prévue : [dateActe DD/MM/YYYY] (dans [N] jours)
-Troupeau : [MOCK.betes] bêtes actives
-
-Ferme BOAN — [ferme_responsable_tel]
-```
-
-### 6.3 WhatsApp Vétérinaire — Rappel urgent J-0 (bouton manuel gérant, jour J uniquement)
-
-> Ce message est déclenché par le **gérant terrain** via un bouton dans Livrables > SOP Véto,
-> affiché uniquement le jour de l'acte. Pas de cron — le gérant est sur place et peut enchaîner
-> avec un appel direct si pas de réponse.
-
-```
-🔔 *BOAN — Intervention aujourd'hui*
-
-Bonjour [contact_vet_nom],
-
-Rappel urgent : acte SOP prévu AUJOURD'HUI à la Ferme BOAN.
-
-Acte : [label_acte]
-Troupeau : [MOCK.betes] bêtes actives
-
-📞 [ferme_responsable_tel]
-Ferme BOAN, Thiès, Sénégal
-```
-
-### 6.4 Notification gérant — Intervention vétérinaire demain (J-1, cron + bannière app)
-
-> Bannière affichée dans l'app côté gérant le jour J-1. Si `contact_gerant_tel` configuré,
-> envoi WhatsApp optionnel. Le gérant doit préparer la zone et contenir le troupeau.
-
-```
-📋 *BOAN — Intervention SOP demain*
-
-Le vétérinaire [contact_vet_nom] est attendu demain à [horaire_vet_dakar].
-
-Acte : [label_acte]
-
-➡ Préparer zone, contenir troupeau, prévoir [fournitures si applicable].
-Ferme BOAN — [ferme_responsable_tel]
-```
-
-### 6.5 WhatsApp CNAAS — Décès (J+0, après email auto)
-```
-📋 *BOAN — Déclaration sinistre (email envoyé)*
-
-Type : Décès animal
-Police : [CYCLE.numCnaas]
-Animal : [ID_ANIMAL] — [race] — [poids] kg
-Date : [date]
-
-⛔ Animal non abattu ni enterré — en attente expert.
-
-Email de déclaration envoyé à [contact_cnaas_email].
-[ferme_responsable_nom] — [ferme_responsable_tel]
-```
-
-### 6.6 WhatsApp CNAAS — Vol (J+0, après email auto)
-```
-📋 *BOAN — Déclaration sinistre (email envoyé)*
-
-Type : Vol de bétail
-Police : [CYCLE.numCnaas]
-N° PV gendarmerie : [no_pv_gendarmerie]
-Date : [date]
-Animaux : [liste IDs]
-
-Email de déclaration envoyé à [contact_cnaas_email].
-[ferme_responsable_nom] — [ferme_responsable_tel]
-```
-
-### 6.7 WhatsApp gérant — Rappel SOP vét J-1 (section 3.6 contexte A)
-
-> Message pré-rempli déclenché par le bouton dashboard gérant (bannière orange).
-> Variables résolues côté client depuis `CYCLE.*`.
-
-```
-🔔 *BOAN — Rappel acte SOP demain*
-
-Bonjour [CYCLE.veterinaire],
-
-Rappel : acte SOP prévu DEMAIN à la Ferme BOAN.
-
-Acte : [acte.label]
-Date : [demain DD/MM/YYYY]
-Troupeau : [CYCLE.betes.length] bêtes actives
-
-Ferme BOAN — [contact_gerant_tel ou ferme_responsable_tel]
-```
-
-### 6.8 WhatsApp gérant — Relance vétérinaire post-décès (section 3.6 contexte B)
-
-> Message pré-rempli déclenché par le bouton dashboard gérant (bannière rouge), 24h après décès
-> si le vétérinaire n'a pas encore confirmé sa venue.
-
-```
-⚠️ *BOAN — Relance certificat décès*
-
-Bonjour [CYCLE.veterinaire],
-
-La bête [ID_ANIMAL] est décédée [hier / il y a N jours] à la Ferme BOAN.
-Le dossier CNAAS attend votre certificat de constatation.
-
-⛔ L'animal n'a pas été enterré.
-
-Pouvez-vous confirmer votre venue ?
-Ferme BOAN — [contact_gerant_tel ou ferme_responsable_tel]
-```
-
----
-
-## 7. Architecture technique
-
-### 7.1 Nouveaux fichiers à créer
-
-> **Référence code existant dans `index.html`** :
-> - `appendRow(sid, range, vals)` (L1163) — écriture ligne Sheets, pattern principal
-> - `readSheet(sid, range)` (L1228) — lecture plage Sheets avec `UNFORMATTED_VALUE`
-> - `writeAll(sids, range, vals)` (L1991) — écriture multi-SIDs en `Promise.all`
-> - `_syncConfigApp()` (L2048) — lire/écrire Config_App, pattern à adapter côté cron pour lire les contacts
-> - `beteDropdown(val, stateKey, extra, excludeIds)` (L2902) — dropdown bêtes vivantes (filtre `LIVE.deceased`)
-> - `partagerRapportJourWhatsApp()` — pattern `wa.me/?text=encodeURIComponent(msg)` déjà dans l'app
-> - `safeText(s)` — à créer dans `/api/notify.js` (pattern ci-dessous)
-
-> **Accès token côté serveur** : le cron doit obtenir un token Google via le même mécanisme que
-> `/api/token.js` (Service Account JWT). Réutiliser `/api/token.js` en import interne dans `/api/notify.js`.
-
-#### `/api/notify.js`
-```
-Fonctions :
-  sendEmail(to, subject, body, cc)          → SendGrid API
-  buildWaUrl(tel, msg)                      → 'https://wa.me/'+tel+'?text='+encodeURIComponent(msg)
-  logNotification(entry)                    → appendRow Notifications_Log
-  updateNotificationStatus(rowIdx, status)  → batchUpdate Sheets
-  checkAndSendVetReminders()                → SOP J-3/J-2/J-1 (J-7 supprimé) — skip si vet_confirmed=TRUE ou jour férié
-  checkAndSendDecesAlerts()                 → J+0 décès (vet + CNAAS) — déclenché aussi au flush offline queue
-  checkAndSendVolAlerts()                   → J+0 vol (CNAAS)
-  checkAndSendCnaasFollowups()              → relances J+7/J+14 (depuis Sinistres_CNAAS) — skip si Statut_CNAAS ≠ EN_COURS
-  safeText(s)                               → sanitize champs libres avant template email
-  confirmVet(sopActeId)                     → Statut=CONFIRME dans Notifications_Log
-  confirmCnaas(sinistreId)                  → Statut=CLOTURE dans Sinistres_CNAAS
-  stopRelances(sinistreId)                  → Relances_Stop=OUI dans Sinistres_CNAAS
-```
-
-**`safeText` — obligatoire sur tous les champs libres :**
+### 3.6 Livrables > Incidents — Fondateur/RGA
+
+Extension du sous-onglet `incidents` existant :
+
+| Élément | Détail |
+|---|---|
+| Bannière ⛔ NE PAS ENTERRER | Si ligne EN_COURS sans Expert_Passe=OUI |
+| Timeline dossier | J+0 email / Appel fondateur / J+7 / J+14 (depuis LIVE.sinistres + LIVE.notifLog) |
+| Champ Date visite vét prévue | → col L (index 11) Sinistres_CNAAS |
+| Champ Date visite expert CNAAS prévu | → col M (index 12) |
+| ⚠️ Alerte croisée dates | Si col M < col L → "Expert CNAAS prévu avant vét → risque rejet" |
+| Statut CNAAS select | EN_COURS / DOSSIER_RECU / EXPERT_ASSIGNE / EXPERTISE_PASSEE / CONFIRME / REJETE |
+| ☑ Certificat vét reçu | → col H (index 7) |
+| ☑ Expert CNAAS passé | → col I (index 8) + `lsSet('sinistres_ouverts', ...)` expertPasse=true |
+| Appel_Fondateur_J0 | Heure appel vocal — saisie manuelle → col G (index 6) |
+| Bouton CNAAS confirmé réception | → Statut_CNAAS = CLOTURE |
+| Bouton Arrêter les relances | → col J (index 9) = OUI |
+| Bouton Annuler (30 min) | → Statut = ANNULE + email correctif CNAAS |
+
+**Réconciliation lsGet('sinistres_ouverts') depuis LIVE.sinistres :**
 ```js
-// slice(0, 2000) : les champs 'circonstances' d'un vol ou 'sym' peuvent dépasser 500 chars
-function safeText(s) { return String(s || '').replace(/[<>&"\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000); }
-// IMPORTANT : plain text strict — NE PAS utiliser ce contenu dans des templates HTML
-// Les \r\n sont normalisés en espaces pour éviter les injections d'en-têtes email (CRLF injection)
+function _reconcileSinistresOuverts() {
+  var soLocal = lsGet('sinistres_ouverts') || [];
+  if (!soLocal.length) return;
+  var changed = false;
+  soLocal.forEach(function(so) {
+    if (so.expertPasse) return;
+    (LIVE.sinistres || []).forEach(function(r) {
+      // col C index 2 = ID_Animal_s, col I index 8 = Expert_Passe, col E index 4 = Statut
+      var ids = String(r[2] || '').split(',');
+      if (ids.indexOf(so.id) === -1) return;
+      if (String(r[8]||'').toUpperCase() === 'OUI' || String(r[4]||'').toUpperCase() === 'CLOTURE') {
+        so.expertPasse = true;
+        changed = true;
+      }
+    });
+  });
+  if (changed) lsSet('sinistres_ouverts', soLocal);
+}
+// Appeler en fin de loadLiveData Vague 2, après LIVE.sinistres = rows
 ```
 
-**Guard offline — décès saisi hors connexion :**
-```js
-// Problème : flushQueue() dans l'app n'écrit que via appendRow(SID.gerant, ...)
-// Un décès offline est dans OFFLINE_QUEUE — il arrive dans Sante_Mortalite du sheet gérant
-// quand la connexion revient, mais peut ne PAS être dans le sheet fondateur immédiatement.
-// Solution retenue (Option A) :
-//   au submit décès offline → lsSet('deces_pending', {id, date, sym, tra, cout})
-//   flushQueue() complet → lsRemove('deces_pending') + créer ligne Sinistres_CNAAS en fondateur
-//   checkAndSendDecesAlerts() lit Sinistres_CNAAS où email_pending=OUI → envoie l'email
-//
-// Stockage localStorage au submit décès offline :
-lsSet('deces_pending', { id: f.id, date: td, sym: safeText(f.sym), tra: safeText(f.tra),
-  cout: f.cout, ts: Date.now() });
-// A la reconnexion (window.addEventListener('online', ...)) :
-// 1. flushQueue() → écriture Sante_Mortalite
-// 2. createSinistrePending() → créer ligne Sinistres_CNAAS email_pending=OUI dans fondateur
-// 3. lsRemove('deces_pending')
-```
+### 3.7 Livrables > SOP Vétérinaire — Fondateur/RGA
 
-#### `/api/cron.js`
+- Bouton "✓ Vétérinaire a confirmé" (acte dans les 7j) → `Date_Confirmation` dans Notifications_Log
+- Timeline J-3/J-2/J-1 : ✓ envoyé / 🟢 confirmé / ⏳ en attente (depuis LIVE.notifLog)
+- Bouton "🔔 Rappel urgent J-0" (gérant uniquement, jour J de l'acte) → wa.me/ msg 6.3
 
-> ⚠️ **TIMEOUT VERCEL PLAN GRATUIT** : les fonctions Vercel Hobby ont un timeout de **10 secondes**.
-> 3 fonctions await séquentielles (vet + décès + relances) × (2-3 lectures Sheets + 1-2 appels SendGrid)
-> = **estimé 15–25 secondes** → dépassement quasi certain.
-> **Solution** : passer au plan Vercel Pro (60s timeout) OU découper en 3 crons GitHub Actions
-> distincts qui appellent `/api/cron?type=vet`, `/api/cron?type=deces`, `/api/cron?type=relances`
-> chacun avec un déclenchement séparé (+2 min entre chaque).
+### 3.8 Helper beteMultiSelect() — VOL multi-bêtes
+
+> `beteDropdown()` existant (L2902) génère un `<select>` unique — incompatible multi-sélection VOL.
+> **Ajouter `S.fin.beteIds = []` dans le reset de S.fin (~L1899).**
 
 ```js
-module.exports = async function handler(req, res) {  // CommonJS requis pour Vercel
+function beteMultiSelect() {
+  var deceased = LIVE.deceased || [];
+  var allIds = (CYCLE.betes || [])
+    .filter(function(b) { return deceased.indexOf(b.id) === -1; })
+    .map(function(b) { return b.id; });
+  if (!allIds.length) {
+    return '<div class="fg"><label>Bêtes concernées</label>'
+      + '<div class="msg-err">Aucune bête disponible</div></div>';
+  }
+  var current = S.fin.beteIds || [];
+  var html = '<div class="fg"><label>Bêtes concernées ('
+    + current.length + ' sélectionnée' + (current.length > 1 ? 's' : '') + ')</label>'
+    + '<div style="background:#0f1a0f;border:1px solid #2a4a2a;border-radius:8px;'
+    + 'padding:8px;max-height:160px;overflow-y:auto">';
+  allIds.forEach(function(id) {
+    var chk = current.indexOf(id) !== -1;
+    html += '<label style="display:flex;align-items:center;gap:10px;padding:5px 8px;cursor:pointer">'
+      + '<input type="checkbox" ' + (chk ? 'checked ' : '')
+      + 'onchange="var idx=S.fin.beteIds.indexOf(\'' + id + '\');'
+      + 'if(this.checked&&idx===-1){S.fin.beteIds.push(\'' + id + '\');}'
+      + 'else if(!this.checked&&idx!==-1){S.fin.beteIds.splice(idx,1);}r();">'
+      + '<span style="font-size:14px">' + id + '</span></label>';
+  });
+  return html + '</div></div>';
+}
+// Submit VOL : S.fin.beteIds.join(',') → col C Sinistres_CNAAS
+// Validation : if (!S.fin.beteIds.length) { showMsg('err','Sélectionner au moins une bête'); return; }
+```
+
+### 3.9 Chargement LIVE.sinistres + LIVE.notifLog (Vague 2)
+
+```js
+// Dans loadLiveData(), dans le Promise.all de la Vague 2 — fondateur/rga uniquement
+if (S.user === 'fondateur' || S.user === 'rga') {
+  readSheet(SID.fondateur, 'Sinistres_CNAAS!A2:M200').then(function(rows) {
+    LIVE.sinistres = rows || [];
+    _reconcileSinistresOuverts();
+  });
+  readSheet(SID.fondateur, 'Notifications_Log!A2:I500').then(function(rows) {
+    LIVE.notifLog = rows || [];
+  });
+}
+```
+
+---
+
+## 4. API serveur
+
+> **Timeout Vercel plan Hobby : 10 secondes par function.**
+> 3 fonctions séquentielles = 15-25s estimé → dépassement certain.
+> Solution : 3 endpoints séparés (`?type=vet/deces/relances`) avec 3 crons GitHub Actions décalés de 2 min.
+
+### 4.1 ensureSheetExists() — auto-création onglets
+
+Appelé au début de chaque run cron. Idempotent.
+
+```js
+async function ensureSheetExists(token, sid, sheetName) {
+  var testUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid
+    + '/values/' + encodeURIComponent(sheetName)
+    + '!A1?valueRenderOption=UNFORMATTED_VALUE';
+  var test = await fetch(testUrl, { headers: { Authorization: 'Bearer ' + token } });
+  if (test.ok) return; // existe déjà
+
+  await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + sid + ':batchUpdate', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ addSheet: { properties: { title: sheetName } } }] })
+  });
+
+  var HEADERS = {
+    Notifications_Log: [['Date_Envoi','Type','Reference_ID','Destinataire','Canal',
+                          'Statut','Tentative_N','Date_Confirmation','Notes']],
+    Sinistres_CNAAS:   [['Date','Type','ID_Animal_s','N_PV_Gendarmerie','Statut_CNAAS',
+                          'Date_Email_J0','Appel_Fondateur_J0','Certif_Vet_Recu',
+                          'Expert_Passe','Relances_Stop','email_pending',
+                          'Date_Visite_Vet_Prevue','Date_Visite_Expert_CNAAS_Prevue']]
+  };
+  var hdrs = HEADERS[sheetName];
+  if (!hdrs) return;
+  await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + sid
+    + '/values/' + encodeURIComponent(sheetName)
+    + '!A1?valueInputOption=USER_ENTERED', {
+    method: 'PUT',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values: hdrs })
+  });
+}
+```
+
+### 4.2 Lecture Config côté serveur
+
+```js
+async function readConfigApp(token, sid) {
+  var res = await fetch(
+    'https://sheets.googleapis.com/v4/spreadsheets/' + sid
+    + '/values/Config_App!A:B?valueRenderOption=UNFORMATTED_VALUE',
+    { headers: { Authorization: 'Bearer ' + token } }
+  );
+  if (!res.ok) throw new Error('Config_App illisible: ' + res.status);
+  var data = await res.json();
+  var cfg = {};
+  (data.values || []).forEach(function(row) {
+    if (!row[0]) return;
+    try { cfg[row[0]] = JSON.parse(row[1]); } catch(e) { cfg[row[0]] = row[1] || ''; }
+  });
+  return cfg;
+  // Clés lues : sopProtocol, numCnaas, sopResetAt, jours_fermes, cnaas_grille,
+  //   contact_vet_email, contact_vet_tel, contact_cnaas_email, contact_cnaas_tel,
+  //   contact_cnaas_delai_h, ferme_email_expediteur, ferme_responsable_nom,
+  //   ferme_responsable_tel, ferme_email_fondateur, contact_rga_email,
+  //   horaire_vet_dakar, contact_gerant_tel
+}
+
+async function readConfigCycle(token, sid) {
+  var res = await fetch(
+    'https://sheets.googleapis.com/v4/spreadsheets/' + sid
+    + '/values/Config_Cycle!A1:S1?valueRenderOption=UNFORMATTED_VALUE',
+    { headers: { Authorization: 'Bearer ' + token } }
+  );
+  var data = await res.json();
+  var row = (data.values || [[]])[0] || [];
+  return {
+    dateDebut:   row[0] || '',   // YYYY-MM-DD — déjà au bon format
+    nomCycle:    row[1] || '',
+    betes:       JSON.parse(String(row[2] || '[]')), // [{id,race,raceCustom,poidsEntree,dateIntro}]
+    veterinaire: row[8] || ''    // col I
+  };
+}
+```
+
+### 4.3 safeText()
+
+```js
+// Obligatoire sur TOUS les champs libres gérant avant insertion dans un email
+// Protège contre CRLF injection dans en-têtes + limite la taille (100 KB max SendGrid)
+function safeText(s) {
+  return String(s || '').replace(/[<>&"\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
+}
+// Appliquer sur : sym, tra, desc, circonstances VOL, notes
+// NE PAS appliquer sur : IDs animaux, dates, montants, variables Config_App (contrôlées)
+```
+
+### 4.4 Idempotence — double guard + TTL PENDING 2h
+
+```js
+async function isAlreadySent(token, sid, notifLog, refId) {
+  for (var i = 0; i < notifLog.length; i++) {
+    var row = notifLog[i];
+    if (row[2] !== refId) continue;                               // col C = Reference_ID
+    if (row[5] === 'SENT' || row[5] === 'CONFIRME') return true;  // col F = Statut
+    if (row[5] === 'PENDING') {
+      var pendingTs = new Date(String(row[0] || '')).getTime();   // col A = Date_Envoi
+      if (Date.now() - pendingTs < 2 * 3600 * 1000) return true; // encore en cours
+      // Stale > 2h → libérer (rowIdx = i + 2 : 1-indexed + header)
+      await updateCell(token, sid, 'Notifications_Log!F' + (i + 2), 'ERROR_TIMEOUT');
+    }
+  }
+  return false;
+}
+```
+
+### 4.5 Validation acte SOP
+
+```js
+// Identifie un acte validé par {label + date ±7j} — jamais par acte.id (non persisté)
+function isActeValidated(acte, dateDebut, santeRows) {
+  var dateActeMs = new Date(dateDebut + 'T00:00:00Z').getTime() + acte.j * 86400000;
+  return (santeRows || []).some(function(row) {
+    if (String(row[9] || '') !== acte.label) return false; // col J = sopLabel
+    var parts = String(row[0] || '').split('/');            // col A = DD/MM/YYYY
+    if (parts.length !== 3) return false;
+    var entryMs = Date.UTC(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    return Math.abs(entryMs - dateActeMs) / 86400000 <= 7;
+  });
+}
+```
+
+### 4.6 sendEmail() + sendEmailWithLog()
+
+```js
+// text/plain obligatoire — Orange Sénégal filtre les emails HTML
+async function sendEmail(cfg, to, subject, body, cc) {
+  var res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + process.env.SENDGRID_API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      personalizations: [{
+        to: [{ email: to }],
+        cc: (cc || []).filter(Boolean).map(function(e) { return { email: e }; })
+      }],
+      from: { email: cfg.ferme_email_expediteur },
+      subject: subject,                               // PAS de crochets [BOAN]
+      content: [{ type: 'text/plain', value: body }]  // TOUJOURS text/plain
+    })
+  });
+  return res.status === 202;
+}
+
+async function sendEmailWithLog(token, sid, cfg, notifLog, opts) {
+  // opts : { to, subject, body, refId, type, cc }
+  var cc = opts.cc || [cfg.ferme_email_fondateur, cfg.contact_rga_email];
+  // 1. Écrire PENDING avant l'envoi
+  var pendingVals = [
+    new Date().toISOString(), opts.type, opts.refId, opts.to, 'EMAIL',
+    'PENDING', '1', '', ''
+  ];
+  var appendRes = await appendRow(token, sid, 'Notifications_Log!A:I', pendingVals);
+  var rowIdx = appendRes.updates.updatedRange.match(/(\d+)$/)[1];
+
+  // 2. Appeler SendGrid
+  var ok = await sendEmail(cfg, opts.to, opts.subject, opts.body, cc);
+
+  // 3. Mettre à jour Statut
+  var statut = ok ? 'SENT' : 'ERROR';
+  if (!ok && !cfg.numCnaas && opts.type.indexOf('CNAAS') !== -1) statut = 'INCOMPLET_POLICE';
+  await updateCell(token, sid, 'Notifications_Log!F' + rowIdx, statut);
+
+  return ok;
+}
+```
+
+### 4.7 checkAndSendVetReminders()
+
+```js
+async function checkAndSendVetReminders(token, cfg, cycle, santeRows, notifLog) {
+  var sopProtocol = cfg.sopProtocol || [];
+  var joursFermes = cfg.jours_fermes || [];
+  var todayISO = new Date().toISOString().slice(0, 10);
+
+  if (!sopProtocol.length) {
+    await appendRow(token, cfg._sid, 'Notifications_Log!A:I',
+      [new Date().toISOString(),'VET_ERROR','','','','ERROR_EMPTY_PROTOCOL','','','']); return;
+  }
+  if (!cfg.contact_vet_email) {
+    await appendRow(token, cfg._sid, 'Notifications_Log!A:I',
+      [new Date().toISOString(),'VET_ERROR','','','','ALERT_NO_CONTACT','','','']); return;
+  }
+  if (joursFermes.indexOf(todayISO) !== -1) {
+    await appendRow(token, cfg._sid, 'Notifications_Log!A:I',
+      [new Date().toISOString(),'VET_SKIPPED','','','','SKIPPED','','','Jour ferme: '+todayISO]); return;
+  }
+
+  var today = new Date();
+  var todayMs = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+
+  for (var i = 0; i < sopProtocol.length; i++) {
+    var acte = sopProtocol[i];
+    var dateActeMs = new Date(cycle.dateDebut + 'T00:00:00Z').getTime() + acte.j * 86400000;
+    var dateActeISO = new Date(dateActeMs).toISOString().slice(0, 10);
+    var joursAvant = Math.round((dateActeMs - todayMs) / 86400000);
+
+    if ([1, 2, 3].indexOf(joursAvant) === -1) continue;
+    if (isActeValidated(acte, cycle.dateDebut, santeRows)) continue;
+
+    var refId = 'SOP_VET_J-' + joursAvant + '_'
+      + acte.label.toLowerCase().replace(/\s+/g, '-') + '_' + dateActeISO;
+    if (await isAlreadySent(token, cfg._sid, notifLog, refId)) continue;
+
+    var body = 'BOAN — Rappel acte SOP dans ' + joursAvant + ' jour(s)\n\n'
+      + 'Bonjour ' + cycle.veterinaire + ',\n\n'
+      + 'Acte : ' + acte.label + '\nDate prevue : ' + dateActeISO
+      + '\nTroupeau : ' + (cycle.betes || []).length + ' betes actives\n\n'
+      + 'Merci de confirmer votre disponibilite.\n\n'
+      + cfg.ferme_responsable_nom + ' - ' + cfg.ferme_responsable_tel
+      + '\nFerme BOAN, Thies, Senegal';
+
+    await sendEmailWithLog(token, cfg._sid, cfg, notifLog, {
+      to: cfg.contact_vet_email,
+      subject: 'BOAN — Rappel SOP J-' + joursAvant + ' — ' + acte.label,
+      body: body, refId: refId, type: 'SOP_VET_J-' + joursAvant,
+      cc: [cfg.ferme_email_fondateur]
+    });
+  }
+}
+```
+
+### 4.8 checkAndSendDecesAlerts()
+
+```js
+async function checkAndSendDecesAlerts(token, cfg, cycle, santeRows, sinistresRows, notifLog) {
+  for (var i = 0; i < sinistresRows.length; i++) {
+    var row = sinistresRows[i];
+    var rowIdx = i + 2; // 1-indexed + header
+
+    if (String(row[10] || '').trim().toUpperCase() !== 'OUI') continue; // col K = email_pending
+
+    var animalId = String(row[2] || '');  // col C
+    var dateStr  = String(row[0] || '');  // col A
+    var dateKey  = dateStr.replace(/\//g, '-');
+
+    var refCnaas   = 'CNAAS_DECES_J0_' + animalId + '_' + dateKey;
+    var refVet     = 'VET_DECES_J0_' + animalId + '_' + dateKey;
+    var todayISO   = new Date().toISOString().slice(0, 10);
+    var refRappel  = 'VET_DECES_RAPPEL_J1_' + animalId + '_' + todayISO;
+
+    if (await isAlreadySent(token, cfg._sid, notifLog, refCnaas)) continue;
+
+    // Données animal depuis Sante_Mortalite
+    var santeRow = (santeRows || []).filter(function(r) {
+      return String(r[1] || '') === animalId && String(r[6] || '').toUpperCase() === 'OUI';
+    })[0] || [];
+    var sym  = safeText(String(santeRow[2] || ''));
+    var tra  = safeText(String(santeRow[3] || ''));
+    var cout = String(santeRow[4] || '');
+
+    var beteInfo = (cycle.betes || []).filter(function(b) { return b.id === animalId; })[0] || {};
+
+    // Email CNAAS J+0
+    var cnaasBody = 'Declaration sinistre — Deces ' + animalId
+      + ' — Police n' + (cfg.numCnaas || '[A COMPLETER]') + '\n\n'
+      + 'TYPE : Deces animal\nN POLICE : ' + (cfg.numCnaas || '[A COMPLETER]')
+      + '\nDATE : ' + dateStr + '\nLIEU : Ferme BOAN, Thies, Senegal\n\n'
+      + '--- ANIMAL ---\n'
+      + 'Identifiant : ' + animalId
+      + '\nRace : ' + (beteInfo.race || '')
+      + '\nPoids entree : ' + (beteInfo.poidsEntree || '') + ' kg'
+      + '\nDate entree : ' + (beteInfo.dateIntro || '') + '\n\n'
+      + '--- SOINS ---\nSymptomes : ' + sym + '\nTraitements : ' + tra
+      + '\nCout : ' + cout + ' FCFA\n\n'
+      + '--- ENGAGEMENT ---\n'
+      + 'L\'animal N\'A PAS ete abattu ni enterre. En attente de votre expert.\n\n'
+      + 'COORDINATION REQUISE : Merci de coordonner la date de passage de votre expert\n'
+      + 'avec la venue du veterinaire Dr ' + cycle.veterinaire + '.\n\n'
+      + cfg.ferme_responsable_nom + ' - ' + cfg.ferme_responsable_tel
+      + '\nFerme BOAN, Thies, Senegal';
+
+    var cnaasOk = await sendEmailWithLog(token, cfg._sid, cfg, notifLog, {
+      to: cfg.contact_cnaas_email,
+      subject: 'Declaration sinistre — Deces ' + animalId + ' — Police n' + (cfg.numCnaas || ''),
+      body: cnaasBody, refId: refCnaas, type: 'CNAAS_DECES_J0'
+    });
+
+    // Email VET J+0
+    var vetSent = await isAlreadySent(token, cfg._sid, notifLog, refVet);
+    if (!vetSent && cfg.contact_vet_email) {
+      var vetBody = 'URGENT — Deces animal — ' + animalId + '\n\n'
+        + 'Bonjour ' + cycle.veterinaire + ',\n\n'
+        + 'URGENT : ' + animalId + ' est decede a la Ferme BOAN.\n'
+        + 'Votre presence est requise pour le certificat CNAAS avant leur expert (5-7 jours).\n\n'
+        + 'Animal : ' + animalId + ' — ' + (beteInfo.race || '') + ' — ' + (beteInfo.poidsEntree || '') + ' kg\n'
+        + 'Date : ' + dateStr + '\nSymptomes : ' + sym + '\nTraitements : ' + tra + '\n\n'
+        + 'L\'animal N\'A PAS ete enterre — en attente de votre constat.\n'
+        + 'Merci de confirmer dans les 48h.\n\n'
+        + cfg.ferme_responsable_nom + ' - ' + cfg.ferme_responsable_tel;
+      await sendEmailWithLog(token, cfg._sid, cfg, notifLog, {
+        to: cfg.contact_vet_email,
+        subject: 'URGENT — Deces ' + animalId + ' — Certificat CNAAS requis',
+        body: vetBody, refId: refVet, type: 'VET_DECES_J0',
+        cc: [cfg.ferme_email_fondateur, cfg.contact_rga_email]
+      });
+    }
+
+    // Rappel vét J+1 si pas de confirmation (col H = Date_Confirmation)
+    var vetConfirmed = (notifLog || []).some(function(r) {
+      return r[2] === refVet && String(r[7] || '').length > 0;
+    });
+    if (!vetConfirmed && cfg.contact_vet_email
+        && !(await isAlreadySent(token, cfg._sid, notifLog, refRappel))) {
+      var rappelBody = 'Rappel URGENT — Deces ' + animalId + '\n\n'
+        + 'Bonjour ' + cycle.veterinaire + ',\n\n'
+        + 'Le dossier CNAAS pour ' + animalId + ' attend votre certificat de constatation.\n'
+        + 'L\'animal n\'a pas ete enterre.\n\n'
+        + 'Merci de confirmer votre venue au ' + cfg.ferme_responsable_tel + '.\n\n'
+        + cfg.ferme_responsable_nom + '\nFerme BOAN, Thies, Senegal';
+      await sendEmailWithLog(token, cfg._sid, cfg, notifLog, {
+        to: cfg.contact_vet_email,
+        subject: 'Rappel URGENT — Deces ' + animalId + ' — Confirmation requise',
+        body: rappelBody, refId: refRappel, type: 'VET_DECES_RAPPEL_J1',
+        cc: [cfg.ferme_email_fondateur]
+      });
+    }
+
+    // Alerte croisée : col M < col L → expert avant vét
+    var dateVet    = String(row[11] || ''); // col L
+    var dateExpert = String(row[12] || ''); // col M
+    if (dateVet && dateExpert && dateExpert < dateVet && cfg.ferme_email_fondateur) {
+      await sendEmail(cfg, cfg.ferme_email_fondateur,
+        'BOAN ALERTE — Expert CNAAS prevu avant vet — ' + animalId,
+        'Expert CNAAS prevu le ' + dateExpert + ' AVANT le veterinaire (' + dateVet + ').\n'
+        + 'Risque de rejet du dossier. Appeler CNAAS pour reporter apres le ' + dateVet + '.', []);
+    }
+
+    // Effacer email_pending UNIQUEMENT si email CNAAS envoyé avec succès
+    if (cnaasOk) {
+      await updateCell(token, cfg._sid, 'Sinistres_CNAAS!K' + rowIdx, 'NON');
+    }
+  }
+}
+```
+
+### 4.9 checkAndSendCnaasFollowups()
+
+```js
+async function checkAndSendCnaasFollowups(token, cfg, sinistresRows, notifLog) {
+  var todayISO = new Date().toISOString().slice(0, 10);
+  for (var i = 0; i < sinistresRows.length; i++) {
+    var row = sinistresRows[i];
+    if (String(row[4] || '').toUpperCase() !== 'EN_COURS') continue; // col E
+    if (String(row[9] || '').toUpperCase() === 'OUI') continue;       // col J = Relances_Stop
+    var dateJ0 = String(row[5] || ''); // col F
+    if (!dateJ0) continue;
+    var joursEcoules = Math.round(
+      (Date.now() - new Date(dateJ0 + 'T00:00:00Z').getTime()) / 86400000
+    );
+    if (joursEcoules !== 7 && joursEcoules !== 14) continue;
+
+    var animalId = String(row[2] || '');
+    var refId = 'CNAAS_RELANCE_J' + joursEcoules + '_' + animalId + '_' + todayISO;
+    if (await isAlreadySent(token, cfg._sid, notifLog, refId)) continue;
+
+    var body = 'BOAN — Suivi sinistre\n\nMadame, Monsieur,\n\n'
+      + 'Nous revenons sur notre declaration du ' + dateJ0
+      + ', restee sans accuse de reception.\n\n'
+      + 'Ref : ' + String(row[1] || '') + ' — ' + animalId
+      + ' — Police n' + (cfg.numCnaas || '') + '\n\n'
+      + 'Nous restons a votre disposition.\n\n'
+      + cfg.ferme_responsable_nom + ' - ' + cfg.ferme_responsable_tel;
+
+    await sendEmailWithLog(token, cfg._sid, cfg, notifLog, {
+      to: cfg.contact_cnaas_email,
+      subject: 'BOAN Suivi sinistre — Police n' + (cfg.numCnaas || '') + ' — Dec. du ' + dateJ0,
+      body: body, refId: refId, type: 'CNAAS_RELANCE_J' + joursEcoules
+    });
+
+    if (joursEcoules === 14 && cfg.ferme_email_fondateur) {
+      await sendEmail(cfg, cfg.ferme_email_fondateur,
+        'BOAN — Dossier ' + animalId + ' sans reponse CNAAS a J+14',
+        'Appel vocal CNAAS Thies recommande pour dossier ' + animalId
+        + ' declare le ' + dateJ0 + '.', []);
+    }
+  }
+}
+```
+
+### 4.10 /api/cron.js
+
+```js
+// CommonJS — requis pour Vercel serverless (module.exports, pas export default)
+module.exports = async function handler(req, res) {
   if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  var type = req.query.type || 'all';
+  var type = req.query.type || 'vet';
   try {
-    if (type === 'vet'    || type === 'all') await checkAndSendVetReminders();
-    if (type === 'deces'  || type === 'all') await checkAndSendDecesAlerts();   // rattrape les décès offline
-    if (type === 'relances'||type === 'all') await checkAndSendCnaasFollowups();
+    var token = await getGoogleToken(); // réutilise /api/token.js
+    var cfg   = await readConfigApp(token, process.env.SID_FONDATEUR);
+    cfg._sid  = process.env.SID_FONDATEUR;
+    var cycle = await readConfigCycle(token, process.env.SID_FONDATEUR);
+
+    await ensureSheetExists(token, cfg._sid, 'Notifications_Log');
+    await ensureSheetExists(token, cfg._sid, 'Sinistres_CNAAS');
+
+    var notifLog      = await readSheet(token, cfg._sid, 'Notifications_Log!A2:I500');
+    var santeRows     = await readSheet(token, cfg._sid, 'Sante_Mortalite!A2:J500');
+    var sinistresRows = await readSheet(token, cfg._sid, 'Sinistres_CNAAS!A2:M200');
+
+    if (type === 'vet')      await checkAndSendVetReminders(token, cfg, cycle, santeRows, notifLog);
+    if (type === 'deces')    await checkAndSendDecesAlerts(token, cfg, cycle, santeRows, sinistresRows, notifLog);
+    if (type === 'relances') await checkAndSendCnaasFollowups(token, cfg, sinistresRows, notifLog);
+
     return res.status(200).json({ ok: true, type: type, ts: new Date().toISOString() });
   } catch(e) {
-    console.error('CRON ERROR', e);
+    console.error('CRON ERROR [' + type + ']', e.message);
     return res.status(500).json({ ok: false, error: e.message });
   }
 };
 ```
 
-#### `/.github/workflows/cron-notifications.yml`
+### 4.11 /.github/workflows/cron-notifications.yml
 
-> ⚠️ **Protection workflow_dispatch** : ajouter une garde `github.actor` pour éviter qu'une PR externe
-> puisse déclencher manuellement le workflow et ainsi provoquer des emails non voulus.
+> **Bug corrigé** : `github.event.inputs.type || 'all'` → tous les schedules envoyaient `type=all`
+> car `github.event.inputs` est vide sur l'événement `schedule`.
+> **Fix** : différencier les 3 crons via `github.event.schedule`.
 
 ```yaml
 name: BOAN — Cron Notifications
 on:
   schedule:
-    - cron: '0 7 * * *'    # 07h00 UTC = 07h00 Dakar (UTC+0)
-    - cron: '2 7 * * *'    # +2 min : cron type=deces
-    - cron: '4 7 * * *'    # +4 min : cron type=relances
-  workflow_dispatch:
-    inputs:
-      type:
-        description: 'Type de cron (vet | deces | relances | all)'
-        required: true
-        default: 'all'
-
-jobs:
-  notify:
-    runs-on: ubuntu-latest
-    # Protection : uniquement les membres du dépôt peuvent déclencher manuellement
-    if: github.event_name == 'schedule' || github.actor == 'diopcmd'
-    steps:
-      - name: Déclencher le cron BOAN
-        run: |
-          TYPE=${{ github.event.inputs.type || 'all' }}
-          # Si schedule : déterminer le type selon l'index du cron
-          curl -f -X GET \
-            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
-            "https://boan-app-ur3x.vercel.app/api/cron?type=$TYPE"
-```
-
-### 7.2 Fichiers `index.html` à modifier
-
-> **Structure colonnes `Sante_Mortalite` actuelle (A:I)** :
-> ```
-> A=date (DD/MM/YYYY)  B=id_bete  C=sym  D=tra  E=cout  F=res  G=dec (OUI/NON)
-> H=bcs  I=muqueuses  J=sopLabel (ajouté par commit 61fc2c0 — lu à la lecture Vague 2)
-> ```
-> L'écriture dans l'app se fait sur `Sante_Mortalite!A:I` (9 colonnes, J=sopLabel écrit uniquement par `_sopInlineSave`).
-> Pour le flag `email_pending` : **utiliser Option A** (colonne dans `Sinistres_CNAAS`, sheet fondateur)
-> plutôt qu'ajouter une colonne K dans `Sante_Mortalite` — voir point bloquant #16.
-
-| Section | Modification |
-|---|---|
-| Livrables — nouveau sous-onglet `contacts` | Bloc Config "Contacts & Assurance" (fondateur) — tous les champs section 4.3, persistés dans Config_App |
-| Saisie > Santé (décès = OUI) | Bannière rouge `⛔ NE PAS ENTERRER`, alerte photo avant submit, compteur 48h sanitaire, boutons WhatsApp/appel vet + CNAAS post-submit |
-| Saisie > Santé (décès = OUI, offline) | `lsSet('deces_pending', {...})` au submit offline — traité par `createSinistrePending()` à la reconnexion |
-| Saisie > Incident (type VOL) | Champ N° PV gendarmerie obligatoire bloquant, **`beteMultiSelect()`** (nouveau helper multi-select — `beteDropdown` ne supporte pas multi-select), boutons WhatsApp/appel CNAAS post-submit |
-| Livrables > Incidents | Timeline dossier `Sinistres_CNAAS`, checkboxes fondateur, bouton "CNAAS confirmé" / "Arrêter relances", bannière NE PAS ENTERRER si expert non passé, compteur 48h, **champs date visite vét + expert CNAAS**, alerte croisée si expert < vét |
-| Livrables > SOP Vétérinaire | Bouton "Vétérinaire confirme" conditionnel (acte dans les 7j) |
-| Dashboard — bannière conditionnelle | `⛔ Dossier sinistre ouvert` si `Sinistres_CNAAS` a une ligne `EN_COURS` |
-| Bouton annuler 30 min | `lsSet('last_deces_ts', Date.now())` au submit → vérifier `Date.now() - lsGet('last_deces_ts') < 30*60*1000` dans la vue pour afficher/masquer le bouton |
-
----
-
-## 8. Points bloquants techniques
-
-### #1 — `Notifications_Log` absent au premier run
-**Solution :** Créer manuellement (section 4.2). 2 min.
-
-### #2 — Doublons emails si cron retry
-**Solution — idempotence double guard + TTL PENDING :**
-```js
-// 1. Lire Notifications_Log + Sinistres_CNAAS en début de cron
-// 2. Vérifier Reference_ID + Date_Envoi = aujourd'hui + Statut ≠ ERREUR
-// 3. Logger Statut=PENDING AVANT l'appel SendGrid
-// 4. Mettre à jour Statut=SENT ou Statut=ERROR après réponse
-//
-// ⚠️ TTL PENDING : si une ligne est en statut PENDING depuis > 2 heures
-// (crash entre l'étape 3 et l'étape 4), la considérer comme ERROR et réessayer.
-// Sinon, le deadlock est silencieux : le cron croit l'email en cours — il ne l'est plus.
-var pendingTs = parseDate(row.Date_Envoi); // timestamp de création du PENDING
-var isPendingStale = row.Statut === 'PENDING' && (Date.now() - pendingTs > 2 * 3600 * 1000);
-if (row.Statut === 'PENDING' && !isPendingStale) { continue; } // en cours — skip
-if (isPendingStale) { updateNotificationStatus(rowIdx, 'ERROR_TIMEOUT'); } // libérer
-```
-
-### #3 — Délivrabilité SendGrid (Orange / Yahoo Sénégal)
-**Solution :**
-- Single Sender Verification minimum (5 min)
-- Domain Authentication SPF + DKIM recommandée (20 min, accès DNS)
-- Email test mensuel dans le cron (cron envoie un "heartbeat" à ferme_email_fondateur)
-
-### #4 — Email décès non envoyé si offline au moment du submit
-**Solution — localStorage + Sinistres_CNAAS (Option A) :**
-- `doSubmit('sante')` si offline ET `S.fsa.dec === 'OUI'` → `lsSet('deces_pending', {id, date, sym, tra, cout, ts})`
-- À la reconnexion (`window.addEventListener('online', ...)`) : appel `createSinistrePending()` qui crée une ligne `Sinistres_CNAAS` dans le sheet fondateur avec `email_pending=OUI`
-- `checkAndSendDecesAlerts()` dans le cron : lire `Sinistres_CNAAS` où `email_pending=OUI` → envoyer l'email → effacer le flag
-- Si `lsGet('deces_pending')` non vide au démarrage app : afficher bannière à l'utilisateur loggé
-
-### #5 — Vétérinaire ne lit probablement pas ses emails (terrain)
-**Solution UI (zéro infrastructure) :**
-- Bouton `💬 WhatsApp Vétérinaire` affiché immédiatement post-submit
-- Bouton `📞 Appeler Vétérinaire` — `tel:` link
-- L'email reste envoyé (trace écrite) mais l'humain est alerté par WhatsApp
-
-### #6 — Valeur déclarée CNAAS basée sur prix foirail potentiellement obsolète
-**Solution :**
-- Mention dans l'email : _"Valeur estimée basée sur relevé foirail du [date_dernier_prix]"_
-- Alerte bloquante au submit décès si dernier prix foirail > 30 jours : _"⚠️ Prix foirail non mis à jour depuis [N] jours — la valeur déclarée sera approximative"_
-
-### #7 — N° police absent au moment d'un décès urgent
-**Solution 3 niveaux :**
-```
-1. Blocage soft avant submit : "⚠️ N° police non configuré → email CNAAS incomplet"
-2. Email envoyé avec "Police n°[À COMPLÉTER]" visible
-3. Statut Notifications_Log = INCOMPLET_POLICE
-```
-
-### #8 — Injection contenu dans email depuis champs libres
-**Solution :** `safeText(s)` sur tous les champs gérant (symptômes, description, circonstances) avant composition du template email.
-**Renforcement (CRLF injection)** : les caractères `\r\n` dans un champ libre peuvent injecter des en-têtes email si le contenu est placé dans un sujet ou un CC. `safeText` normalise les `\r\n\t` en espaces. En-têtes (To, CC, Subject) — toujours construits depuis des variables contrôlées par le fondateur (Config_App), jamais depuis des saisies gérant.
-
-### #9 — Âge animal non tracké dans `CYCLE.betes`
-**Contexte :** `CYCLE.betes = [{id, race, raceCustom, poidsEntree, dateIntro}]` — pas de date de naissance.
-Le champ `raceCustom` contient la race en texte libre quand `race === 'Autre'`.
-**Solution :** L'email utilise `dateIntro` comme "Date d'entrée en élevage" — suffisant pour la CNAAS. Si un âge précis est requis, ajouter un champ `anneeNaissance` optionnel dans la fiche bête (modal init cycle step 3).
-
-### #10 — `sopProtocol` JSON corrompu côté serveur
-**Solution :**
-```js
-try {
-  var prot = JSON.parse(sopProtocolRaw);
-  prot.forEach(function(a) { if (!a.j || isNaN(parseInt(a.j))) throw new Error('Acte invalide'); });
-} catch(e) {
-  logNotification({ type:'VET_ERROR', notes:'sopProtocol invalide: ' + e.message });
-  return;
-}
-```
-
----
-
-### #11 — 5 validations pre-cron obligatoires (VET)
-
-> Sans ces gardes, `checkAndSendVetReminders()` crashe silencieusement ou envoie des rappels absurdes.
-
-> **Note sur `sopProtocol`** : dans l'app, `CYCLE.sopProtocol` est persisté en JSON dans Config_App
-> (clé `sopProtocol`). Chaque acte a la structure : `{j: number, label: string, type: 'sante'|'pesee', note: string}`.
-> Le champ `id` d'un acte est son index dans le tableau (généré au runtime — pas persisté). Pour l'idempotence
-> cron, identifier un acte par la combinaison `{j, label}` plutôt que par `id`.
-
-> **Note sur la validation SOP** : dans l'app, un acte SOP est considéré "validé" quand une entrée
-> `HISTORY` existe avec `type='sante'`, `sopLabel === acte.label`, et date dans la fenêtre `±7j`
-> (logique `_sopEntryAfterReset` + `_pdDone`). Le cron doit répliquer cette logique en lisant
-> `Sante_Mortalite` + `SOP_Check` directement depuis Sheets.
-
-```js
-// 1. sopProtocol vide → pas de crash, alerte fondateur
-if (!sopProtocol || sopProtocol.length === 0) {
-  logNotification({ type:'VET_ERROR', statut:'ERROR_EMPTY_PROTOCOL' }); return;
-}
-// 2. Contact vétérinaire manquant → alerte fondateur, pas crash
-if (!config.contact_vet_whatsapp && !config.contact_vet_email) {
-  logNotification({ type:'VET_ERROR', statut:'ALERT_NO_CONTACT' }); return;
-}
-// 3. Acte hors durée de cycle → skip (ex: J+60 sur cycle de 45j)
-if (acte.j > CYCLE_DUREE_JOURS) { continue; }
-// 4. Acte déjà validé dans SOP_Check → skip (pas de rappel inutile)
-if (sopCheckIds.indexOf(acte.id) !== -1) { continue; }
-// 5. Jour férié sénégalais → skip (table 'jours_fermes' dans Config_App)
-if ((joursFermes || []).indexOf(todayISO) !== -1) {
-  logNotification({ type:'VET_SKIPPED', notes:'Jour ferme: ' + todayISO }); return;
-}
-```
-
-### #12 — `CYCLE.dateDebut` doit être en ISO UTC côté serveur (VET + CNAAS)
-
-> ✅ **RÉSOLU** — `CYCLE.dateDebut` est déjà stocké au format `YYYY-MM-DD` dans `Config_Cycle!A1` (colonne A). Pas de migration nécessaire.
-
-Le cron Node.js peut calculer directement :
-```js
-// dateDebut lu depuis Config_Cycle!A1 est déjà 'YYYY-MM-DD' — pas de conversion nécessaire
-var joursEcoules = Math.floor((Date.now() - new Date(dateDebut + 'T00:00:00Z').getTime()) / 86400000);
-// Dakar = UTC+0 — mais coder robuste pour un changement éventuel
-```
-
-### #13 — `vet_confirmed` : arrêt des rappels après confirmation vétérinaire (VET)
-
-Sans ce mécanisme, le vétérinaire reçoit J-3/J-2/J-1 même après avoir dit "OK je viens".
-
-**Solution :**
-- Utiliser la colonne `Date_Confirmation` existante dans `Notifications_Log`.
-- Si une ligne `Type=SOP_VET_Jx / Reference_ID=acte.id` a `Date_Confirmation` renseignée → `vet_confirmed = TRUE` → skip cet acte dans le cron.
-- Bouton **"✓ Vétérinaire a confirmé"** dans Livrables > SOP Véto → écrit `Date_Confirmation = today` dans Notifications_Log + badge 🟢 dans la timeline.
-
-### #14 — Grille officielle CNAAS requise pour valeur déclarée (CNAAS)
-
-`poids × prix_foirail` sera révisé ou rejeté par l'expert CNAAS comme calcul non conforme à leur grille.
-
-**Solution :**
-- Obtenir la grille CNAAS lors de la souscription (Chantier 2).
-- Hard-coder dans `Config_App` clé `cnaas_grille` : JSON `{zebu_senegalais_18_36m: 1200000, ...}`.
-- Si race absente de la grille → mention dans email : *"Valeur estimée au prorata marché, sujette à expertise CNAAS"*.
-- Alerte bloquante au submit décès si grille et prix foirail tous les deux absents.
-
-### #15 — Fêtes religieuses et fermetures administratives sénégalaises (VET + CNAAS)
-
-Décès pendant Tabaski/Magal/Gamou → administrations fermées 3-5 jours → expert CNAAS absent.
-
-**Solution :**
-- Table `jours_fermes` dans `Config_App` (JSON, mise à jour manuelle annuelle par fondateur).
-- Cron vet : skip envoi si `today in jours_fermes`.
-- Email CNAAS décès : si décès pendant période fermée → mention *"Décès survenu pendant [fête] — expert attendu après réouverture administrative estimée au [date]"*.
-- Délai bannière "NE PAS ENTERRER" étendu à 9-12j affiché plutôt que 5-7j.
-
-### #16 — Cron : accès à `Sante_Mortalite` (SID gérant) pour `email_pending` (CNAAS)
-
-Le cron tourne avec le SID fondateur. `Sante_Mortalite` est écrite sur les sheets gérant ET fondateur via `writeAll([SID.gerant, SID.fondateur, SID.rga], 'Sante_Mortalite!A:I', ...)`. Le sheet fondateur contient donc déjà une copie de `Sante_Mortalite`.
-
-**Solution :**
-- Option A : ajouter colonne `email_pending` dans `Sinistres_CNAAS` (sheet fondateur) plutôt que dans `Sante_Mortalite` gérant — le cron a les droits.
-- Option B : lire `Sante_Mortalite` depuis `SID.fondateur` (copie écrite par `writeAll`) — pas de modification des droits Sheets.
-- **Recommandé : Option A** — plus simple, découplage propre, `Sinistres_CNAAS` est la source de vérité CNAAS.
-```
-
-### #17 — Timeout Vercel plan gratuit (Architecte Backend)
-
-Le cron appelle 3 fonctions `async` séquentiellement. Estimation par fonction : 2-3 lectures Sheets (~1-3s chacune) + 1-2 appels SendGrid (~300ms) = **~5-8s par fonction × 3 = 15-25s**. Timeout plan Hobby = 10s.
-
-**Solution :**
-- Découper en 3 endpoints distincts : `/api/cron?type=vet`, `/api/cron?type=deces`, `/api/cron?type=relances`
-- GitHub Actions : 3 crons à 07h00, 07h02, 07h04 UTC (voir section 7.1 cron.yml)
-- Alternative : passer au plan Vercel Pro (60s) si le fondateur est prêt à payer ~20$/mois
-- **Ne jamais mettre toutes les fonctions en `await` séquentiel dans un seul handler** — risk de timeout surtout si Sheets API est lente
-
-### #18 — `beteDropdown()` ne supporte pas la sélection multiple (cas VOL)
-
-`beteDropdown(val, stateKey, extra, excludeIds)` (L2902) génère un `<select>` HTML — sélection **unique** seulement. Le cas VOL nécessite de sélectionner plusieurs bêtes (vol d'un troupeau entier ou partiel).
-
-**Solution :** Créer `beteMultiSelect(stateKeyArr)` — nouveau helper dans `index.html` :
-```js
-// Principe : liste de checkboxes, stateKeyArr est un tableau dans S (ex: S.fin.beteIds = [])
-function beteMultiSelect(stateKeyArr) {
-  var beteIds = /* même logique que beteDropdown pour obtenir la liste */;
-  return beteIds.map(function(id) {
-    var checked = (stateKeyArr||[]).indexOf(id) !== -1;
-    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0">'
-      +'<input type="checkbox" '+(checked?'checked':'')
-      +' onchange="(function(c){var arr='+stateKeyArr+';var i=arr.indexOf(\''+id+'\');if(c&&i===-1)arr.push(\''+id+'\');if(!c&&i!==-1)arr.splice(i,1)})(this.checked)">'
-      +'<span>'+id+'</span></label>';
-  }).join('');
-}
-```
-> ⚠️ Ne pas utiliser des lambdas arrow functions — ES5 strict dans l'app.
-
-### #19 — Bannière "NE PAS ENTERRER" doit être offline-first et persistante entre rechargements
-
-La bannière décrite dans le roadmap (section 3.1) "disparaît seulement quand expert CNAAS coché" doit survivre à un rechargement de l'app et fonctionner même sans connexion.
-
-**Solution :**
-```js
-// Au submit décès confirmé (_submitActual), en PLUS de l'écriture Sheets :
-lsSet('sinistres_ouverts', lsGet('sinistres_ouverts') || []);
-var _so = lsGet('sinistres_ouverts') || [];
-_so.push({ id: f.id, date: td, expertPasse: false, ts: Date.now() });
-lsSet('sinistres_ouverts', _so);
-
-// Dans r() / viewDash() et viewSaisie() : lire lsGet('sinistres_ouverts') filtrer expertPasse=false
-var _souverts = (lsGet('sinistres_ouverts') || []).filter(function(s){ return !s.expertPasse; });
-if (_souverts.length > 0) {
-  // afficher bannière rouge persistante
-}
-
-// Quand fondateur coche "Expert CNAAS passé" :
-var _so2 = lsGet('sinistres_ouverts') || [];
-_so2.forEach(function(s){ if(s.id === id) s.expertPasse = true; });
-lsSet('sinistres_ouverts', _so2);
-```
-> Ce mécanisme fonctionne **offline** car basé sur localStorage. Synchronized avec Sinistres_CNAAS au chargement.
-
-### #20 — Chargement de `Sinistres_CNAAS` dans `loadLiveData()` non spécifié
-
-Le roadmap décrit une timeline dossier depuis `Sinistres_CNAAS` mais ne précise pas quand ni comment ces données sont chargées dans l'app.
-
-**Solution :** Ajouter la lecture de `Sinistres_CNAAS` en **Vague 2** de `loadLiveData()` (aux côtés des 7 autres onglets) :
-```js
-// Dans le Promise.all de la Vague 2 (L~1400) :
-readSheet(SID.fondateur, 'Sinistres_CNAAS!A2:M200')  // lit toutes les lignes (13 colonnes)
-// col K = email_pending, col L = Date_Visite_Vet_Prevue, col M = Date_Visite_Expert_CNAAS_Prevue
-// Résultat stocké dans LIVE.sinistres = rows
-// Utilisé dans viewLiv() > onglet incidents pour la timeline
-// ET dans viewDash() pour la bannière conditionnelle
-```
-> Accessible uniquement si `S.user === 'fondateur' || S.user === 'rga'` — le gérant n'a pas besoin de ces données.
-
-### #21 — Format email : plain text obligatoire (Sécurité + Délivrabilité)
-
-Les templates email de la section 5 sont en plain text — c'est correct. Confirmation explicite :
-
-**Règle absolue :** NE PAS construire de templates HTML pour les emails BOAN.
-- Délivrabilité : Orange Sénégal filtre agressivement les emails HTML
-- Sécurité : zéro risque XSS, injection HTML ou CRLF dans les en-têtes
-- Lisibilité : les appareils bas de gamme au Sénégal affichent mieux le plain text
-
-Dans le call SendGrid API :
-```js
-body: JSON.stringify({
-  personalizations: [{ to: [{email: to}], cc: cc.map(function(e){return {email:e};}) }],
-  from: { email: config.ferme_email_expediteur },
-  subject: subject,  // PAS de crochets [BOAN]
-  content: [{ type: 'text/plain', value: body }]  // TOUJOURS text/plain
-})
-```
-
-### #22 — Validité juridique de l'email automatique (Droit Sénégalais)
-
-Un email automatique n'a pas valeur d'**acte officiel de déclaration de sinistre** en droit sénégalais sans accusé de réception électronique signé par la CNAAS.
-
-**Considérations :**
-- L'email sert de **preuve d'envoi horodatée** (CC fondateur + RGA = 3 copies)
-- L'appel vocal fondateur à J+0 est l'acte déclencheur officiel — l'app doit afficher
-  clairement : *"L'email est une trace — l'appel vocal CNAAS est obligatoire"*
-- Mention à ajouter dans l'email J+0 : *"Ce message constitue une déclaration à titre
-  conservatoire. Une confirmation par voie officielle sera faite sous 24h."*
-
----
-
-## 9. Ordre d'implémentation
-
-```
-BLOC A — HORS CODE (prérequis absolus)
-  □ [Chantier 1] Contractualiser vétérinaire agréé Thiès — nom, email, +221XX, WhatsApp
-  □ [Chantier 2] Souscrire police CNAAS — N° police, email, tel, délai, liste pièces
-  □ [Chantier 2] Obtenir grille officielle CNAAS indemnisation par race/classe d'âge (PDF)
-  □ [Chantier 2] Obtenir numéro téléphone vocal agent CNAAS Thiès (canal principal déclarations)
-  □ Créer compte SendGrid + Single Sender Verification de l'adresse ferme
-  □ Créer onglet Notifications_Log dans Sheet fondateur (9 colonnes — section 4.2)
-  □ Créer onglet Sinistres_CNAAS dans Sheet fondateur (10 colonnes — section 4.2)
-  □ Collecter tous les contacts (section 4.3) + emails fondateur + RGA
-  □ Ajouter SENDGRID_API_KEY + CRON_SECRET dans Vercel + GitHub Secrets
-
-BLOC B — Config UI index.html
-  ☑ Champ `numCnaas` (N° police CNAAS) — **déjà implémenté** : modal init step 2 + Config_App + Go/No-Go
-  ☑ Champ `veterinaire` (nom vétérinaire) — **déjà implémenté** : modal init step 2 + Config_Cycle
-  □ Sous-onglet "Contacts & Assurance" dans Livrables (fondateur) — champs NOUVEAUX : email/tel vét, email/tel CNAAS, emails fondateur/RGA, horaire_vet, jours_fermes, cnaas_grille
-  □ Persistance dans Config_App Sheets (clé/valeur — via `_syncConfigApp()` déjà en place)
-  □ Bannière rouge ⛔ NE PAS ENTERRER dans Santé (décès = OUI) + compteur 48h sanitaire
-  □ lsSet('sinistres_ouverts', [...]) au submit décès — persistance offline pour la bannière (#19)
-  □ lsSet('last_deces_ts', Date.now()) au submit — pour bouton annuler 30 min
-  □ Alerte photo ⚠️ avant bouton Enregistrer (décès = OUI)
-  □ Champ N° PV gendarmerie bloquant + **beteMultiSelect()** (nouveau helper) dans formulaire VOL (#18)
-  □ Alerte prix foirail obsolète > 30j dans formulaire décès
-  □ Config `horaire_vet_dakar`, `contact_gerant_tel`, `jours_fermes` (pré-rempli 2026), `cnaas_grille` dans sous-onglet Contacts & Assurance
-  □ **[Section 3.6A]** Bannière dashboard gérant J-1 SOP — `_checkVetJ1Banners()` dans `viewDash()`
-      → détecte acte SOP dont dateActe = demain, affiche bouton WhatsApp msg 6.7
-      → flag `boanr_wa_vet_j1_[acteKey]_[YYYY-MM-DD]` via lsSet à l'onclick
-  □ **[Section 3.6B]** Bannière dashboard gérant post-décès — `_checkDecesVetBanners()` dans `viewDash()`
-      → détecte sinistres_ouverts avec expertPasse=false ET > 24h, affiche bouton WhatsApp msg 6.8
-      → flag `boanr_wa_vet_deces_relance_[id]_[YYYY-MM-DD]` via lsSet à l'onclick
-      → bouton "Vétérinaire a confirmé" marque le flag local uniquement (pas d'écriture Sheets)
-  □ /api/notify.js — toutes les fonctions (section 7.1) — emails text/plain uniquement (#21)
-  □ /api/cron.js — endpoint sécurisé avec param ?type= (vet | deces | relances) pour éviter timeout (#17)
-  □ Rappel vét J+1 décès : dans checkAndSendDecesAlerts(), si Date_Confirmation vide pour VET_DECES_[ID] → envoyer 5.2b (template section 5.2b)
-  □ Alerte croisée : dans checkAndSendDecesAlerts(), si col M < col L dans Sinistres_CNAAS → notifier fondateur
-  □ Logique offline : createSinistrePending() déclenché par l'app à la reconnexion (#4 + #19)
-  □ TTL PENDING > 2h → statut ERROR_TIMEOUT dans Notifications_Log (#2)
-
-BLOC D — GitHub Actions
-  □ .github/workflows/cron-notifications.yml avec 3 crons décalés (07h00/07h02/07h04) (#17)
-  □ Ajouter CRON_SECRET dans GitHub Secrets
-  □ Guard `github.actor == 'diopcmd'` sur workflow_dispatch (#sécurité)
-
-BLOC E — Boutons et statuts index.html
-  □ Bouton 1️⃣ 📞 Appeler CNAAS (primaire post-submit décès) + 2️⃣ Appeler Vét + 3️⃣ WhatsApp Vét
-  □ Bouton ⚠️ "Annuler — erreur de saisie" visible 30 min post-submit décès (lsGet check)
-  □ Modal post-submit "✅ Emails envoyés — ⚠️ L'email est une trace — l'appel vocal CNAAS est OBLIGATOIRE"
-  □ Bouton "✓ Vétérinaire a confirmé" (SOP Véto, conditionnel acte dans 7j) → Date_Confirmation Notifications_Log
-  □ Bouton "🔔 Rappel urgent J-0" (gérant uniquement, affiché le jour J de l'acte SOP) → wa.me/ msg 6.3
-  □ Bannière gérant J-1 dans app : "Intervention SOP demain [horaire_vet_dakar] — Préparer zone"
-  □ SOP_Check menu étendu : ✅ Réalisé / ⚠️ Reporté (raison + nouvelle date J+7) / ❌ Annulé (raison)
-  □ Timeline SOP Livrables > SOP Véto : J-3/J-2/J-1 ✓ envoyé / 🟢 confirmé / ⏳ en attente
-  □ Statut CNAAS select (Livrables > Incidents) : En attente / Dossier reçu / Expert assigné / Expertise passée / Rejeté
-  □ Colonne Appel_Fondateur_J0 dans Sinistres_CNAAS — à renseigner manuellement par fondateur
-  □ Checkboxes fondateur : Certif reçu / Certif transmis / Expert passé / Autorisation inhumation si > 48h
-  □ Bouton "CNAAS a confirmé réception" (clôture dossier) → lsSet sinistres_ouverts expertPasse=true
-  □ Bouton "Arrêter les relances" (confirmation CNAAS par téléphone)
-  □ Timeline dossier sinistre (J+0 / Appel fondateur / J+7 relance / J+14) depuis LIVE.sinistres (#20)
-  □ Badge statut email (lecture Notifications_Log via loadLiveData Vague 2)
-  □ Badge numérique onglet Livrables si dossier(s) en attente
-
-BLOC F — Tests (ne jamais tester sur vrais emails CNAAS/vet)
-  □ Test curl /api/cron?type=vet avec x-cron-secret → vérifier réponse 200 en < 10s
-  □ Test curl /api/cron?type=deces + /api/cron?type=relances — idem
-  □ Test email vers adresses fondateur/RGA de test → vérifier text/plain + objet sans crochets
-  □ Test WhatsApp → vérifier ouverture conversation avec message pré-rempli
-  □ Vérifier lignes créées dans Notifications_Log + Sinistres_CNAAS
-  □ Tester idempotence : appeler /api/cron deux fois → une seule ligne dans Notifications_Log
-  □ Tester TTL PENDING : créer ligne PENDING > 2h → relancer cron → statut ERROR_TIMEOUT
-  □ Tester mode offline : soumettre décès hors connexion → lsGet('deces_pending') non vide → reconnexion → email envoyé
-  □ Tester N° police vide → alerte bloquante
-  □ Tester prix foirail > 30j → alerte
-  □ Tester bannière NE PAS ENTERRER après rechargement app (lsGet sinistres_ouverts)
-  □ Tester beteMultiSelect() dans formulaire VOL — vérification sélection multiple
-  □ Mise en production
-```
-
----
-
-## 10. Statut actuel
-
-| Item | Statut |
-|---|---|
-| Vétérinaire contractualisé (Thiès) | ⛔ Non fait — **bloquant** |
-| Contrat CNAAS souscrit + N° police | ⛔ Non fait — **bloquant** |
-| Email/tel/WhatsApp CNAAS confirmés | ⛔ Non fait — bloquant |
-| Compte SendGrid | ⛔ Non fait |
-| Onglet Notifications_Log | ⬛ Auto-créé au premier run cron (L4) |
-| Onglet Sinistres_CNAAS | ⬛ Auto-créé au premier run cron (L4) |
-| Contacts collectés (section 4.3) | ⛔ Non fait |
-| Variables Vercel + GitHub Secrets | ⛔ Non fait |
-| **`CYCLE.numCnaas` (N° police)** | **✅ Implémenté** — modal init + Config_App + Go/No-Go (commit `9766040`) |
-| **`CYCLE.veterinaire` (nom vétérinaire)** | **✅ Implémenté** — modal init + Config_Cycle (commit antérieur) |
-| **`CYCLE.dateDebut` format ISO** | **✅ Déjà YYYY-MM-DD** — point bloquant #12 résolu |
-| Code implémenté (Blocs C–E) | ⬛ En attente des prérequis |
-
----
-
-## 11. Lacunes résiduelles — Solutions concrètes
-
-> Cette section documente les **7 problèmes sans solution ou à solution buguée** identifiés
-> lors de la relecture approfondie du roadmap. Chaque correctif est directement implémentable.
-
----
-
-### L1 — YAML GitHub Actions : TYPE toujours `all` pour les 3 crons schedulés
-
-**Problème :** Le YAML actuel utilise `TYPE=${{ github.event.inputs.type || 'all' }}`. Pour un
-événement `schedule`, `github.event.inputs` est vide → TYPE vaut toujours `'all'`. Les 3
-crons déclenchent donc 3 runs qui appellent chacun `/api/cron?type=all` en parallèle, soit
-**3× la charge** et 3× le risque de timeout.
-
-**Solution :** Utiliser `github.event.schedule` pour différencier — GitHub Actions expose
-la chaîne cron exacte qui a déclenché le workflow.
-
-```yaml
-name: BOAN — Cron Notifications
-on:
-  schedule:
-    - cron: '0 7 * * *'   # 07h00 UTC — vet
-    - cron: '2 7 * * *'   # 07h02 UTC — deces
-    - cron: '4 7 * * *'   # 07h04 UTC — relances
+    - cron: '0 7 * * *'   # 07h00 UTC — type=vet
+    - cron: '2 7 * * *'   # 07h02 UTC — type=deces
+    - cron: '4 7 * * *'   # 07h04 UTC — type=relances
   workflow_dispatch:
     inputs:
       type:
@@ -1431,7 +937,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' || github.actor == 'diopcmd'
     steps:
-      - name: Résoudre le type selon le trigger
+      - name: Résoudre le type
         id: resolve
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -1443,7 +949,6 @@ jobs:
           else
             echo "type=relances" >> $GITHUB_OUTPUT
           fi
-
       - name: Déclencher le cron BOAN
         run: |
           curl -f -X GET \
@@ -1453,309 +958,385 @@ jobs:
 
 ---
 
-### L2 — Lecture de `Config_App` côté serveur (cron Node.js)
+## 5. Templates emails (plain text strict)
 
-**Problème :** Le cron tourne en Node.js Vercel — il n'a aucun accès à l'objet `CYCLE` qui
-est construit côté client dans `index.html`. Toute la configuration (sopProtocol, numCnaas,
-contacts, jours_fermes, etc.) doit être lue directement depuis `Config_App` via l'API Sheets.
-Ce pattern n'est documenté nulle part.
+> **Règle absolue** : `text/plain` uniquement — HTML filtré par Orange Sénégal.
+> Pas de crochets [BOAN] dans les objets. `safeText()` sur tous les champs libres.
 
-**Solution :** Ajouter ce helper dans `/api/notify.js` :
+### 5.1 Rappel SOP vétérinaire (J-3 / J-2 / J-1)
+```
+À    : [contact_vet_email]
+CC   : [ferme_email_fondateur]
+Objet : BOAN — Rappel acte SOP dans [N] jour(s) — [acte.label]
 
-```js
-// Lecture Config_App depuis le sheet fondateur — retourne un objet clé→valeur
-// Les valeurs JSON (tableaux, objets) sont parsées automatiquement
-async function readConfigApp(token, sidFondateur) {
-  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + sidFondateur
-    + '/values/' + encodeURIComponent('Config_App') + '!A:B'
-    + '?valueRenderOption=UNFORMATTED_VALUE';
-  var res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-  if (!res.ok) throw new Error('Config_App illisible: ' + res.status);
-  var data = await res.json();
-  var cfg = {};
-  (data.values || []).forEach(function(row) {
-    if (!row[0]) return;
-    try { cfg[row[0]] = JSON.parse(row[1]); }
-    catch(e) { cfg[row[0]] = row[1] || ''; }
-  });
-  return cfg;
-}
+Bonjour [cycle.veterinaire],
 
-// Correspondance clés Config_App → équivalents CYCLE côté client :
-// cfg.sopProtocol        → CYCLE.sopProtocol (JSON array des actes)
-// cfg.numCnaas           → CYCLE.numCnaas
-// cfg.jours_fermes       → table des jours fériés (JSON array 'YYYY-MM-DD')
-// cfg.cnaas_grille       → grille indemnisation (JSON object)
-// cfg.contact_vet_email  → nouveau champ — à créer dans sous-onglet Contacts
-// cfg.contact_vet_tel    → nouveau champ
-// cfg.contact_cnaas_email → nouveau champ
-// cfg.ferme_email_fondateur → email expéditeur SendGrid
-// cfg.sopResetAt         → CYCLE.sopResetAt (date reset SOP)
+Rappel : acte du protocole SOP planifié dans [N] jour(s).
+
+Acte       : [acte.label]
+Date prévue: [dateActe DD/MM/YYYY]
+Troupeau   : [cycle.betes.length] bêtes actives
+
+Merci de confirmer votre disponibilité.
+
+[ferme_responsable_nom] — [ferme_responsable_tel]
+Ferme BOAN, Thiès, Sénégal
 ```
 
-Lecture de `Config_Cycle` pour les données du cycle en cours :
+### 5.2 Alerte vétérinaire — Décès J+0
+```
+À    : [contact_vet_email]
+CC   : [ferme_email_fondateur], [contact_rga_email]
+Objet : URGENT — Décès animal — Certificat CNAAS requis — [ID_ANIMAL]
 
-```js
-async function readConfigCycle(token, sidFondateur) {
-  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + sidFondateur
-    + '/values/' + encodeURIComponent('Config_Cycle') + '!A:J'
-    + '?valueRenderOption=UNFORMATTED_VALUE';
-  var res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-  var data = await res.json();
-  var row = (data.values || [[]])[0] || [];
-  return {
-    dateDebut: row[0] || '',    // YYYY-MM-DD — déjà au bon format
-    nomCycle:  row[1] || '',
-    betes:     JSON.parse(row[2] || '[]'),  // [{id,race,raceCustom,poidsEntree,dateIntro}]
-    veterinaire: row[8] || ''   // colonne I = nom vétérinaire référent
-  };
-}
+Bonjour [cycle.veterinaire],
+
+URGENT : [ID_ANIMAL] est décédé à la Ferme BOAN.
+Votre présence est requise pour le certificat de constatation
+avant le passage de l'expert CNAAS (attendu sous 5-7 jours terrain).
+
+Animal    : [ID_ANIMAL] — [race] — [poidsEntree] kg
+Date      : [date]
+Symptômes : [safeText(sym)]
+Traitements: [safeText(tra)]
+
+L'animal N'A PAS été enterré — en attente de votre constat.
+Merci de confirmer votre disponibilité dans les 48h.
+
+[ferme_responsable_nom] — [ferme_responsable_tel]
+Ferme BOAN, Thiès, Sénégal
 ```
 
----
+### 5.2b Rappel vétérinaire J+1 (si aucune confirmation)
+```
+À    : [contact_vet_email]
+CC   : [ferme_email_fondateur]
+Objet : Rappel URGENT — Décès [ID_ANIMAL] — Confirmation de venue requise
 
-### L3 — Guard validation #11 point 4 : `acte.id` non persisté
+Bonjour [cycle.veterinaire],
 
-**Problème :** Le code documenté au point #11 utilise `sopCheckIds.indexOf(acte.id)` pour
-vérifier si un acte est déjà validé. Or `acte.id` est l'index du tableau runtime côté client
-— il n'est **jamais persisté** dans les Sheets. Un acte lu depuis Config_App n'a pas de `id`.
-Le guard ne filtre jamais → rappels envoyés pour des actes déjà réalisés.
+Le dossier CNAAS pour [ID_ANIMAL] attend votre certificat de constatation.
+L'animal n'a pas été enterré.
 
-**Solution :** Identifier chaque acte par la combinaison `{j, label}` et valider contre les
-entrées de `Sante_Mortalite` (colonne J = `sopLabel`) :
+Merci de confirmer votre venue au [ferme_responsable_tel].
 
-```js
-// Remplacer le guard #11 point 4 par :
-function isActeValidated(acte, dateDebut, santeRows) {
-  // Date théorique de l'acte
-  var dateActeMs = new Date(dateDebut + 'T00:00:00Z').getTime() + acte.j * 86400000;
-  var found = false;
-  (santeRows || []).forEach(function(row) {
-    var sopLbl = String(row[9] || '');  // colonne J
-    if (sopLbl !== acte.label) return;
-    // Convertir date DD/MM/YYYY de la feuille en timestamp
-    var parts = String(row[0] || '').split('/');
-    if (parts.length !== 3) return;
-    var entryMs = Date.UTC(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-    // Fenêtre de tolérance ±7j (même logique que _sopEntryAfterReset côté client)
-    if (Math.abs(entryMs - dateActeMs) / 86400000 <= 7) { found = true; }
-  });
-  return found;
-}
-
-// Usage dans checkAndSendVetReminders() :
-// Lire Sante_Mortalite!A:J depuis SID.fondateur (copie présente via writeAll)
-// Pour chaque acte : if (isActeValidated(acte, dateDebut, santeRows)) { continue; }
+[ferme_responsable_nom]
+Ferme BOAN, Thiès, Sénégal
 ```
 
-> Note : `SID.fondateur` contient une copie de `Sante_Mortalite` grâce au `writeAll([SID.gerant,
-> SID.fondateur, SID.rga], ...)` — le cron n'a donc besoin que du token fondateur.
+### 5.3 Déclaration CNAAS — Décès J+0
+```
+À    : [contact_cnaas_email]
+CC   : [ferme_email_fondateur], [contact_rga_email]
+Objet : Déclaration sinistre — Décès [ID_ANIMAL] — Police n°[CYCLE.numCnaas]
 
----
+Madame, Monsieur,
 
-### L4 — Auto-création de `Notifications_Log` et `Sinistres_CNAAS` au premier run
+La Ferme BOAN déclare le sinistre suivant dans le délai contractuel.
+Ce message constitue une déclaration à titre conservatoire.
 
-**Problème :** Le point #1 dit "créer manuellement (2 min)". En pratique, si le fondateur
-oublie de créer ces onglets avant le premier cron, toutes les fonctions crashent avec
-`Unable to parse range` et aucun log n'est écrit.
+TYPE DE SINISTRE  : Décès animal
+N° POLICE         : [CYCLE.numCnaas]
+DATE DU DÉCÈS     : [date DD/MM/YYYY]
+LIEU              : Ferme BOAN, Thiès, Sénégal
 
-**Solution :** Ajouter `ensureSheetExists()` appelé une fois en début de chaque handler :
+--- IDENTIFICATION DE L'ANIMAL ---
+  Identifiant  : [ID_ANIMAL]
+  Race         : [race]
+  Poids entrée : [poidsEntree] kg
+  Date entrée  : [dateIntro DD/MM/YYYY]
+  Poids actuel : [poids_dernier] kg (pesée du [date_derniere_pesee])
+  Valeur estimée : [cnaas_grille[race] ou poidsEntree × prix_foirail] FCFA
 
-```js
-// /api/notify.js — helper auto-création onglet + en-têtes
-async function ensureSheetExists(token, sid, sheetName) {
-  // 1. Vérifier si l'onglet existe
-  var testUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid
-    + '/values/' + encodeURIComponent(sheetName) + '!A1?valueRenderOption=UNFORMATTED_VALUE';
-  var test = await fetch(testUrl, { headers: { Authorization: 'Bearer ' + token } });
-  if (test.ok) return; // existe déjà
+--- HISTORIQUE DES SOINS ---
+  Symptômes    : [safeText(sym)]
+  Traitements  : [safeText(tra)]
+  Coût soins   : [cout] FCFA
+  Vaccinations : [actes SOP validés — label + date]
 
-  // 2. Créer l'onglet
-  var batchUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + ':batchUpdate';
-  var batchRes = await fetch(batchUrl, {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ requests: [{ addSheet: { properties: { title: sheetName } } }] })
-  });
-  if (!batchRes.ok) throw new Error('Impossible de créer ' + sheetName + ': ' + batchRes.status);
+--- HISTORIQUE DES PESÉES ---
+  [date | poids kg | gain kg | GMQ kg/j — 3 dernières pesées]
 
-  // 3. Écrire les en-têtes selon le nom de l'onglet
-  var HEADERS = {
-    Notifications_Log: [['Date_Envoi','Type','Reference_ID','Destinataire','Canal',
-                          'Statut','Tentative_N','Date_Confirmation','Notes']],
-    Sinistres_CNAAS:   [['Date','Type','ID_Animal_s','N_PV_Gendarmerie','Statut_CNAAS',
-                          'Date_Email_J0','Appel_Fondateur_J0','Certif_Vet_Recu',
-                          'Expert_Passe','Relances_Stop','email_pending',
-                          'Date_Visite_Vet_Prevue','Date_Visite_Expert_CNAAS_Prevue']]
-  };
-  var hdrs = HEADERS[sheetName];
-  if (!hdrs) return;
-  var putUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid
-    + '/values/' + encodeURIComponent(sheetName) + '!A1?valueInputOption=USER_ENTERED';
-  await fetch(putUrl, {
-    method: 'PUT',
-    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ values: hdrs })
-  });
-}
+--- ENGAGEMENT ---
+  L'animal N'A PAS été abattu ni enterré. En attente de votre expert.
 
-// Appel en tête de chaque fonction principale :
-// await ensureSheetExists(token, SID_FONDATEUR, 'Notifications_Log');
-// await ensureSheetExists(token, SID_FONDATEUR, 'Sinistres_CNAAS');
+COORDINATION REQUISE :
+  Merci de coordonner la date de passage de votre expert
+  avec la disponibilité du vétérinaire Dr [cycle.veterinaire],
+  afin que le certificat soit disponible lors de votre venue.
+
+Pièces à transmettre séparément :
+  - Certificat de constatation signé par Dr [cycle.veterinaire]
+  - Photos de l'animal (par WhatsApp ou email de suivi)
+
+[ferme_responsable_nom] — [ferme_responsable_tel]
+Ferme BOAN, Thiès, Sénégal
 ```
 
-> Mettre à jour le point #1 du tableau statut section 10 après déploiement : il devient ✅ automatique.
+### 5.4 Déclaration CNAAS — Vol J+0
+```
+À    : [contact_cnaas_email]
+CC   : [ferme_email_fondateur], [contact_rga_email]
+Objet : Déclaration sinistre — Vol bétail — Police n°[CYCLE.numCnaas]
 
----
+TYPE DE SINISTRE  : Vol de bétail
+N° POLICE         : [CYCLE.numCnaas]
+N° PV GENDARMERIE : [safeText(no_pv)]
+DATE DU VOL       : [date] à [heure]
+LIEU              : Ferme BOAN, Thiès, Sénégal
 
-### L5 — `beteMultiSelect()` : implémentation ES5 corrigée
+--- ANIMAUX VOLÉS ---
+  [ID | Race | Poids entrée kg | Valeur FCFA]
+  TOTAL estimé : [somme] FCFA
 
-**Problème :** Le code documenté au point #18 contient `arr='+stateKeyArr+'` qui tente
-de sérialiser un tableau passé par référence en string, ce qui génère `arr=[object Array]`
-— la checkbox ne modifie rien. De plus, `stateKeyArr` sans guillemets ne référence pas
-le bon chemin dans `S`.
+Circonstances  : [safeText(desc)]
+Dépôt plainte  : Gendarmerie Thiès, le [date_plainte]
 
-**Solution — implémentation ES5 correcte :**
+[ferme_responsable_nom] — [ferme_responsable_tel]
+Ferme BOAN, Thiès, Sénégal
+```
 
-```js
-// beteMultiSelect() — helper multi-select bêtes pour formulaire VOL
-// Principe : stocke les IDs cochés dans S.fin.beteIds (Array)
-// Appel : beteMultiSelect()  — pas d'argument, lit/écrit S.fin.beteIds
-// À initialiser dans resetInc() : S.fin.beteIds = [];
-function beteMultiSelect() {
-  // Construire la liste des bêtes disponibles (vivantes uniquement)
-  var deceased = LIVE.deceased || [];
-  var allIds = (CYCLE.betes || [])
-    .filter(function(b) { return deceased.indexOf(b.id) === -1; })
-    .map(function(b) { return b.id; });
-  if (!allIds.length) {
-    return '<div class="fg"><label>Bêtes concernées</label>'
-      + '<div class="msg-err">Aucune bête disponible dans ce cycle</div></div>';
-  }
-  var current = S.fin.beteIds || [];
-  var count = current.length;
-  var html = '<div class="fg"><label>Bêtes concernées ('
-    + count + ' sélectionnée' + (count > 1 ? 's' : '') + ')</label>'
-    + '<div style="background:#0f1a0f;border:1px solid #2a4a2a;border-radius:8px;'
-    + 'padding:8px;max-height:160px;overflow-y:auto">';
-  allIds.forEach(function(id) {
-    var chk = current.indexOf(id) !== -1;
-    // L'onclick utilise des guillemets simples en dehors et doubles en dedans
-    // id ne contient que des caractères alphanumériques + tiret (ex: C1-001) — sûr en inline
-    html += '<label style="display:flex;align-items:center;gap:10px;padding:5px 8px;cursor:pointer">'
-      + '<input type="checkbox" ' + (chk ? 'checked ' : '')
-      + 'onchange="'
-      +   'var idx=S.fin.beteIds.indexOf(\'' + id + '\');'
-      +   'if(this.checked&&idx===-1){S.fin.beteIds.push(\'' + id + '\');}'
-      +   'else if(!this.checked&&idx!==-1){S.fin.beteIds.splice(idx,1);}'
-      +   'r();">'
-      + '<span style="font-size:14px">' + id + '</span>'
-      + '</label>';
-  });
-  html += '</div></div>';
-  return html;
-}
+### 5.5 Relances CNAAS — J+7 / J+14
+```
+À    : [contact_cnaas_email]
+CC   : [ferme_email_fondateur], [contact_rga_email]
+Objet : BOAN Suivi sinistre — Police n°[CYCLE.numCnaas] — Déc. du [date_J0]
 
-// Valeur lue au submit : S.fin.beteIds.join(',') → stocké en colonne C de Sinistres_CNAAS
-// Validation : S.fin.beteIds.length === 0 → message d'erreur bloquant
+Madame, Monsieur,
+
+Nous revenons sur notre déclaration du [date_J0], sans accusé de réception à ce jour.
+
+Réf : [Type] — [ID_ANIMAL ou N°_PV] — Police n°[CYCLE.numCnaas]
+
+Nous restons à votre disposition.
+
+[ferme_responsable_nom] — [ferme_responsable_tel]
 ```
 
 ---
 
-### L6 — Réconciliation `sinistres_ouverts` localStorage avec Sheets au rechargement
+## 6. Templates WhatsApp
 
-**Problème :** Le mécanisme du point #19 écrit dans `localStorage` au submit décès. Mais si
-le fondateur coche "Expert CNAAS passé" directement dans Sheets (sans passer par l'app),
-la bannière reste affichée dans l'app car le localStorage n'est jamais mis à jour.
-De plus, si l'app est utilisée sur deux appareils, le localStorage ne se synchronise pas.
+> Pattern : `window.open('https://wa.me/' + tel + '?text=' + encodeURIComponent(msg), '_blank')`
+> Même pattern que `partagerRapportJourWhatsApp()` existant dans l'app.
+> Si tel vide → `wa.me/?text=` (utilisateur choisit le contact).
 
-**Solution :** Ajouter une réconciliation dans le callback `loadLiveData()` Vague 2, après
-le chargement de `LIVE.sinistres` :
+### 6.1 WA vét — Décès J+0 (post-submit gérant)
+```
+🚨 *BOAN — DÉCÈS ANIMAL*
 
-```js
-// À ajouter dans le then() final de la Vague 2, après LIVE.sinistres = rows
-function _reconcileSinistresOuverts() {
-  var soLocal = lsGet('sinistres_ouverts') || [];
-  if (!soLocal.length) return; // rien à réconcilier
-  var changed = false;
-  soLocal.forEach(function(so) {
-    if (so.expertPasse) return; // déjà fermé localement
-    // Chercher la ligne dans LIVE.sinistres (col A=Date, C=ID_Animal_s, I=Expert_Passe)
-    var match = (LIVE.sinistres || []).filter(function(r) {
-      // ID_Animal_s peut être 'C1-001' ou 'C1-001,C1-002' pour multi-bêtes
-      return String(r[2] || '').split(',').indexOf(so.id) !== -1;
-    });
-    match.forEach(function(r) {
-      // col I (index 8) = Expert_Passe, col J (index 9) = email_pending
-      var expertPasse = String(r[8] || '').toUpperCase() === 'OUI';
-      var cloture = String(r[4] || '').toUpperCase() === 'CLOTURE'; // col E = Statut_CNAAS
-      if (expertPasse || cloture) { so.expertPasse = true; changed = true; }
-    });
-  });
-  if (changed) { lsSet('sinistres_ouverts', soLocal); }
-}
-// Appel : _reconcileSinistresOuverts(); en fin de loadLiveData Vague 2 completion
+Bête : [ID_ANIMAL] ([race], [poids] kg)
+Date : [date] à [heure]
+Symptômes : [sym]
+
+⛔ Animal non enterré — présence requise pour certificat CNAAS.
+Ferme BOAN — [ferme_responsable_nom] — [ferme_responsable_tel]
 ```
 
-> Cette réconciliation est idempotente et silencieuse — ne modifie rien si LIVE.sinistres
-> est vide ou si l'expert n'est pas encore passé.
+### 6.2 WA vét — Rappel SOP (cron)
+```
+📅 *BOAN — Rappel SOP*
+
+Acte : [acte.label]
+Date : [dateActe DD/MM/YYYY] (dans [N] jours)
+Troupeau : [(CYCLE.betes||[]).length] bêtes actives
+
+Ferme BOAN — [ferme_responsable_tel]
+```
+
+### 6.3 WA vét — Rappel urgent J-0 (bouton gérant dans SOP Véto)
+```
+🔔 *BOAN — Intervention aujourd'hui*
+
+Bonjour [CYCLE.veterinaire],
+
+Acte SOP prévu AUJOURD'HUI à la Ferme BOAN.
+Acte : [acte.label]
+Troupeau : [(CYCLE.betes||[]).length] bêtes actives
+
+📞 [ferme_responsable_tel]
+Ferme BOAN, Thiès, Sénégal
+```
+
+### 6.4 WA gérant — Préparer intervention demain
+```
+📋 *BOAN — Intervention SOP demain*
+
+Dr [CYCLE.veterinaire] attendu demain à [horaire_vet_dakar].
+Acte : [acte.label]
+
+➡ Préparer zone, contenir troupeau.
+Ferme BOAN — [ferme_responsable_tel]
+```
+
+### 6.5 WA CNAAS — Décès J+0 (post-submit)
+```
+📋 *BOAN — Déclaration sinistre envoyée*
+
+Type : Décès animal
+Police : [CYCLE.numCnaas]
+Animal : [ID_ANIMAL] — [race] — [poids] kg
+Date : [date]
+
+⛔ Animal non enterré — en attente expert.
+Email envoyé à [contact_cnaas_email].
+[ferme_responsable_nom] — [ferme_responsable_tel]
+```
+
+### 6.6 WA CNAAS — Vol J+0
+```
+📋 *BOAN — Déclaration sinistre envoyée*
+
+Type : Vol de bétail
+Police : [CYCLE.numCnaas]
+N° PV : [no_pv_gendarmerie]
+Animaux : [liste IDs]
+
+Email envoyé à [contact_cnaas_email].
+[ferme_responsable_nom] — [ferme_responsable_tel]
+```
+
+### 6.7 WA gérant → vét — Rappel SOP J-1 (bannière dashboard contexte A)
+```
+🔔 *BOAN — Rappel acte SOP demain*
+
+Bonjour [CYCLE.veterinaire],
+
+Acte : [acte.label]
+Date : [demain DD/MM/YYYY]
+Troupeau : [(CYCLE.betes||[]).length] bêtes actives
+
+Ferme BOAN — [lsGet('cfg_contact_gerant_tel')]
+```
+
+### 6.8 WA gérant → vét — Relance décès > 24h (bannière dashboard contexte B)
+```
+⚠️ *BOAN — Relance certificat décès*
+
+Bonjour [CYCLE.veterinaire],
+
+La bête [ID_ANIMAL] est décédée [hier / il y a N jours].
+Le dossier CNAAS attend votre certificat. L'animal n'a pas été enterré.
+
+Pouvez-vous confirmer votre venue ?
+Ferme BOAN — [lsGet('cfg_contact_gerant_tel')]
+```
 
 ---
 
-### L7 — `checkAndSendDecesAlerts()` : idempotence complète avec `email_pending`
+## 7. Pièces CNAAS — Table de référence
 
-**Problème :** Le scénario de crash entre l'envoi SendGrid et l'effacement du flag
-`email_pending=OUI` dans `Sinistres_CNAAS` n'est pas couvert par le TTL PENDING du point #2
-(qui s'applique à `Notifications_Log`, pas à `Sinistres_CNAAS`). Le cron suivant re-lit
-`email_pending=OUI` et renvoie l'email.
+| Pièce | Qui produit | Quand | Dans BOAN |
+|---|---|---|---|
+| Déclaration J+0 | App BOAN (email auto) | J+0 | ✅ Section 5.3 |
+| Certificat constatation vét | Vétérinaire attitré | J+1 à J+5-7 ⚠️ délai réel | ✅ Email vét J+0 (5.2) + rappel J+1 (5.2b) → ⬛ Checkbox fondateur |
+| Fiche identification animal | App BOAN | J+0 dans email | ✅ CYCLE.betes[i] |
+| Historique soins/vaccins | App BOAN | J+0 dans email | ✅ Sante_Mortalite + SOP_Check |
+| N° police assurance | Fondateur (config) | J+0 dans email | ✅ CYCLE.numCnaas |
+| Photos animal décédé | Gérant (manuel) | J+0 | ⚠️ Rappel app — WA ou email suivi |
+| Engagement non enterrement | App (bannière) | Continu | ✅ Bannière ⛔ + mention email |
 
-**Solution :** Appliquer le pattern PENDING de `Notifications_Log` à `Sinistres_CNAAS` aussi —
-écrire un flag `NOTIF_PENDING` dans Notifications_Log AVANT d'appeler SendGrid,
-effacer `email_pending` APRÈS réception du `202` SendGrid :
+> ⚠️ **Coordination vét/expert CNAAS** : email CNAAS J+0 demande coordination explicite.
+> Appel vocal fondateur J+0 = alignement des deux rendez-vous.
+> Alerte croisée dans Livrables > Incidents si `Date_Visite_Expert_CNAAS_Prevue < Date_Visite_Vet_Prevue`.
 
-```js
-async function checkAndSendDecesAlerts(token, sidFondateur) {
-  var rows = await readSheet(token, sidFondateur, 'Sinistres_CNAAS!A2:K200');
-  var notifLog = await readSheet(token, sidFondateur, 'Notifications_Log!A2:I200');
-  var today = new Date().toISOString().slice(0, 10);
+---
 
-  for (var i = 0; i < rows.length; i++) {
-    var row = rows[i];
-    var rowIdx = i + 2; // ligne Sheets (1-indexed + header)
-    var emailPending = String(row[10] || '').trim().toUpperCase(); // col K = email_pending
-    if (emailPending !== 'OUI') continue;
+## 8. Checklist d'implémentation
 
-    var animalId = String(row[2] || ''); // col C
-    var refId = 'DECES_' + animalId + '_' + String(row[0] || '').replace(/\//g, '-');
-
-    // 1. Vérifier si déjà traité dans Notifications_Log (idempotence)
-    var alreadySent = notifLog.some(function(r) {
-      return r[2] === refId && (r[5] === 'SENT' || r[5] === 'PENDING');
-    });
-    // Vérifier TTL PENDING > 2h
-    var pendingRow = notifLog.filter(function(r){ return r[2] === refId && r[5] === 'PENDING'; })[0];
-    var isPendingStale = pendingRow && (Date.now() - new Date(pendingRow[0]).getTime() > 2*3600*1000);
-    if (alreadySent && !isPendingStale) continue; // déjà envoyé ou en cours — skip
-
-    // 2. Écrire PENDING dans Notifications_Log AVANT l'appel SendGrid
-    var pendingEntry = [today, 'DECES_J0', refId, config.contact_cnaas_email, 'EMAIL', 'PENDING', '1', '', ''];
-    await appendRow(token, sidFondateur, 'Notifications_Log!A:I', pendingEntry);
-    var pendingRowIdx = /* index de la ligne qu'on vient d'écrire */;
-
-    // 3. Appeler SendGrid
-    var emailOk = await sendEmail(token, config, { /* template décès */ });
-
-    // 4. Mettre à jour Notifications_Log SENT ou ERROR
-    var newStatus = emailOk ? 'SENT' : 'ERROR';
-    await updateCell(token, sidFondateur, 'Notifications_Log!F' + pendingRowIdx, newStatus);
-
-    // 5. Effacer email_pending dans Sinistres_CNAAS — SEULEMENT si emailOk
-    if (emailOk) {
-      await updateCell(token, sidFondateur, 'Sinistres_CNAAS!K' + rowIdx, 'NON');
-    }
-  }
-}
+### BLOC A — Prérequis métier (hors code — bloquants absolus)
+```
+□ Contractualiser vétérinaire agréé Thiès (nom, email, +221XX, WhatsApp)
+□ Souscrire police CNAAS + obtenir N° police, email, tel, délai, liste pièces
+□ Obtenir grille officielle CNAAS indemnisation par race/classe d'âge
+□ Numéro téléphone vocal agent CNAAS Thiès
+□ Créer compte SendGrid + Single Sender Verification adresse fondateur
+□ SENDGRID_API_KEY dans Variables Vercel
+□ CRON_SECRET dans Secrets Vercel + GitHub
+□ SID_FONDATEUR dans Variables Vercel
+□ Saisir les contacts (section 3.5) dans sous-onglet "Contacts & Assurance"
 ```
 
-> Ce pattern garantit : si le cron crashe après `PENDING` mais avant `SENT` → TTL 2h → `ERROR_TIMEOUT`
-> → le cron suivant relance. `email_pending` reste à `OUI` jusqu'à confirmation `SENT`.
+### BLOC B — index.html (frontend)
+```
+☑ CYCLE.numCnaas — déjà implémenté (commit 9766040)
+☑ CYCLE.veterinaire — déjà implémenté
+□ Sous-onglet "Contacts & Assurance" dans viewLiv() — fondateur uniquement
+    → Champs section 3.5, persistés via _syncConfigApp() + cache lsSet('cfg_[key]')
+□ safeTextClient() dans index.html (sym, tra, desc avant stockage localStorage)
+□ viewSaisie() décès=OUI : bannière rouge ⛔ + alerte photo + alerte N° police absent
+    + alerte prix foirail > 30j
+□ doSubmit('sante') si décès=OUI :
+    lsSet last_deces_ts, sinistres_ouverts, deces_pending (si offline)
+    + window.addEventListener('online') → createSinistrePending()
+□ Modal + boutons post-submit décès : 1️⃣📞CNAAS 2️⃣📞Vét 3️⃣💬WA vét + Annuler 30min
+□ viewSaisie() VOL : beteMultiSelect() (section 3.8) + S.fin.beteIds=[] dans reset (~L1899)
+    + champ N° PV bloquant + boutons CNAAS post-submit
+□ viewDash() : bannière ⛔ sinistre ouvert (tous rôles)
+□ viewDash() gérant : _checkVetJ1Banners() + _checkDecesVetBanners() (section 3.3)
+□ LIVE.sinistres + LIVE.notifLog chargés en Vague 2 loadLiveData (section 3.9)
+    + _reconcileSinistresOuverts() en fin de Vague 2
+□ viewLiv() incidents enrichi (section 3.6) :
+    bannière ⛔, timeline, champs L/M, alerte croisée,
+    checkboxes fondateur, statut select, boutons CLOTURE/ANNULE/RELANCES_STOP
+□ viewLiv() sopvet (section 3.7) :
+    bouton "✓ Vét a confirmé", timeline J-3/J-2/J-1, bouton J-0 gérant
+□ Badge numérique onglet Livrables si sinistres EN_COURS
+```
+
+### BLOC C — API serveur (nouveaux fichiers)
+```
+□ /api/notify.js — fonctions sections 4.1 à 4.9 :
+    ensureSheetExists, readConfigApp, readConfigCycle, safeText,
+    isAlreadySent, isActeValidated, sendEmail, sendEmailWithLog,
+    checkAndSendVetReminders, checkAndSendDecesAlerts, checkAndSendCnaasFollowups
+    helpers : readSheet, appendRow, updateCell
+□ /api/cron.js — section 4.10 (CommonJS module.exports, param ?type=)
+□ Réutiliser /api/token.js pour getGoogleToken()
+```
+
+### BLOC D — GitHub Actions
+```
+□ .github/workflows/cron-notifications.yml (section 4.11)
+    → 3 schedules + résolution type par github.event.schedule
+    → Guard github.actor == 'diopcmd' sur workflow_dispatch
+□ CRON_SECRET dans GitHub Secrets
+```
+
+### BLOC E — Tests
+```
+□ curl /api/cron?type=vet — 200 en < 10s
+□ curl /api/cron?type=deces + ?type=relances — idem
+□ Email test vers adresse fondateur — vérifier text/plain, objet sans crochets, CC présents
+□ WhatsApp → wa.me/ ouvre conversation avec message pré-rempli correct
+□ Idempotence : appeler /api/cron deux fois → une seule ligne SENT dans Notifications_Log
+□ TTL PENDING : ligne PENDING > 2h → cron → ERROR_TIMEOUT
+□ Offline décès : submit offline → lsGet('deces_pending') non vide
+    → reconnexion → createSinistrePending() → ligne Sinistres_CNAAS email_pending=OUI
+    → cron → email envoyé, email_pending=NON
+□ N° police vide → Statut INCOMPLET_POLICE + alerte soft app
+□ Prix foirail > 30j → alerte dans formulaire décès
+□ Bannière ⛔ après rechargement → lsGet('sinistres_ouverts') persisté
+□ beteMultiSelect() : coche 2 bêtes → S.fin.beteIds = ['C1-001','C1-002']
+□ Alerte croisée dates : col M < col L → email fondateur envoyé
+□ Dashboard gérant J-1 SOP → tap WA → flagKey présent → bannière disparaît le lendemain
+□ _reconcileSinistresOuverts() : Expert_Passe=OUI Sheets → expertPasse=true localStorage
+□ Mise en production
+```
+
+---
+
+## 9. Statut actuel
+
+| Item | Statut |
+|---|---|
+| Vétérinaire contractualisé (Thiès) | ⛔ Non fait — **bloquant absolu** |
+| Contrat CNAAS + N° police | ⛔ Non fait — **bloquant absolu** |
+| Email/tel CNAAS + grille indemnisation | ⛔ Non fait — bloquant |
+| Compte SendGrid | ⛔ Non fait |
+| Variables Vercel + GitHub Secrets | ⛔ Non fait |
+| `Notifications_Log` + `Sinistres_CNAAS` | ⬛ Auto-créés au 1er run cron (section 4.1) |
+| **`CYCLE.numCnaas`** | **✅ Implémenté** — modal init + Config_App + Go/No-Go (commit `9766040`) |
+| **`CYCLE.veterinaire`** | **✅ Implémenté** — Config_Cycle col I |
+| **`CYCLE.dateDebut` format ISO** | **✅ Déjà YYYY-MM-DD** — aucune conversion nécessaire |
+| Code BLOC B + C + D | ⬛ En attente des prérequis BLOC A |
