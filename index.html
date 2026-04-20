@@ -2202,13 +2202,20 @@ function _syncConfigApp() {
       headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
       body: JSON.stringify({ requests: [{ addSheet: { properties: { title: 'Config_App' } } }] })
     }).catch(function(){});
-    // PUT direct — indépendant de la création de l'onglet (l'onglet existe dans 99% des cas)
-    var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + '/values/' + encodeURIComponent('Config_App!A1') + '?valueInputOption=USER_ENTERED';
-    return fetch(url, {
-      method: 'PUT',
-      headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: rows })
-    }).then(function(r){ return r.json(); }).catch(function(){ return {}; });
+    // PUT direct — précédé d'un clear pour purger les lignes parasites (anciennes appendRow)
+    // clear et PUT sont chaînés séquentiellement pour éviter que le clear n'efface le PUT
+    var _clearUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + '/values/' + encodeURIComponent('Config_App!A1:B200') + ':clear';
+    var _putUrl   = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + '/values/' + encodeURIComponent('Config_App!A1') + '?valueInputOption=USER_ENTERED';
+    return fetch(_clearUrl, {
+      method: 'POST', headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' }, body: '{}'
+    }).catch(function(){})
+    .then(function() {
+      return fetch(_putUrl, {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: rows })
+      }).then(function(r){ return r.json(); }).catch(function(){ return {}; });
+    });
   }).catch(function(){ return Promise.resolve(); });
 }
 
@@ -6213,9 +6220,8 @@ function _sopReset(){
   if(!confirm('Réinitialiser le protocole SOP au standard ?')) return;
   CYCLE.sopProtocol = null;
   lsSet('cycle', CYCLE);
-  // Effacer sopProtocol dans Config_App Sheets (valeur null = standard au prochain chargement)
-  var _resetSid = SID.fondateur || SID.rga;
-  if (_resetSid) appendRow(_resetSid, 'Config_App!A:B', ['sopProtocol', JSON.stringify(null)]);
+  // Persister le reset dans Config_App via _syncConfigApp (PUT atomique — efface les anciennes lignes)
+  _syncConfigApp().catch(function(){});
   S._sopEd = null;
   _syncSopProtocol();
   r();
@@ -6456,36 +6462,17 @@ function _sopInlineSave(idx, tous){
   r();
 }
 function saveObjectifs(){
-  var _sid=SID.fondateur||SID.commerciale||SID.rga; if(!_sid){ alert('SID non configuré'); return; }
-  var keys=[
-    ['gmqCible',         CYCLE.gmqCible         || 1.0],
-    ['gmqWarn',          CYCLE.gmqWarn          || 0.8],
-    ['poidsCible',       CYCLE.poidsCible       || 400],
-    ['poidsVenteMin',    CYCLE.poidsVenteMin    || 340],
-    ['tauxMortMax',      CYCLE.tauxMortMax      || 3],
-    ['coutRevientMax',   CYCLE.coutRevientMax   || 1100],
-    ['margeParBeteMin',  CYCLE.margeParBeteMin  || 80000],
-    ['alerteSeuilTreso', CYCLE.alerteSeuilTreso || 100000]
-  ];
-  if(CYCLE.sopProtocol) keys.push(['sopProtocol', JSON.stringify(CYCLE.sopProtocol)]);
-  keys.push(['numCycle',     CYCLE.numCycle     || 1]);
-  keys.push(['prixAlim',     CYCLE.prixAlim     || 0]);
-  keys.push(['objectifPrix', CYCLE.objectifPrix || 2000]);
-  keys.push(['mixSon',       CYCLE.mixSon       || 60]);
-  keys.push(['mixTourteau',  CYCLE.mixTourteau  || 40]);
-  keys.push(['_mktUpdated',  CYCLE._mktUpdated  || '']);
-  var promises = keys.map(function(kv){
-    return appendRow(_sid, 'Config_App!A:B', [kv[0], JSON.stringify(kv[1])]);
-  });
-  Promise.all(promises).then(function(results){
-    var ok = results.every(function(r){ return r && r.ok; });
-    lsSet('cycle', CYCLE);
-    if(ok){
+  if(!SID.fondateur && !SID.rga){ alert('SID non configuré'); return; }
+  lsSet('cycle', CYCLE);
+  // Déléguer à _syncConfigApp qui fait un PUT atomique A1:Bn — pas de race condition,
+  // pas d'accumulation de lignes parasites dans Config_App.
+  _syncConfigApp().then(function(d){
+    if (d && d.error) {
+      S.msg='err:Erreur lors de l\'enregistrement (' + (d.error.message||'') + ')'; r();
+      setTimeout(function(){ S.msg=''; r(); }, 4000);
+    } else {
       S.msg='ok:\u2705 Objectifs enregistr\u00e9s'; r();
       setTimeout(function(){ S.msg=''; r(); }, 3000);
-    } else {
-      S.msg='err:Erreur lors de l\'enregistrement'; r();
-      setTimeout(function(){ S.msg=''; r(); }, 4000);
     }
   });
 }
