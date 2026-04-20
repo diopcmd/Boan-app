@@ -1182,7 +1182,8 @@ var TABLE_RANGES = {
   'Suivi_Aliments':     { start: 4, end: 200 },
   'KPI_Mensuels':       { start: 4, end: 50  },
   'KPI_Hebdo':          { start: 4, end: 50  },
-  'Historique_Cycles':  { start: 2, end: 200 }  // ligne 1 = en-têtes, données à partir de 2
+  'Historique_Cycles':  { start: 2, end: 200 },  // ligne 1 = en-têtes, données à partir de 2
+  'SOP_Protocol':       { start: 5, end: 50  }   // vitrine SOP : structure + statut auto
 };
 
 function appendRow(sid, range, vals) {
@@ -1407,7 +1408,10 @@ function loadLiveData() {
               if (key === 'prixAlim'     && val && parseFloat(val) > 0) CYCLE.prixAlim     = parseFloat(val);
               if (key === 'objectifPrix' && val && parseInt(val)   > 0) CYCLE.objectifPrix = parseInt(val);
               if (key === '_mktUpdated'  && val) CYCLE._mktUpdated = val;
-              if (key === 'sopProtocol' && val && Array.isArray(val) && val.length) CYCLE.sopProtocol = val;
+              if (key === 'sopProtocol') {
+                if (val === null) CYCLE.sopProtocol = null;                     // reset explicite depuis _sopReset()
+                else if (Array.isArray(val) && val.length) CYCLE.sopProtocol = val;
+              }
               if (key === 'numCycle'    && val && parseInt(val) > 0) CYCLE.numCycle = parseInt(val);
               if (key === 'numCnaas'    && val !== null && val !== undefined) CYCLE.numCnaas = val;
               if (key === 'gonogo'      && val && typeof val === 'object') CYCLE.gonogo = Object.assign(CYCLE.gonogo||{}, val);
@@ -2106,6 +2110,9 @@ function _submitActual(type) {
                  : type==='marche' ? 'Marché '+(S.fm.foi==='Autre'&&S.fm.foiCustom ? S.fm.foiCustom : (S.fm.foi||''))
                  : type;
       addHistory(type, _label, _meta);
+      // Mettre à jour SOP_Protocol sheet si c'est une pesée SOP ou un acte santé SOP
+      if (type === 'pesee' && S._sopCtx) _syncSopProtocol();
+      if (type === 'sante' && S.fsa && S.fsa.sopLabel) _syncSopProtocol();
       // Persister date de chaque type dans Config_App → visible par tous dès step1 (avant Vague 2)
       var _tdSync = today();
       if (type==='fiche')  { marquerFicheAujourdhui(); CYCLE._lastFicheDate = _tdSync; }
@@ -6185,7 +6192,9 @@ function _sopDel(i){
   if(!CYCLE.sopProtocol) CYCLE.sopProtocol = SOP_PROTOCOL_DEFAULT.map(function(e){return {j:e.j,ico:e.ico,label:e.label,type:e.type,note:e.note};});
   CYCLE.sopProtocol.splice(i,1);
   lsSet('cycle', CYCLE);
-  S._sopEd = null; r();
+  S._sopEd = null;
+  _syncSopProtocol();
+  r();
 }
 function _sopSave(isNew){
   if(!S._sopEd) return;
@@ -6196,13 +6205,148 @@ function _sopSave(isNew){
   else CYCLE.sopProtocol[S._sopEd.idx] = entry;
   CYCLE.sopProtocol.sort(function(a,b){return a.j-b.j;});
   lsSet('cycle', CYCLE);
-  S._sopEd = null; r();
+  S._sopEd = null;
+  _syncSopProtocol();
+  r();
 }
 function _sopReset(){
   if(!confirm('Réinitialiser le protocole SOP au standard ?')) return;
   CYCLE.sopProtocol = null;
   lsSet('cycle', CYCLE);
-  S._sopEd = null; r();
+  // Effacer sopProtocol dans Config_App Sheets (valeur null = standard au prochain chargement)
+  var _resetSid = SID.fondateur || SID.rga;
+  if (_resetSid) appendRow(_resetSid, 'Config_App!A:B', ['sopProtocol', JSON.stringify(null)]);
+  S._sopEd = null;
+  _syncSopProtocol();
+  r();
+}
+
+// ── SYNC SOP_Protocol SHEET ─────────────────────────────────────────────────
+// Réécrit intégralement l'onglet SOP_Protocol dans Sheets (clear + PUT).
+// Appelé après toute modification du protocole ou validation d'un acte SOP.
+function _syncSopProtocol() {
+  var _validSids = [SID.gerant, SID.fondateur, SID.rga].filter(Boolean);
+  if (!_validSids.length) return;
+
+  var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+  var _pdDeb  = parseISO(CYCLE.dateDebut);
+  var _ndPd   = _nowDakar();
+  var _pdToday = new Date(_ndPd.year, _ndPd.month-1, _ndPd.day);
+
+  // Bêtes actives (décès exclus)
+  var _beteIds = CYCLE.betes && CYCLE.betes.length
+    ? CYCLE.betes.filter(function(b){ return (LIVE.deceased||[]).indexOf(b.id)===-1; }).map(function(b){ return b.id; })
+    : LIVE.beteIds && LIVE.beteIds.length
+      ? LIVE.beteIds
+      : (function(){ var _n=CYCLE.nbBetes||MOCK.betes||4,_ids=[]; for(var _i=1;_i<=_n;_i++) _ids.push('B'+('0'+_i).slice(-2)); return _ids; })();
+  var _nbTotal = _beteIds.length || 1;
+
+  // Calculer le statut de chaque étape (même logique que la vue protocole)
+  var _rows = _proto.map(function(evt) {
+    var _td = null, _betesDone = [];
+    if (_pdDeb) {
+      _td = new Date(_pdDeb.getTime()); _td.setDate(_td.getDate() + evt.j);
+      HISTORY.forEach(function(h) {
+        if (h.type !== evt.type) return;
+        if (h.sopLabel !== undefined && h.sopLabel !== null && h.sopLabel !== evt.label) return;
+        var _p = h.date.split('/'); if (_p.length !== 3) return;
+        var _hd = new Date(_p[2], _p[1]-1, _p[0]);
+        var _inW = (h.sopLabel === evt.label) || (Math.abs(_hd - _td) <= 3*86400000);
+        if (_inW) {
+          if (h.id === '__tous__') _betesDone = _beteIds.slice();
+          else if (_betesDone.indexOf(h.id) === -1) _betesDone.push(h.id);
+        }
+      });
+    }
+    var _nbDone = _betesDone.length;
+    var _fait = _nbDone >= _nbTotal;
+    var _statut, _dateReal = '';
+    if (!_pdDeb) {
+      _statut = 'Cycle non démarré';
+    } else if (_fait) {
+      _statut = 'OK \u2705';
+      // Date de réalisation = date de la dernière entrée HISTORY pour cette étape
+      var _last = null;
+      HISTORY.forEach(function(h) {
+        if (h.type !== evt.type) return;
+        var _isThis = (h.sopLabel === evt.label);
+        if (!_isThis && _td) {
+          var _pp = h.date.split('/'); if (_pp.length !== 3) return;
+          _isThis = Math.abs(new Date(_pp[2],_pp[1]-1,_pp[0]) - _td) <= 3*86400000;
+        }
+        if (_isThis && (!_last || h.date > _last)) _last = h.date;
+      });
+      _dateReal = _last || '';
+    } else if (_nbDone > 0) {
+      _statut = _nbDone+'/'+_nbTotal+' b\u00eates \uD83D\uDD04';
+    } else {
+      var _daysTo = _td ? Math.round((_td - _pdToday) / 86400000) : null;
+      if (_daysTo === null)      _statut = '\u00c0 faire';
+      else if (_daysTo > 7)     _statut = 'Pr\u00e9vu J+'+evt.j+' (dans '+_daysTo+' j)';
+      else if (_daysTo >= 0)    _statut = 'Dans '+_daysTo+' j \uD83D\uDD14';
+      else if (_daysTo >= -7)   _statut = 'En retard ('+Math.abs(_daysTo)+'j) \u26A0\uFE0F';
+      else if (_daysTo >= -21)  _statut = 'Hors d\u00e9lai \u26A0\uFE0F';
+      else                      _statut = 'Expir\u00e9 \uD83D\uDD12';
+    }
+    return [evt.j, evt.label, evt.type==='pesee'?'Pesée':'Santé', evt.ico||'', evt.note||'', _statut, _dateReal];
+  });
+
+  getTok().then(function(tk) {
+    if (!tk) return;
+    var _sheet  = 'SOP_Protocol';
+    var _hdr1   = [['PROTOCOLE SOP VÉT\u00c9RINAIRE \u2014 BOAN', '', '', '', '', 'Cycle '+(CYCLE.numCycle||1), 'G\u00e9n\u00e9r\u00e9 auto']];
+    var _hdr3   = [['J+', 'Libellé', 'Type', 'Icône', 'Note protocole', 'Statut', 'Date réalisation']];
+
+    function _writeOnSid(sid) {
+      var _enc = encodeURIComponent(_sheet);
+      // 1. Effacer A5:G55
+      return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+_enc+'!A5:G55:clear', {
+        method: 'POST', headers: {Authorization:'Bearer '+tk, 'Content-Type':'application/json'}, body: '{}'
+      })
+      // 2. Écrire les données
+      .then(function() {
+        return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+_enc+'!A5?valueInputOption=USER_ENTERED', {
+          method: 'PUT', headers: {Authorization:'Bearer '+tk, 'Content-Type':'application/json'},
+          body: JSON.stringify({values: _rows})
+        }).then(function(r){ return r.json(); });
+      })
+      // 3. Si l'onglet n'existe pas, le créer + écrire en-têtes + données
+      .then(function(d) {
+        if (!d.error) return d;
+        var _em = d.error.message || '';
+        if (_em.indexOf('Unable to parse range') === -1 && _em.indexOf('not found') === -1) return d;
+        // Créer l'onglet
+        return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid+':batchUpdate', {
+          method: 'POST', headers: {Authorization:'Bearer '+tk, 'Content-Type':'application/json'},
+          body: JSON.stringify({requests:[{addSheet:{properties:{title:_sheet}}}]})
+        })
+        .then(function() {
+          // Écrire titre (A1) + en-têtes colonnes (A3)
+          return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values:batchUpdate?valueInputOption=USER_ENTERED', {
+            method: 'POST', headers: {Authorization:'Bearer '+tk, 'Content-Type':'application/json'},
+            body: JSON.stringify({data:[
+              {range:_sheet+'!A1', values:_hdr1},
+              {range:_sheet+'!A3', values:_hdr3},
+              {range:_sheet+'!A5', values:_rows}
+            ]})
+          }).then(function(r){ return r.json(); });
+        });
+      })
+      .catch(function(e){ console.warn('[SOP_Protocol]', sid, e.message); });
+    }
+
+    // Écrire le titre et les en-têtes aussi (non destructif — toujours utile)
+    _validSids.forEach(function(sid){
+      fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values:batchUpdate?valueInputOption=USER_ENTERED', {
+        method: 'POST', headers: {Authorization:'Bearer '+tk, 'Content-Type':'application/json'},
+        body: JSON.stringify({data:[
+          {range:_sheet+'!A1', values:_hdr1},
+          {range:_sheet+'!A3', values:_hdr3}
+        ]})
+      }).catch(function(){});
+      _writeOnSid(sid);
+    });
+  }).catch(function(e){ console.warn('[SOP_Protocol] getTok:', e.message); });
 }
 function _sopValider(idx){
   var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
@@ -6290,6 +6434,8 @@ function _sopInlineSave(idx, tous){
   // Sauvegarder dans HISTORY
   _entries.forEach(function(e){ HISTORY.push(e); });
   lsSet('history', HISTORY);
+  // Mettre à jour SOP_Protocol sheet (statut auto)
+  _syncSopProtocol();
   // Fermer le form si toutes les bêtes traitées ou mode "tous"
   var _nowDoneIds = _doneBetes.concat(_entries.map(function(e){ return e.id; }));
   var _stillRem = _allBetes.filter(function(bid){ return _nowDoneIds.indexOf(bid)===-1; });
