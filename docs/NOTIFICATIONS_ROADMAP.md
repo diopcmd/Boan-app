@@ -1,7 +1,7 @@
 # BOAN — Roadmap Notifications Automatiques
 > Version finale — Prête pour implémentation
 > Statut : **BLOQUÉ — Prérequis métier non satisfaits** (voir section 0)
-> Dernière mise à jour : 20 Avril 2026 — aligné avec commit `9e5aca5`
+> Dernière mise à jour : 20 Avril 2026 — aligné avec commit `9e5aca5` + section 11 lacunes résiduelles
 > Revue par : Architecte Backend, Expert UX Offline-first, Expert Sécurité OWASP, Expert Email/Délivrabilité Afrique, Expert Assurance/Droit Sénégalais, Expert Terrain Opérationnel
 
 > **Note de référence** : ce document est aligné sur l'état réel du code (`index.html`, ~8 600 lignes).
@@ -1088,11 +1088,377 @@ BLOC F — Tests (ne jamais tester sur vrais emails CNAAS/vet)
 | Contrat CNAAS souscrit + N° police | ⛔ Non fait — **bloquant** |
 | Email/tel/WhatsApp CNAAS confirmés | ⛔ Non fait — bloquant |
 | Compte SendGrid | ⛔ Non fait |
-| Onglet Notifications_Log | ⛔ Non fait |
-| Onglet Sinistres_CNAAS | ⛔ Non fait |
+| Onglet Notifications_Log | ⬛ Auto-créé au premier run cron (L4) |
+| Onglet Sinistres_CNAAS | ⬛ Auto-créé au premier run cron (L4) |
 | Contacts collectés (section 4.3) | ⛔ Non fait |
 | Variables Vercel + GitHub Secrets | ⛔ Non fait |
 | **`CYCLE.numCnaas` (N° police)** | **✅ Implémenté** — modal init + Config_App + Go/No-Go (commit `9766040`) |
 | **`CYCLE.veterinaire` (nom vétérinaire)** | **✅ Implémenté** — modal init + Config_Cycle (commit antérieur) |
 | **`CYCLE.dateDebut` format ISO** | **✅ Déjà YYYY-MM-DD** — point bloquant #12 résolu |
 | Code implémenté (Blocs C–E) | ⬛ En attente des prérequis |
+
+---
+
+## 11. Lacunes résiduelles — Solutions concrètes
+
+> Cette section documente les **7 problèmes sans solution ou à solution buguée** identifiés
+> lors de la relecture approfondie du roadmap. Chaque correctif est directement implémentable.
+
+---
+
+### L1 — YAML GitHub Actions : TYPE toujours `all` pour les 3 crons schedulés
+
+**Problème :** Le YAML actuel utilise `TYPE=${{ github.event.inputs.type || 'all' }}`. Pour un
+événement `schedule`, `github.event.inputs` est vide → TYPE vaut toujours `'all'`. Les 3
+crons déclenchent donc 3 runs qui appellent chacun `/api/cron?type=all` en parallèle, soit
+**3× la charge** et 3× le risque de timeout.
+
+**Solution :** Utiliser `github.event.schedule` pour différencier — GitHub Actions expose
+la chaîne cron exacte qui a déclenché le workflow.
+
+```yaml
+name: BOAN — Cron Notifications
+on:
+  schedule:
+    - cron: '0 7 * * *'   # 07h00 UTC — vet
+    - cron: '2 7 * * *'   # 07h02 UTC — deces
+    - cron: '4 7 * * *'   # 07h04 UTC — relances
+  workflow_dispatch:
+    inputs:
+      type:
+        description: 'vet | deces | relances'
+        required: true
+        default: 'vet'
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.actor == 'diopcmd'
+    steps:
+      - name: Résoudre le type selon le trigger
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "type=${{ github.event.inputs.type }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "0 7 * * *" ]; then
+            echo "type=vet" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "2 7 * * *" ]; then
+            echo "type=deces" >> $GITHUB_OUTPUT
+          else
+            echo "type=relances" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Déclencher le cron BOAN
+        run: |
+          curl -f -X GET \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            "https://boan-app-ur3x.vercel.app/api/cron?type=${{ steps.resolve.outputs.type }}"
+```
+
+---
+
+### L2 — Lecture de `Config_App` côté serveur (cron Node.js)
+
+**Problème :** Le cron tourne en Node.js Vercel — il n'a aucun accès à l'objet `CYCLE` qui
+est construit côté client dans `index.html`. Toute la configuration (sopProtocol, numCnaas,
+contacts, jours_fermes, etc.) doit être lue directement depuis `Config_App` via l'API Sheets.
+Ce pattern n'est documenté nulle part.
+
+**Solution :** Ajouter ce helper dans `/api/notify.js` :
+
+```js
+// Lecture Config_App depuis le sheet fondateur — retourne un objet clé→valeur
+// Les valeurs JSON (tableaux, objets) sont parsées automatiquement
+async function readConfigApp(token, sidFondateur) {
+  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + sidFondateur
+    + '/values/' + encodeURIComponent('Config_App') + '!A:B'
+    + '?valueRenderOption=UNFORMATTED_VALUE';
+  var res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  if (!res.ok) throw new Error('Config_App illisible: ' + res.status);
+  var data = await res.json();
+  var cfg = {};
+  (data.values || []).forEach(function(row) {
+    if (!row[0]) return;
+    try { cfg[row[0]] = JSON.parse(row[1]); }
+    catch(e) { cfg[row[0]] = row[1] || ''; }
+  });
+  return cfg;
+}
+
+// Correspondance clés Config_App → équivalents CYCLE côté client :
+// cfg.sopProtocol        → CYCLE.sopProtocol (JSON array des actes)
+// cfg.numCnaas           → CYCLE.numCnaas
+// cfg.jours_fermes       → table des jours fériés (JSON array 'YYYY-MM-DD')
+// cfg.cnaas_grille       → grille indemnisation (JSON object)
+// cfg.contact_vet_email  → nouveau champ — à créer dans sous-onglet Contacts
+// cfg.contact_vet_tel    → nouveau champ
+// cfg.contact_cnaas_email → nouveau champ
+// cfg.ferme_email_fondateur → email expéditeur SendGrid
+// cfg.sopResetAt         → CYCLE.sopResetAt (date reset SOP)
+```
+
+Lecture de `Config_Cycle` pour les données du cycle en cours :
+
+```js
+async function readConfigCycle(token, sidFondateur) {
+  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + sidFondateur
+    + '/values/' + encodeURIComponent('Config_Cycle') + '!A:J'
+    + '?valueRenderOption=UNFORMATTED_VALUE';
+  var res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  var data = await res.json();
+  var row = (data.values || [[]])[0] || [];
+  return {
+    dateDebut: row[0] || '',    // YYYY-MM-DD — déjà au bon format
+    nomCycle:  row[1] || '',
+    betes:     JSON.parse(row[2] || '[]'),  // [{id,race,raceCustom,poidsEntree,dateIntro}]
+    veterinaire: row[8] || ''   // colonne I = nom vétérinaire référent
+  };
+}
+```
+
+---
+
+### L3 — Guard validation #11 point 4 : `acte.id` non persisté
+
+**Problème :** Le code documenté au point #11 utilise `sopCheckIds.indexOf(acte.id)` pour
+vérifier si un acte est déjà validé. Or `acte.id` est l'index du tableau runtime côté client
+— il n'est **jamais persisté** dans les Sheets. Un acte lu depuis Config_App n'a pas de `id`.
+Le guard ne filtre jamais → rappels envoyés pour des actes déjà réalisés.
+
+**Solution :** Identifier chaque acte par la combinaison `{j, label}` et valider contre les
+entrées de `Sante_Mortalite` (colonne J = `sopLabel`) :
+
+```js
+// Remplacer le guard #11 point 4 par :
+function isActeValidated(acte, dateDebut, santeRows) {
+  // Date théorique de l'acte
+  var dateActeMs = new Date(dateDebut + 'T00:00:00Z').getTime() + acte.j * 86400000;
+  var found = false;
+  (santeRows || []).forEach(function(row) {
+    var sopLbl = String(row[9] || '');  // colonne J
+    if (sopLbl !== acte.label) return;
+    // Convertir date DD/MM/YYYY de la feuille en timestamp
+    var parts = String(row[0] || '').split('/');
+    if (parts.length !== 3) return;
+    var entryMs = Date.UTC(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    // Fenêtre de tolérance ±7j (même logique que _sopEntryAfterReset côté client)
+    if (Math.abs(entryMs - dateActeMs) / 86400000 <= 7) { found = true; }
+  });
+  return found;
+}
+
+// Usage dans checkAndSendVetReminders() :
+// Lire Sante_Mortalite!A:J depuis SID.fondateur (copie présente via writeAll)
+// Pour chaque acte : if (isActeValidated(acte, dateDebut, santeRows)) { continue; }
+```
+
+> Note : `SID.fondateur` contient une copie de `Sante_Mortalite` grâce au `writeAll([SID.gerant,
+> SID.fondateur, SID.rga], ...)` — le cron n'a donc besoin que du token fondateur.
+
+---
+
+### L4 — Auto-création de `Notifications_Log` et `Sinistres_CNAAS` au premier run
+
+**Problème :** Le point #1 dit "créer manuellement (2 min)". En pratique, si le fondateur
+oublie de créer ces onglets avant le premier cron, toutes les fonctions crashent avec
+`Unable to parse range` et aucun log n'est écrit.
+
+**Solution :** Ajouter `ensureSheetExists()` appelé une fois en début de chaque handler :
+
+```js
+// /api/notify.js — helper auto-création onglet + en-têtes
+async function ensureSheetExists(token, sid, sheetName) {
+  // 1. Vérifier si l'onglet existe
+  var testUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid
+    + '/values/' + encodeURIComponent(sheetName) + '!A1?valueRenderOption=UNFORMATTED_VALUE';
+  var test = await fetch(testUrl, { headers: { Authorization: 'Bearer ' + token } });
+  if (test.ok) return; // existe déjà
+
+  // 2. Créer l'onglet
+  var batchUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid + ':batchUpdate';
+  var batchRes = await fetch(batchUrl, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ addSheet: { properties: { title: sheetName } } }] })
+  });
+  if (!batchRes.ok) throw new Error('Impossible de créer ' + sheetName + ': ' + batchRes.status);
+
+  // 3. Écrire les en-têtes selon le nom de l'onglet
+  var HEADERS = {
+    Notifications_Log: [['Date_Envoi','Type','Reference_ID','Destinataire','Canal',
+                          'Statut','Tentative_N','Date_Confirmation','Notes']],
+    Sinistres_CNAAS:   [['Date','Type','ID_Animal_s','N_PV_Gendarmerie','Statut_CNAAS',
+                          'Date_Email_J0','Appel_Fondateur_J0','Certif_Vet_Recu',
+                          'Expert_Passe','email_pending','Notes']]
+  };
+  var hdrs = HEADERS[sheetName];
+  if (!hdrs) return;
+  var putUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + sid
+    + '/values/' + encodeURIComponent(sheetName) + '!A1?valueInputOption=USER_ENTERED';
+  await fetch(putUrl, {
+    method: 'PUT',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values: hdrs })
+  });
+}
+
+// Appel en tête de chaque fonction principale :
+// await ensureSheetExists(token, SID_FONDATEUR, 'Notifications_Log');
+// await ensureSheetExists(token, SID_FONDATEUR, 'Sinistres_CNAAS');
+```
+
+> Mettre à jour le point #1 du tableau statut section 10 après déploiement : il devient ✅ automatique.
+
+---
+
+### L5 — `beteMultiSelect()` : implémentation ES5 corrigée
+
+**Problème :** Le code documenté au point #18 contient `arr='+stateKeyArr+'` qui tente
+de sérialiser un tableau passé par référence en string, ce qui génère `arr=[object Array]`
+— la checkbox ne modifie rien. De plus, `stateKeyArr` sans guillemets ne référence pas
+le bon chemin dans `S`.
+
+**Solution — implémentation ES5 correcte :**
+
+```js
+// beteMultiSelect() — helper multi-select bêtes pour formulaire VOL
+// Principe : stocke les IDs cochés dans S.fin.beteIds (Array)
+// Appel : beteMultiSelect()  — pas d'argument, lit/écrit S.fin.beteIds
+// À initialiser dans resetInc() : S.fin.beteIds = [];
+function beteMultiSelect() {
+  // Construire la liste des bêtes disponibles (vivantes uniquement)
+  var deceased = LIVE.deceased || [];
+  var allIds = (CYCLE.betes || [])
+    .filter(function(b) { return deceased.indexOf(b.id) === -1; })
+    .map(function(b) { return b.id; });
+  if (!allIds.length) {
+    return '<div class="fg"><label>Bêtes concernées</label>'
+      + '<div class="msg-err">Aucune bête disponible dans ce cycle</div></div>';
+  }
+  var current = S.fin.beteIds || [];
+  var count = current.length;
+  var html = '<div class="fg"><label>Bêtes concernées ('
+    + count + ' sélectionnée' + (count > 1 ? 's' : '') + ')</label>'
+    + '<div style="background:#0f1a0f;border:1px solid #2a4a2a;border-radius:8px;'
+    + 'padding:8px;max-height:160px;overflow-y:auto">';
+  allIds.forEach(function(id) {
+    var chk = current.indexOf(id) !== -1;
+    // L'onclick utilise des guillemets simples en dehors et doubles en dedans
+    // id ne contient que des caractères alphanumériques + tiret (ex: C1-001) — sûr en inline
+    html += '<label style="display:flex;align-items:center;gap:10px;padding:5px 8px;cursor:pointer">'
+      + '<input type="checkbox" ' + (chk ? 'checked ' : '')
+      + 'onchange="'
+      +   'var idx=S.fin.beteIds.indexOf(\'' + id + '\');'
+      +   'if(this.checked&&idx===-1){S.fin.beteIds.push(\'' + id + '\');}'
+      +   'else if(!this.checked&&idx!==-1){S.fin.beteIds.splice(idx,1);}'
+      +   'r();">'
+      + '<span style="font-size:14px">' + id + '</span>'
+      + '</label>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
+// Valeur lue au submit : S.fin.beteIds.join(',') → stocké en colonne C de Sinistres_CNAAS
+// Validation : S.fin.beteIds.length === 0 → message d'erreur bloquant
+```
+
+---
+
+### L6 — Réconciliation `sinistres_ouverts` localStorage avec Sheets au rechargement
+
+**Problème :** Le mécanisme du point #19 écrit dans `localStorage` au submit décès. Mais si
+le fondateur coche "Expert CNAAS passé" directement dans Sheets (sans passer par l'app),
+la bannière reste affichée dans l'app car le localStorage n'est jamais mis à jour.
+De plus, si l'app est utilisée sur deux appareils, le localStorage ne se synchronise pas.
+
+**Solution :** Ajouter une réconciliation dans le callback `loadLiveData()` Vague 2, après
+le chargement de `LIVE.sinistres` :
+
+```js
+// À ajouter dans le then() final de la Vague 2, après LIVE.sinistres = rows
+function _reconcileSinistresOuverts() {
+  var soLocal = lsGet('sinistres_ouverts') || [];
+  if (!soLocal.length) return; // rien à réconcilier
+  var changed = false;
+  soLocal.forEach(function(so) {
+    if (so.expertPasse) return; // déjà fermé localement
+    // Chercher la ligne dans LIVE.sinistres (col A=Date, C=ID_Animal_s, I=Expert_Passe)
+    var match = (LIVE.sinistres || []).filter(function(r) {
+      // ID_Animal_s peut être 'C1-001' ou 'C1-001,C1-002' pour multi-bêtes
+      return String(r[2] || '').split(',').indexOf(so.id) !== -1;
+    });
+    match.forEach(function(r) {
+      // col I (index 8) = Expert_Passe, col J (index 9) = email_pending
+      var expertPasse = String(r[8] || '').toUpperCase() === 'OUI';
+      var cloture = String(r[4] || '').toUpperCase() === 'CLOTURE'; // col E = Statut_CNAAS
+      if (expertPasse || cloture) { so.expertPasse = true; changed = true; }
+    });
+  });
+  if (changed) { lsSet('sinistres_ouverts', soLocal); }
+}
+// Appel : _reconcileSinistresOuverts(); en fin de loadLiveData Vague 2 completion
+```
+
+> Cette réconciliation est idempotente et silencieuse — ne modifie rien si LIVE.sinistres
+> est vide ou si l'expert n'est pas encore passé.
+
+---
+
+### L7 — `checkAndSendDecesAlerts()` : idempotence complète avec `email_pending`
+
+**Problème :** Le scénario de crash entre l'envoi SendGrid et l'effacement du flag
+`email_pending=OUI` dans `Sinistres_CNAAS` n'est pas couvert par le TTL PENDING du point #2
+(qui s'applique à `Notifications_Log`, pas à `Sinistres_CNAAS`). Le cron suivant re-lit
+`email_pending=OUI` et renvoie l'email.
+
+**Solution :** Appliquer le pattern PENDING de `Notifications_Log` à `Sinistres_CNAAS` aussi —
+écrire un flag `NOTIF_PENDING` dans Notifications_Log AVANT d'appeler SendGrid,
+effacer `email_pending` APRÈS réception du `202` SendGrid :
+
+```js
+async function checkAndSendDecesAlerts(token, sidFondateur) {
+  var rows = await readSheet(token, sidFondateur, 'Sinistres_CNAAS!A2:K200');
+  var notifLog = await readSheet(token, sidFondateur, 'Notifications_Log!A2:I200');
+  var today = new Date().toISOString().slice(0, 10);
+
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    var rowIdx = i + 2; // ligne Sheets (1-indexed + header)
+    var emailPending = String(row[9] || '').trim().toUpperCase(); // col J = email_pending
+    if (emailPending !== 'OUI') continue;
+
+    var animalId = String(row[2] || ''); // col C
+    var refId = 'DECES_' + animalId + '_' + String(row[0] || '').replace(/\//g, '-');
+
+    // 1. Vérifier si déjà traité dans Notifications_Log (idempotence)
+    var alreadySent = notifLog.some(function(r) {
+      return r[2] === refId && (r[5] === 'SENT' || r[5] === 'PENDING');
+    });
+    // Vérifier TTL PENDING > 2h
+    var pendingRow = notifLog.filter(function(r){ return r[2] === refId && r[5] === 'PENDING'; })[0];
+    var isPendingStale = pendingRow && (Date.now() - new Date(pendingRow[0]).getTime() > 2*3600*1000);
+    if (alreadySent && !isPendingStale) continue; // déjà envoyé ou en cours — skip
+
+    // 2. Écrire PENDING dans Notifications_Log AVANT l'appel SendGrid
+    var pendingEntry = [today, 'DECES_J0', refId, config.contact_cnaas_email, 'EMAIL', 'PENDING', '1', '', ''];
+    await appendRow(token, sidFondateur, 'Notifications_Log!A:I', pendingEntry);
+    var pendingRowIdx = /* index de la ligne qu'on vient d'écrire */;
+
+    // 3. Appeler SendGrid
+    var emailOk = await sendEmail(token, config, { /* template décès */ });
+
+    // 4. Mettre à jour Notifications_Log SENT ou ERROR
+    var newStatus = emailOk ? 'SENT' : 'ERROR';
+    await updateCell(token, sidFondateur, 'Notifications_Log!F' + pendingRowIdx, newStatus);
+
+    // 5. Effacer email_pending dans Sinistres_CNAAS — SEULEMENT si emailOk
+    if (emailOk) {
+      await updateCell(token, sidFondateur, 'Sinistres_CNAAS!J' + rowIdx, 'NON');
+    }
+  }
+}
+```
+
+> Ce pattern garantit : si le cron crashe après `PENDING` mais avant `SENT` → TTL 2h → `ERROR_TIMEOUT`
+> → le cron suivant relance. `email_pending` reste à `OUI` jusqu'à confirmation `SENT`.
