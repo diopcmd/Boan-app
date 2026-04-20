@@ -1,7 +1,7 @@
 ﻿# DOCUMENTATION TECHNIQUE — BOAN App
 
 Référence développeur pour l'application de gestion d'élevage **BOAN**.  
-**Commit HEAD** : `c0f3b1e` — ~8 400 lignes — 16 Avril 2026
+**Commit HEAD** : `f7a962b` — ~8 600 lignes — 20 Avril 2026
 
 ---
 
@@ -409,6 +409,12 @@ function readSheet(sid, range) {
 - margeParBeteMin, alerteSeuilTreso, mixSon, mixTourteau
 - **prixAlim, objectifPrix, _mktUpdated** *(ajout commit 7db6560)*
 - dureeMois, sopProtocol (JSON)
+- **numCnaas** — N° contrat assurance CNAAS *(ajout commit 9766040)*
+- **sopResetAt** — date ISO du dernier reset SOP *(ajout commit ff578e2)*
+
+**Auto-sync SOP** *(commit 9766040)* : après écriture Config_App réussie, appelle `_syncSopProtocol()` — le tableau `SOP_Protocol` dans Sheets est systématiquement synchronisé sans action séparée.
+
+**N° CNAAS dans modal init** *(commit 9766040)* : le champ `numCnaas` est maintenant éditable dès le step 2 du modal d'initialisation de cycle (plus besoin de passer par Go/No-Go pour le renseigner).
 
 ### saveCycle() — persistance Config_Cycle
 Écrit dans `Config_Cycle!A1:S1` (colonnes A–N standard + P=dureeMois + Q=simCharges + R=prixAlim + **S=numCycle**).  
@@ -423,6 +429,29 @@ CYCLE._mktUpdated = '';      // date modif marché — repart de zéro
 S._sopEd = null; S._sopInlineIdx = null; S._sopCtx = null; S._sopInlineData = {};
 LIVE._histCycles = null;     // cache férimé — forcé à recharger depuis Sheets
 ```
+
+### _sopEntryAfterReset(h) *(commit ff578e2)*
+
+Filtre les entrées d'historique antérieures au dernier reset SOP :
+```javascript
+function _sopEntryAfterReset(h) {
+  if (!CYCLE._sopResetAt || !h.date) return true;  // pas de reset = tout passe
+  var _p = h.date.split('/');  // DD/MM/YYYY
+  if (_p.length !== 3) return true;
+  var _hd = new Date(_p[2], _p[1]-1, _p[0]);
+  var _rd = parseISO(CYCLE._sopResetAt);
+  return _rd ? (_hd >= _rd) : true;  // ne garde que les entrées >= date du reset
+}
+```
+
+**Appliqué dans 3 endroits :**
+1. `viewSaisie/protocole` — `_pdCards` boucle sur `HISTORY` (affichage calendrier)
+2. `_syncSopProtocol()` — boucle interne `HISTORY.forEach` (écriture Sheets)
+3. Calendrier SOP — `HISTORY.some` (calcul statut ✅/⚠️/🔔/📅)
+
+**`CYCLE._sopResetAt`** — clé ISO `YYYY-MM-DD` du dernier reset. Persisté via `lsSet('cycle', CYCLE)` + `_syncConfigApp()`. Null par défaut.
+
+---
 
 ### _archiveCycle(snap) *(commit 5a0ca03, mis à jour 6fb1b19)*
 Archive un snapshot du cycle terminé dans `Historique_Cycles!A:O` :
@@ -516,7 +545,35 @@ if (key === 'objectifPrix' && val && parseInt(val)   > 0) CYCLE.objectifPrix = p
 if (key === '_mktUpdated'  && val) CYCLE._mktUpdated = val;
 if (key === 'mixSon'       && val) CYCLE.mixSon       = parseInt(val);
 if (key === 'mixTourteau'  && val) CYCLE.mixTourteau  = parseInt(val);
+if (key === 'numCnaas'     && val) CYCLE.numCnaas     = JSON.parse(val);
+if (key === 'sopResetAt'   && val) CYCLE._sopResetAt  = JSON.parse(val);
 ```
+
+### loadPrix(force) / loadAlimPrix(force) — TTL cache *(commit e1aa293)*
+```javascript
+// Variables globales de timestamp (déclarées avec les autres vars globales) :
+var _lastPrixLoad = 0;   // timestamp dernier loadPrix() réussi
+var _lastAlimLoad = 0;   // timestamp dernier loadAlimPrix() réussi
+
+// Guard TTL dans loadPrix() :
+if (!force && _lastPrixLoad && Date.now() - _lastPrixLoad < 5 * 60 * 1000
+    && LIVE.prix && LIVE.prix.length) return;  // skip si < 5 min
+// Après fetch réussi : _lastPrixLoad = Date.now();
+```
+Evite des appels Sheets répétés lors des navigations dans l'onglet Marché. Paramètre `force=true` (ex: après submit prix) court-circuite le cache.
+
+### _configAppTabOk — flag addSheet *(commit e1aa293)*
+```javascript
+// Variable globale déclarée à côté des autres :
+var _configAppTabOk = false;  // true après la 1ère création/vérification de l'onglet Config_App
+
+// Dans _syncConfigApp() :
+if (!_configAppTabOk) {
+  fetch(addUrl, {...}).then(function(){ _configAppTabOk = true; });
+             //         .catch → aussi true (l'onglet existe déjà)
+}
+```
+Evite l'appel `addSheet` à chaque `saveObjectifs()`. Remis à `false` uniquement si on détecte un cycle reset.
 
 ---
 
@@ -561,6 +618,8 @@ prixAlim           FCFA/kg — ex. 280
 objectifPrix       FCFA/kg poids vif — ex. 2000
 _mktUpdated        DD/MM/YYYY — date modif paramètres marché
 sopProtocol        JSON — tableau étapes vétérinaires (fondateur uniquement)
+sopResetAt         JSON ISO YYYY-MM-DD — date du dernier reset SOP (null si jamais réinitialisé)
+numCnaas           JSON texte — N° contrat assurance CNAAS (ex: "CNAAS-2025-00123")
 dureeMois          mois — durée prévue cycle
 cycleDebut         ISO YYYY-MM-DD — dupliqué pour accès rapide
 numCycle           entier — numéro du cycle courant (utile pour tests — préfixe IDs bêtes)
@@ -706,8 +765,10 @@ renderTab(tab)
 
 ## 12. Index des numéros de ligne — `index.html`
 
-> Référence rapide pour naviguer dans le fichier (~8 000 lignes). Vérifier après chaque commit car les lignes peuvent décaler.
-> **Dernière mise à jour : commit `a8705a8` (7 avril 2026)**
+> Référence rapide pour naviguer dans le fichier (~8 600 lignes). Vérifier après chaque commit car les lignes peuvent décaler.
+> **Dernière mise à jour : commit `f7a962b` (20 avril 2026)**
+
+> ⚠️ Les numéros de ligne ci-dessous sont approximatifs — ils ont légèrement décalé suite aux commits de la session Avril 2026 (+200 lignes environ). Utiliser la recherche de texte pour localiser avec précision.
 
 ### Variables globales
 
@@ -722,6 +783,9 @@ renderTab(tab)
 | `var ONLINE` | L895 | `navigator.onLine` — mis à jour par events |
 | `var OFFLINE_QUEUE` | L896 | Queue hors-ligne — persistée localStorage |
 | `var METEO` | L927 | Météo Thiès — chargée à la demande sidebar |
+| `var _lastPrixLoad` | L~903 | Timestamp dernier `loadPrix()` réussi — TTL 5 min *(commit e1aa293)* |
+| `var _lastAlimLoad` | L~904 | Timestamp dernier `loadAlimPrix()` réussi — TTL 5 min *(commit e1aa293)* |
+| `var _configAppTabOk` | L~905 | Flag : onglet Config_App déjà vérifié ce cycle *(commit e1aa293)* |
 | `var LIVE` | L2186 | Données live : pesées, prix, incidents, deceased |
 | `var TABLE_RANGES` | L1148 | `{start, end}` par onglet Sheets — utilisé par `appendRow()` |
 
@@ -774,15 +838,17 @@ renderTab(tab)
 | `loadLiveData()` | L1247 | Étape 1 bloquante + Vague 1 + Vague 2 (voir flux démarrage §0) |
 | `buildHistoryFromSheets()` | L1585 | Fusion 7 onglets → HISTORY — appelée fin Vague 2 |
 | `loadPesees()` | L2197 | GMQ réel inter-pesées par bête — `setTimeout(loadPesees, 300)` après loadLiveData |
-| `loadPrix()` | L2290 | Suivi_Marche — appelée si onglet `marche` ou après submit |
-| `loadAlimPrix()` | L2332 | Suivi_Aliments — appelée si onglet `marche` ou après submit |
+| `loadPrix(force)` | L2290 | Suivi_Marche — TTL 5 min, `force=true` après submit prix *(commit e1aa293)* |
+| `loadAlimPrix(force)` | L2332 | Suivi_Aliments — TTL 5 min, `force=true` après submit alim *(commit e1aa293)* |
+| `_sopEntryAfterReset(h)` | L~6210 | Filtre les entrées HISTORY antérieures à `CYCLE._sopResetAt` *(commit ff578e2)* |
 
 ### Synchronisation Sheets
 
 | Fonction | Ligne | Notes |
 |---|---|---|
 | `_syncCycle()` | L2097 | Réécrit `Config_Cycle!A1:R1` dans les 4 sheets |
-| `_syncConfigApp()` | L2048 | Réécrit `Config_App!A:B` dans sheet fondateur (23 clés) |
+| `_syncConfigApp()` | L2048 | Réécrit `Config_App!A:B` dans sheet fondateur — 25 clés dont `sopResetAt`, `numCnaas` *(commit ff578e2+9766040)* |
+| `_syncSopProtocol()` | L~6320 | Sync SOP_Protocol Sheets — auto-appelée depuis `saveObjectifs()` *(commit 9766040)* |
 | `flushQueue()` | L902 | Dépile `OFFLINE_QUEUE` — auto-déclenché au retour réseau |
 
 ### Soumission
@@ -827,7 +893,7 @@ renderTab(tab)
 
 ---
 
-## 14. Bugs corrigés — audits multi-passes (commits `51f5fee` → `a8705a8`)
+## 14. Bugs corrigés — audits multi-passes (commits `51f5fee` → `f7a962b`)
 
 ### Passe 1 — 7 corrections (`51f5fee`)
 | # | Localisation | Bug | Fix |
@@ -855,6 +921,21 @@ renderTab(tab)
 | 3 | `loadLiveData()` Vague 2 | `kgRow === 0` ajoute un mouvement `{kg:0}` inutile dans `STOCK_MVTS` | `if (kgRow === null \|\| kgRow === 0) return` |
 | 4 | `joursSince()` | `new Date(local)` pour les deux termes — incohérent avec le standard `Date.UTC` | `new Date(Date.UTC(...))` pour les deux |
 | 5 | `_joursDepuisDebut()` fallback | `return Math.max(1, calcSemaine() * 7)` retourne 7 quand `!CYCLE.dateDebut` | `return 1` |
+
+### Passe 4 — Session Avril 2026 (commits `ff578e2` → `f7a962b`)
+
+| # | Commit | Bug | Fix |
+|---|---|---|---|
+| 1 | `ff578e2` | SOP reset ne filtrait pas les validations antérieures — actes effectués AVANT le reset continuaient à compter | Ajout `CYCLE._sopResetAt` + helper `_sopEntryAfterReset(h)` appliqué sur les 3 boucles HISTORY (calendrier, sync Sheets, affichage) |
+| 2 | `9766040` | Sync feuille SOP_Protocol nécessitait un bouton séparé de `saveObjectifs()` — confusion UX | `saveObjectifs()` appelle `_syncSopProtocol()` automatiquement après écriture Config_App |
+| 3 | `9766040` | Champ `numCnaas` absent du modal d'initialisation de cycle (step 2) — impossibilité de le renseigner à l'init | Ajout du champ dans modal init step 2 |
+| 4 | `e1aa293` | `Sante_Mortalite` lue 2× par cycle de refresh (Vague 1 + Vague 2 identiques) | Vague 2 réutilise les résultats de Vague 1 via `_rowsSanteV1` — économise 1 appel Sheets |
+| 5 | `e1aa293` | `loadPrix()` refetchait à chaque visite de l'onglet Marché | TTL 5 min + variable `_lastPrixLoad` |
+| 6 | `e1aa293` | `loadAlimPrix()` refetchait à chaque visite de l'onglet Marché | TTL 5 min + variable `_lastAlimLoad` |
+| 7 | `e1aa293` | `_syncConfigApp()` tentait de créer l'onglet Config_App à chaque `saveObjectifs()` | Flag `_configAppTabOk` — addSheet appelé 1 seule fois par session |
+| 8 | `f7a962b` | **`fl()` CRITIQUE** — `'fl'+(val?'has-val':'')` génère `class="flhas-val"` — la classe CSS `.fl.has-val` n'était jamais appliquée — tous les floating labels restaient en position haute même avec valeur pré-remplie | Espace ajouté : `'fl '+(val?' has-val':'')` |
+| 9 | `f7a962b` | `S._sopSyncDone` non déclaré dans `S = {}` — `!undefined` = `true` fonctionnait accidentellement | Déclaré explicitement `_sopSyncDone: false` dans `S` |
+| 10 | `f7a962b` | `'betes'` sans accent dans le hero card dashboard | Corrigé en `'bêtes'` |
 
 ---
 
