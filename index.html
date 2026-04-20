@@ -2935,10 +2935,11 @@ function beteDropdown(val, stateKey, extra, excludeIds) {
 
 function addStockLigne(mode){
   mode = mode || 'ajouter';
-  // Lire depuis le DOM en priorité (plus fiable qu'oninput avec datalist)
-  var typeEl = document.getElementById('stk-type-inp');
-  var kEl    = document.getElementById('stk-kg-inp');
-  var t = (typeEl ? typeEl.value : S.fst.stockInput || '').trim();
+  // Lire depuis le DOM pour la quantité, et S.fst pour le type (select + custom input)
+  var customEl = document.getElementById('stk-type-custom');
+  var kEl      = document.getElementById('stk-kg-inp');
+  var t = (customEl ? customEl.value : S.fst.stockInput || '').trim();
+  if (!t && S.fst.stockInput) t = S.fst.stockInput.trim();
   var k = parseFloat(kEl ? kEl.value : S.fst.stockKg) || 0;
 
   if (!t) { S.msg = 'err:Saisir un type d\'aliment'; r(); return; }
@@ -2974,12 +2975,12 @@ function addStockLigne(mode){
   // Réinitialiser les champs
   S.fst.stockInput = '';
   S.fst.stockKg = '';
+  S.fst._stkAutre = false;
   S.msg = '';
   if(kEl) kEl.value = '';
-  if(typeEl) typeEl.value = '';
   r();
-  // Refocaliser sur le champ type pour permettre d'ajouter la prochaine ligne sans fermer le clavier
-  setTimeout(function(){ var e=document.getElementById('stk-type-inp'); if(e) e.focus(); }, 30);
+  // Refocaliser sur le champ quantité pour la prochaine saisie
+  setTimeout(function(){ var e=document.getElementById('stk-kg-inp'); if(e) e.focus(); }, 30);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -5743,8 +5744,6 @@ function viewSaisie(){
       +fl('Date','<input type="date" value="'+f.date+'" oninput="S.fst.date=this.value">',f.date)
       // ── Saisie stock par type d'aliment ──
       +(function(){
-        var dlId='dl-alim-stock';
-        setTimeout(rebuildAlimList, 0);
         var mvts=f.mvts||[];
         var lignes=mvts.length?mvts.map(function(m,i){
           var isConso = m.mode === 'consommer';
@@ -5762,9 +5761,26 @@ function viewSaisie(){
         }).join(''):'';        var totalAjout=mvts.reduce(function(s,m){return s+(m.mode==='ajouter'?m.kg:0);},0);
         var totalConso=mvts.reduce(function(s,m){return s+(m.mode==='consommer'?m.kg:0);},0);
         var total=totalAjout-totalConso;
+        // Construire la liste des aliments connus
+        var _alimDef=['Fane arachide','Son de blé','Mélasse','Tourteau coton','Natite','Mélange'];
+        var _alimCyc=CYCLE.alimentTypes||[];
+        var _alimMvts=(STOCK_MVTS||[]).map(function(m){return m.type;});
+        var _alimAll=_alimDef.concat(_alimCyc).concat(_alimMvts).filter(function(v,i,a){return v&&a.indexOf(v)===i;});
+        var _stkAutre=f._stkAutre||(f.stockInput&&_alimAll.indexOf(f.stockInput)===-1&&f.stockInput!=='');
+        var _stkSelVal=_stkAutre?'__autre__':(f.stockInput||'');
+        var _alimOpts='<option value="">— Choisir un aliment —</option>'
+          +_alimAll.map(function(a){return '<option value="'+a+'"'+(_stkSelVal===a?' selected':'')+'>'+a+'</option>';}).join('')
+          +'<option value="__autre__"'+(_stkAutre?' selected':'')+'>✏️ Saisir un autre...</option>';
         return '<div style="margin-bottom:12px">'
-          +'<div style="font-size:11px;color:#88aa88;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">🌾 Stock par aliment — saisir type + quantité puis +</div>'
-          +'<div style="margin-top:8px">'          +fl('Type d\'aliment (liste ou saisie libre)','<input id="stk-type-inp" type="search" list="'+dlId+'" autocomplete="off" placeholder=" " value="'+(f.stockInput||'')+'" oninput="S.fst.stockInput=this.value" onchange="S.fst.stockInput=this.value" onkeydown="if(event.key===\'Enter\'){event.preventDefault();document.getElementById(\'stk-kg-inp\').focus();}">',f.stockInput)          +fl('Quantité (kg)','<input id="stk-kg-inp" type="number" inputmode="decimal" placeholder=" " value="'+(f.stockKg||'')+'" oninput="S.fst.stockKg=this.value" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addStockLigne();}">',f.stockKg)          +'<div style="display:flex;gap:8px;margin-bottom:8px">'+'<button type="button" onclick="addStockLigne(\'ajouter\')" style="flex:1;padding:12px;border-radius:8px;background:#2d6a2d;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer">📦 Ajouter</button>'+'<button type="button" onclick="addStockLigne(\'consommer\')" style="flex:1;padding:12px;border-radius:8px;background:#7a3a10;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer">🔻 Consommer</button>'+'</div>'          +(mvts.length>0?'<div style="padding:8px 12px;background:#0f1f0f;border-radius:8px;font-size:13px">📦 +'+totalAjout+' kg ajouté &nbsp;|&nbsp; 🔻 -'+totalConso+' kg consommé &nbsp;|&nbsp; Net : <strong style="color:'+(total<0?'#f44336':'#C8A06A')+';font-size:14px">'+(total>=0?'+':'')+total+' kg</strong></div>':'')          +'</div>'
+          +'<div style="font-size:11px;color:#88aa88;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">🌾 Stock par aliment — choisir type + quantité puis +</div>'
+          +'<div style="margin-top:8px">'
+          +'<div class="fg"><label>Type d\'aliment ('+_alimAll.length+' disponibles)</label>'
+          +'<select onchange="S.fst._stkAutre=(this.value===\'__autre__\');S.fst.stockInput=(this.value===\'__autre__\'?\'\':this.value);r()">'+_alimOpts+'</select></div>'
+          +(_stkAutre?'<div class="fg"><label>Préciser le type</label><input id="stk-type-custom" placeholder=" " autocomplete="off" value="'+(f.stockInput||'')+'" oninput="S.fst.stockInput=this.value"></div>':'')
+          +fl('Quantité (kg)','<input id="stk-kg-inp" type="number" inputmode="decimal" placeholder=" " value="'+(f.stockKg||'')+'" oninput="S.fst.stockKg=this.value" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addStockLigne();}">',f.stockKg)
+          +'<div style="display:flex;gap:8px;margin-bottom:8px">'+'<button type="button" onclick="addStockLigne(\'ajouter\')" style="flex:1;padding:12px;border-radius:8px;background:#2d6a2d;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer">📦 Ajouter</button>'+'<button type="button" onclick="addStockLigne(\'consommer\')" style="flex:1;padding:12px;border-radius:8px;background:#7a3a10;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer">🔻 Consommer</button>'+'</div>'
+          +(mvts.length>0?'<div style="padding:8px 12px;background:#0f1f0f;border-radius:8px;font-size:13px">📦 +'+totalAjout+' kg ajouté &nbsp;|&nbsp; 🔻 -'+totalConso+' kg consommé &nbsp;|&nbsp; Net : <strong style="color:'+(total<0?'#f44336':'#C8A06A')+';font-size:14px">'+(total>=0?'+':'')+total+' kg</strong></div>':'')
+          +'</div>'
       })()
       +fl('Ration/j totale (kg)','<input type="number" inputmode="decimal" placeholder=" " value="'+f.rat+'" oninput="S.fst.rat=this.value">',f.rat)
       +(sem2?
