@@ -1,7 +1,7 @@
 # BOAN — Roadmap Notifications Automatiques
 > Version finale — Prête pour implémentation
 > Statut : **BLOQUÉ — Prérequis métier non satisfaits** (voir section 0)
-> Dernière mise à jour : 20 Avril 2026 — aligné avec commit `9e5aca5` + section 11 lacunes résiduelles
+> Dernière mise à jour : 20 Avril 2026 — section 11 lacunes résiduelles + correction coordination vét/CNAAS
 > Revue par : Architecte Backend, Expert UX Offline-first, Expert Sécurité OWASP, Expert Email/Délivrabilité Afrique, Expert Assurance/Droit Sénégalais, Expert Terrain Opérationnel
 
 > **Note de référence** : ce document est aligné sur l'état réel du code (`index.html`, ~8 600 lignes).
@@ -69,12 +69,20 @@ Ce que ça implique dans l'app :
 | Pièce | Qui la produit | Quand | Pris en compte dans BOAN |
 |---|---|---|---|
 | Déclaration dans les 24h | App BOAN (email auto J+0) | J+0 | ✅ Email + WhatsApp auto |
-| Certificat de constatation du décès | Vétérinaire attitré | J+1 à J+3 | ✅ Checkbox fondateur |
+| Certificat de constatation du décès | Vétérinaire attitré | J+1 à J+5-7 ⚠️ délai réel terrain Thiès | ✅ Email vét urgent J+0 + rappel vét J+1 si pas de confirmation → ⬛ Checkbox fondateur réception |
 | Fiche d'identification de l'animal (race, âge indicatif, poids, N°) | App BOAN | J+0 dans email | ✅ Généré depuis `CYCLE.betes[].id/race/poidsEntree/dateIntro` |
 | Historique des soins et vaccins | App BOAN | J+0 dans email | ✅ Généré depuis `Sante_Mortalite` + `SOP_Check` |
 | Numéro de police d'assurance | Fondateur (config) | J+0 dans email | ✅ `CYCLE.numCnaas` (clé `numCnaas` dans Config_App — déjà implémenté commit `9766040`) |
 | Photos de l'animal décédé | Gérant (manuel) | J+0 | ⚠️ Rappel dans l'app — pas de stockage (Option B) |
 | Animal non abattu ni enterré | Gérant (engagement) | Continu | ✅ Bannière rouge + mention email |
+
+> ⚠️ **Dépendance critique — coordination vét/expert CNAAS :**
+> Le certificat vétérinaire doit être obtenu AVANT ou EN MÊME TEMPS que le passage de l'expert CNAAS.
+> L'email vét J+0 (urgent) ne garantit pas sa venue avant l'expert CNAAS — délai terrain Thiès = 5-7 jours.
+> Si l'expert CNAAS arrive sans certificat vét → risque de rejet du dossier ou blocage en attente.
+> **Mitigation :** l'appel vocal fondateur J+0 (étape 5 section 2.1) doit explicitement coordonner
+> les deux rendez-vous. L'email CNAAS J+0 demande à la CNAAS de caler la date expert APRÈS le vét.
+> L'app ajoute une alerte croisée dans Livrables > Incidents si date expert < date visite vét prévue.
 
 ---
 
@@ -94,11 +102,21 @@ J+0 — Gérant constate le décès
   2. [App] Email CNAAS envoyé automatiquement (À: CNAAS, CC: Fondateur, RGA)
      → Contient : fiche animal, historique soins/vaccins, valeur estimée,
        engagement "animal non abattu ni enterré"
+     → Phrase clé : "Constatation vétérinaire en cours de planification.
+       Nous vous demandons de coordonner la date de passage de votre expert
+       avec la disponibilité du vétérinaire référent afin que le certificat
+       de constatation puisse vous être remis lors de votre venue."
   3. [App] Email Vétérinaire envoyé automatiquement (CC: Fondateur, RGA)
-     → "Présence requise pour certificat de constatation"
+     → "URGENT — Décès constaté ce jour. Certificat de constatation requis
+       avant passage expert CNAAS (attendu sous 5-7 jours).
+       Merci de confirmer votre disponibilité dans les 48h."
+  3b. [Cron J+1] Si aucune confirmation vét (Date_Confirmation vide dans Notifications_Log)
+      → Email + WhatsApp de relance vét : "⚠️ Rappel urgent — confirmation de venue requise"
   4. [App] Affiche modal : "✅ Emails envoyés. ⚠️ APPEL VOCAL FONDATEUR REQUIS maintenant —
      la CNAAS n'actionne pas sur email seul."
-  5. [Fondateur en France] Appelle CNAAS Thiès vocalement (numéro dans contacts)
+  5. [Fondateur en France] Appelle CNAAS Thiès vocalement — objectif double :
+     a) Déclarer le sinistre oralement
+     b) Demander à la CNAAS de caler la date expert APRÈS confirmation venue du vétérinaire
      → Colonne Sinistres_CNAAS : Appel_Fondateur_J0 = date/heure
   6. [App] Affiche boutons par priorité :
      1️⃣ 📞 Appeler CNAAS (bouton primaire)   — fondateur France + gérant terrain
@@ -178,6 +196,9 @@ Clôture
 | Bouton `⚠️ Annuler — erreur de saisie` | Visible 30 min après submit — déclenche email correctif CNAAS "fausse alerte" + marque ligne ANNULÉ |
 | Timeline dossier (J+0 email / Appel fondateur / J+7 relance / J+14 relance) | Dates réelles depuis `Sinistres_CNAAS` — délais mis à jour |
 | Statut CNAAS | Select fondateur : `En attente` / `Dossier reçu` / `Expert assigné` / `Expertise passée` / `Rejeté` — stoppe les relances auto dès ≠ `En attente` |
+| Champ `Date visite vétérinaire prévue` | Date estimée saisie par fondateur après appel J+0 — stockée en `Sinistres_CNAAS` col `Date_Visite_Vet_Prevue` |
+| Champ `Date visite expert CNAAS prévue` | Date estimée après appel J+0 — stockée en `Sinistres_CNAAS` col `Date_Visite_Expert_CNAAS_Prevue` |
+| ⚠️ Alerte croisée dates | Si `Date_Visite_Expert_CNAAS_Prevue < Date_Visite_Vet_Prevue` → bannière rouge : "L'expert CNAAS arrive avant le certificat vétérinaire → Risque de rejet. Appeler CNAAS pour reporter." |
 | Checkbox `☑ Certificat vétérinaire reçu` | Étape clé avant indemnisation |
 | Champ `Certificat transmis à CNAAS le [date]` | Texte libre + date |
 | Checkbox `☑ Expert CNAAS passé — animal peut être retiré` | Libère la bannière NE PAS ENTERRER |
@@ -276,13 +297,18 @@ En-têtes ligne 1 :
 #### `Sinistres_CNAAS` (Sheet fondateur)
 En-têtes ligne 1 :
 
-| A | B | C | D | E | F | G | H | I | J | K |
-|---|---|---|---|---|---|---|---|---|---|---|
-| Date | Type | ID_Animal(s) | N°_PV_Gendarmerie | Statut_CNAAS | Date_Email_J0 | Appel_Fondateur_J0 | Certif_Vet_Recu | Expert_Passe | Relances_Stop | Notes |
+| A | B | C | D | E | F | G | H | I | J | K | L | M |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Date | Type | ID_Animal(s) | N°_PV_Gendarmerie | Statut_CNAAS | Date_Email_J0 | Appel_Fondateur_J0 | Certif_Vet_Recu | Expert_Passe | Relances_Stop | email_pending | Date_Visite_Vet_Prevue | Date_Visite_Expert_CNAAS_Prevue |
 
 Valeurs `Statut_CNAAS` : `EN_COURS` / `DOSSIER_RECU` / `EXPERT_ASSIGNE` / `EXPERTISE_PASSEE` / `CONFIRME` / `REJETE` / `CLOTURE`
 
-> ⚠️ `Appel_Fondateur_J0` (nouvelle colonne K) : date/heure de l'appel vocal fondateur vers CNAAS — doit être rempli manuellement par le fondateur. Les relances automatiques vérifient cette colonne : si vide à J+2, notification fondateur "Appel requis".
+> ⚠️ `Appel_Fondateur_J0` (col G) : date/heure de l'appel vocal fondateur vers CNAAS — doit être rempli manuellement par le fondateur. Les relances automatiques vérifient cette colonne : si vide à J+2, notification fondateur "Appel requis".
+> 
+> `Date_Visite_Vet_Prevue` (col L) : date estimée venue vétérinaire — saisie par fondateur après appel J+0. Format `YYYY-MM-DD`.
+> 
+> `Date_Visite_Expert_CNAAS_Prevue` (col M) : date estimée passage expert CNAAS — saisie par fondateur après appel CNAAS J+0. Format `YYYY-MM-DD`.
+> Si col M < col L : l'app affiche une alerte croisée rouge dans Livrables > Incidents.
 
 ### 4.3 Contacts à collecter auprès du fondateur
 ```
@@ -373,16 +399,21 @@ Message automatique. Répondre à [ferme_email_expediteur].
 ```
 
 ### 5.2 Alerte vétérinaire — Décès constaté (J+0 immédiat)
+
+> ⚠️ **Niveau d'urgence renforcé** : le certificat vét doit précéder le passage expert CNAAS
+> (attendu J+5-7). La phrase de confirmation dans les 48h est obligatoire.
+
 ```
 À    : [contact_vet_email]
 CC   : [ferme_email_fondateur], [contact_rga_email]
-Objet : [BOAN] ⚠️ URGENT — Décès animal — Présence requise — [ID_ANIMAL]
+Objet : URGENT — Décès animal — Certificat CNAAS requis — [ID_ANIMAL] — Ferme BOAN
 
 Bonjour [contact_vet_nom],
 
-Un animal est décédé à la Ferme BOAN. Votre présence est requise
-en urgence pour établir le certificat de constatation du décès
-destiné à la CNAAS.
+URGENT — Un animal est décédé aujourd'hui à la Ferme BOAN.
+Votre présence est requise pour établir le certificat de constatation
+du décès destiné à la CNAAS avant le passage de leur expert (attendu
+sous 5 à 7 jours).
 
 Animal        : [ID_ANIMAL] — [race] — [poids_dernier] kg
 Date/heure    : [date] à [heure]
@@ -392,9 +423,40 @@ Traitements   : [traitements_historique]
 
 ⛔ L'animal N'A PAS été abattu ni enterré — en attente de votre constat.
 
+Merci de confirmer votre disponibilité dans les 48h au
+[ferme_responsable_tel] ou par retour de ce message.
+
 [ferme_responsable_nom] — [ferme_responsable_tel]
 Ferme BOAN, Thiès, Sénégal
 ```
+
+### 5.2b Rappel vétérinaire J+1 — si aucune confirmation reçue
+
+> Déclenché par le cron `type=deces` du lendemain si `Date_Confirmation` est vide
+> dans Notifications_Log pour `Reference_ID = VET_DECES_[ID_ANIMAL]`.
+
+```
+À    : [contact_vet_email]
+CC   : [ferme_email_fondateur]
+Objet : Rappel URGENT — Décès [ID_ANIMAL] — Confirmation de venue requise
+
+Bonjour [contact_vet_nom],
+
+Nous n'avons pas reçu de confirmation suite à notre message d'hier
+concernant le décès de [ID_ANIMAL] à la Ferme BOAN.
+
+Le dossier CNAAS est ouvert — le certificat de constatation est
+nécessaire avant le passage de l'expert CNAAS.
+
+Merci de confirmer votre disponibilité par retour ou au
+[ferme_responsable_tel].
+
+[ferme_responsable_nom]
+Ferme BOAN, Thiès, Sénégal
+```
+
+> **Idempotence** : ce rappel utilise `Reference_ID = VET_DECES_RAPPEL_[ID_ANIMAL]_J1`
+> dans Notifications_Log — envoyé une seule fois. Arrêt dès `Date_Confirmation` renseignée.
 
 ### 5.3 Déclaration CNAAS — Décès (J+0)
 ```
@@ -437,6 +499,12 @@ LIEU              : Ferme BOAN, Thiès, Sénégal
 ─── ENGAGEMENT ───
   ⛔ L'animal N'A PAS été abattu ni enterré.
   Il est disponible pour constatation par votre expert.
+
+COORDINATION REQUISE :
+  La constatation vétérinaire est en cours de planification.
+  Nous vous demandons de coordonner la date de passage de votre expert
+  avec la disponibilité du vétérinaire référent Dr [CYCLE.veterinaire]
+  afin que le certificat de constatation soit disponible lors de votre venue.
 
 Pièces à transmettre séparément dès disponibilité :
   □ Certificat de décès signé par Dr [CYCLE.veterinaire]
@@ -738,7 +806,7 @@ jobs:
 | Saisie > Santé (décès = OUI) | Bannière rouge `⛔ NE PAS ENTERRER`, alerte photo avant submit, compteur 48h sanitaire, boutons WhatsApp/appel vet + CNAAS post-submit |
 | Saisie > Santé (décès = OUI, offline) | `lsSet('deces_pending', {...})` au submit offline — traité par `createSinistrePending()` à la reconnexion |
 | Saisie > Incident (type VOL) | Champ N° PV gendarmerie obligatoire bloquant, **`beteMultiSelect()`** (nouveau helper multi-select — `beteDropdown` ne supporte pas multi-select), boutons WhatsApp/appel CNAAS post-submit |
-| Livrables > Incidents | Timeline dossier `Sinistres_CNAAS`, checkboxes fondateur, bouton "CNAAS confirmé" / "Arrêter relances", bannière NE PAS ENTERRER si expert non passé, compteur 48h |
+| Livrables > Incidents | Timeline dossier `Sinistres_CNAAS`, checkboxes fondateur, bouton "CNAAS confirmé" / "Arrêter relances", bannière NE PAS ENTERRER si expert non passé, compteur 48h, **champs date visite vét + expert CNAAS**, alerte croisée si expert < vét |
 | Livrables > SOP Vétérinaire | Bouton "Vétérinaire confirme" conditionnel (acte dans les 7j) |
 | Dashboard — bannière conditionnelle | `⛔ Dossier sinistre ouvert` si `Sinistres_CNAAS` a une ligne `EN_COURS` |
 | Bouton annuler 30 min | `lsSet('last_deces_ts', Date.now())` au submit → vérifier `Date.now() - lsGet('last_deces_ts') < 30*60*1000` dans la vue pour afficher/masquer le bouton |
@@ -967,7 +1035,8 @@ Le roadmap décrit une timeline dossier depuis `Sinistres_CNAAS` mais ne précis
 **Solution :** Ajouter la lecture de `Sinistres_CNAAS` en **Vague 2** de `loadLiveData()` (aux côtés des 7 autres onglets) :
 ```js
 // Dans le Promise.all de la Vague 2 (L~1400) :
-readSheet(SID.fondateur, 'Sinistres_CNAAS!A2:K200')  // lit toutes les lignes
+readSheet(SID.fondateur, 'Sinistres_CNAAS!A2:M200')  // lit toutes les lignes (13 colonnes)
+// col K = email_pending, col L = Date_Visite_Vet_Prevue, col M = Date_Visite_Expert_CNAAS_Prevue
 // Résultat stocké dans LIVE.sinistres = rows
 // Utilisé dans viewLiv() > onglet incidents pour la timeline
 // ET dans viewDash() pour la bannière conditionnelle
@@ -1036,6 +1105,8 @@ BLOC B — Config UI index.html
 BLOC C — API serveur
   □ /api/notify.js — toutes les fonctions (section 7.1) — emails text/plain uniquement (#21)
   □ /api/cron.js — endpoint sécurisé avec param ?type= (vet | deces | relances) pour éviter timeout (#17)
+  □ Rappel vét J+1 décès : dans checkAndSendDecesAlerts(), si Date_Confirmation vide pour VET_DECES_[ID] → envoyer 5.2b (template section 5.2b)
+  □ Alerte croisée : dans checkAndSendDecesAlerts(), si col M < col L dans Sinistres_CNAAS → notifier fondateur
   □ Logique offline : createSinistrePending() déclenché par l'app à la reconnexion (#4 + #19)
   □ TTL PENDING > 2h → statut ERROR_TIMEOUT dans Notifications_Log (#2)
 
@@ -1289,7 +1360,8 @@ async function ensureSheetExists(token, sid, sheetName) {
                           'Statut','Tentative_N','Date_Confirmation','Notes']],
     Sinistres_CNAAS:   [['Date','Type','ID_Animal_s','N_PV_Gendarmerie','Statut_CNAAS',
                           'Date_Email_J0','Appel_Fondateur_J0','Certif_Vet_Recu',
-                          'Expert_Passe','email_pending','Notes']]
+                          'Expert_Passe','Relances_Stop','email_pending',
+                          'Date_Visite_Vet_Prevue','Date_Visite_Expert_CNAAS_Prevue']]
   };
   var hdrs = HEADERS[sheetName];
   if (!hdrs) return;
@@ -1425,7 +1497,7 @@ async function checkAndSendDecesAlerts(token, sidFondateur) {
   for (var i = 0; i < rows.length; i++) {
     var row = rows[i];
     var rowIdx = i + 2; // ligne Sheets (1-indexed + header)
-    var emailPending = String(row[9] || '').trim().toUpperCase(); // col J = email_pending
+    var emailPending = String(row[10] || '').trim().toUpperCase(); // col K = email_pending
     if (emailPending !== 'OUI') continue;
 
     var animalId = String(row[2] || ''); // col C
@@ -1454,7 +1526,7 @@ async function checkAndSendDecesAlerts(token, sidFondateur) {
 
     // 5. Effacer email_pending dans Sinistres_CNAAS — SEULEMENT si emailOk
     if (emailOk) {
-      await updateCell(token, sidFondateur, 'Sinistres_CNAAS!J' + rowIdx, 'NON');
+      await updateCell(token, sidFondateur, 'Sinistres_CNAAS!K' + rowIdx, 'NON');
     }
   }
 }
