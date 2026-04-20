@@ -1697,7 +1697,7 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
       return undefined;
     })();
     // id ET _id : _id pour la déduplication Sheets, id pour la reconnaissance SOP
-    entries.push({ type:'sante', label:id+' \u2014 '+sym, icon:icons.sante,
+    entries.push({ type:'sante', label:(id==='__tous__'?'Troupeau \u2014 '+sym:id+' \u2014 '+sym), icon:icons.sante,
       date:r[0], time:'—', id:id, _id:id, _sym:sym, sopLabel:_sopLbl, _src:'sheets' });
   });
 
@@ -6147,6 +6147,11 @@ function viewSaisie(){
           }
           var _absD = _daysTo!==null ? Math.abs(_daysTo) : 0;
           var _actLbl = evt.type==='pesee'?'Peser les b\u00eates':(_nbBetesDone>0?'Suite \u2014 '+_nbRem+' b\u00eate(s) restante(s)':'Sant\u00e9');
+          // Trop tôt : plus de 7j avant la date théorique — le gérant ne peut pas valider à l'avance
+          if(_daysTo !== null && _daysTo > 7){
+            var _dsEarly = _td ? ('0'+_td.getDate()).slice(-2)+'/'+('0'+(_td.getMonth()+1)).slice(-2)+'/'+_td.getFullYear() : 'J+'+evt.j;
+            return '<div style="margin-top:8px;padding:6px 8px;border-radius:6px;background:#0a1a1a;border:1px solid #1a3a4a;color:#446688;font-size:11px;text-align:center">\u23f3 Pr\u00e9vu le '+_dsEarly+' \u2014 dans '+_daysTo+' j (validation disponible 7j avant)</div>';
+          }
           if(_daysTo===null||_daysTo>=-7){
             return '<button onclick="_sopValider('+idx+')" style="width:100%;margin-top:8px;background:#1a2e1a;border:1px solid #2d6a2d;border-radius:6px;color:#88ee88;font-size:11px;font-weight:700;padding:6px 8px;cursor:pointer">\u2705 Saisir l\'acte \u2014 '+_actLbl+'</button>';
           }
@@ -6209,7 +6214,8 @@ function _sopValider(idx){
     var _snv = _nowDakar();
     var _stv = new Date(_snv.year, _snv.month-1, _snv.day);
     var _stgt = new Date(_sdeb.getTime()); _stgt.setDate(_stgt.getDate() + evt.j);
-    if((_stv - _stgt) > 21*86400000) return;
+    if((_stv - _stgt) > 21*86400000) return;  // Trop tard — délai expiré
+    if((_stgt - _stv) > 7*86400000) return;   // Trop tôt — > 7j avant la date prévue
   }
   if(evt.type === 'pesee'){
     S._sopCtx = {label: evt.label, j: evt.j};
@@ -6274,12 +6280,12 @@ function _sopInlineSave(idx, tous){
   var _entries = [];
   if(tous){
     if(_remBetes.length === 0){ S._sopInlineIdx = null; r(); return; }
-    _remBetes.forEach(function(bid){
-      _entries.push({type:'sante',date:td,id:bid,sopLabel:evt.label,sym:evt.label,tra:evt.note||'Acte SOP v\u00e9t.',cout:'',res:d.res||'Gu\u00e9ri',dec:'',bcs:'',muq:''});
-    });
+    // UNE seule entrée __tous__ — évite N×SIDs race conditions dans appendRow parallèles
+    // buildHistoryFromSheets reconnaît h.id==='__tous__' et marque toutes les bêtes comme traitées
+    _entries.push({type:'sante',date:td,id:'__tous__',_id:'__tous__',label:'Troupeau \u2014 '+evt.label,icon:'\uD83D\uDC8A',sopLabel:evt.label,sym:evt.label,tra:evt.note||'Acte SOP v\u00e9t.',cout:'',res:d.res||'Gu\u00e9ri',dec:'',bcs:'',muq:''});
   } else {
     if(!d.id){ S.msg='err:Choisir une b\u00eate'; r(); return; }
-    _entries.push({type:'sante',date:td,id:d.id,sopLabel:evt.label,sym:evt.label,tra:evt.note||'Acte SOP v\u00e9t.',cout:'',res:d.res||'Gu\u00e9ri',dec:'',bcs:'',muq:''});
+    _entries.push({type:'sante',date:td,id:d.id,_id:d.id,label:d.id+' \u2014 '+evt.label,icon:'\uD83D\uDC8A',sopLabel:evt.label,sym:evt.label,tra:evt.note||'Acte SOP v\u00e9t.',cout:'',res:d.res||'Gu\u00e9ri',dec:'',bcs:'',muq:''});
   }
   // Sauvegarder dans HISTORY
   _entries.forEach(function(e){ HISTORY.push(e); });
