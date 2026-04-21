@@ -1077,6 +1077,7 @@ var S = {
   _guideOpen: false,
   _aiOpen:false, _aiLoading:false, _aiResult:'', _aiError:'', _aiQuestion:'',
   _clotureOpen: false, _clotureData: null,
+  _cycleExpanded: {},
   selectedBete: null,
   _donePesee:[], _doneSante:[], _doneInc:[],
   _sopSyncDone: false
@@ -7599,23 +7600,29 @@ function viewLiv(){
       view+='<div style="color:#7a9a7a;font-size:12px;padding:12px 0">Aucun cycle archivé pour le moment.<br><br>À chaque clôture de cycle, un snapshot enrichi est enregistré automatiquement ici.</div>';
     } else {
       var _hRows=[].concat(LIVE._histCycles).reverse();
-      // Afficher chaque cycle comme une carte pliable
+      if (!S._cycleExpanded) S._cycleExpanded = {}; // état accordéon par index
+      // Helper mini-pill KPI
+      function _kpi(v, lbl, col) {
+        return '<div style="background:#0f1f0f;border-radius:7px;padding:6px 4px;text-align:center">'
+          +'<div style="font-size:12px;font-weight:700;color:'+(col||'#fff')+'">'+v+'</div>'
+          +'<div style="font-size:9px;color:#667766;margin-top:1px">'+lbl+'</div>'
+          +'</div>';
+      }
       _hRows.forEach(function(row, idx){
-        var _numCyc = row[27] || row[14] || (idx+1); // AB ou fallback O (ancien format)
-        var _debut  = isoToFr(row[0]||'');
-        var _fin    = isoToFr(row[1]||'');
-        var _duree  = row[2] ? row[2]+' j' : '';
-        var _race   = row[3]||'';
-        var _foirail= row[4]||'';
-        var _nbDep  = row[5]||'';
-        var _nbFin  = row[6]||'';
-        var _deces  = parseInt(row[7]||0);
-        var _tauxMort = row[8]||'';
-        var _pDep   = row[9]||''; var _pFin = row[10]||''; var _gmq = row[11]||'';
+        var _numCyc  = row[27] || row[14] || (idx+1);
+        var _debut   = isoToFr(row[0]||'');
+        var _fin     = isoToFr(row[1]||'');
+        var _duree   = row[2] ? row[2]+' j' : '';
+        var _race    = row[3]||'';
+        var _foirail = row[4]||'';
+        var _nbDep   = row[5]||''; var _nbFin = row[6]||'';
+        var _deces   = parseInt(row[7]||0);
+        var _tauxMort= row[8]||'';
+        var _pDep    = row[9]||''; var _pFin = row[10]||''; var _gmq = row[11]||'';
         var _gainPoids = row[12]||'';
         var _capital = parseInt(row[13]||0);
-        var _coutAlim = parseInt(row[14]||0);
-        var _recette = parseInt(row[15]||0) || parseInt(row[12]||0); // P ou fallback ancien M
+        var _coutAlim= parseInt(row[14]||0);
+        var _recette = parseInt(row[15]||0) || parseInt(row[12]||0);
         var _benef   = parseInt(row[16]||0) || (_recette - _capital);
         var _benefBete = parseInt(row[17]||0);
         var _roi     = row[18]||'';
@@ -7626,83 +7633,88 @@ function viewLiv(){
         var _bcsEntr = row[23]||'';
         var _patho   = row[24]||'';
         var _vaccins = row[25]||'';
-        var _prixMoy = row[26]||'';
 
-        // Couleurs performance
-        var _bCol = _benef >= 0 ? '#4caf50' : '#f44336';
+        var _bCol     = _benef >= 0 ? '#4caf50' : '#f44336';
         var _decesCol = _deces > 0 ? '#f44336' : '#7a9a7a';
-        var _roiCol = _roi && parseFloat(_roi) >= 20 ? '#4caf50' : _roi && parseFloat(_roi) >= 10 ? '#ff9800' : '#f44336';
+        var _roiCol   = _roi && parseFloat(_roi) >= 20 ? '#4caf50' : _roi && parseFloat(_roi) >= 10 ? '#ff9800' : '#f44336';
+        var _open     = !!S._cycleExpanded[idx];
+        var _isLast   = idx === 0;
+        var _cardBorder = _isLast ? 'border:1px solid #3a7a3a' : 'border:1px solid #2a4a2a';
+        var _cardBg   = _isLast ? 'background:#0f2a1a' : 'background:#131f13';
 
-        var _cardBg = idx===0 ? 'background:linear-gradient(135deg,#0f2a1a,#162510);border:1px solid #3a7a3a' : 'background:#1a2e1a;border:1px solid #2a4a2a';
-        view += '<div style="'+_cardBg+';border-radius:12px;padding:14px;margin-bottom:12px">';
-
-        // En-tête carte
-        view += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">';
-        view += '<div>';
-        view += '<div style="font-size:14px;font-weight:700">Cycle '+_numCyc+' <span style="font-size:11px;color:#88aa88;font-weight:400">— '+_race+(idx===0?' <span style="font-size:10px;background:#2d6a2d;color:#fff;border-radius:4px;padding:1px 5px">Dernier</span>':'')+'</span></div>';
-        view += '<div style="font-size:11px;color:#88aa88;margin-top:2px">'+_debut+' → '+_fin+' ('+_duree+')'+('' + _saison ? ' · '+_saison : '')+'</div>';
-        view += '</div>';
+        // ── En-tête accordéon (toujours visible) ──
+        view += '<div style="'+_cardBg+';'+_cardBorder+';border-radius:10px;margin-bottom:7px;overflow:hidden">';
+        view += '<div onclick="S._cycleExpanded['+idx+']=!S._cycleExpanded['+idx+'];r()" '
+          +'style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;cursor:pointer;gap:8px">';
+        // Gauche : badge + identité
+        view += '<div style="display:flex;align-items:center;gap:8px;min-width:0">';
+        view += '<div style="flex-shrink:0;width:32px;height:32px;border-radius:8px;background:'+(_isLast?'#2d6a2d':'#1a3a1a')+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:'+(_isLast?'#fff':'#88aa88')+'">'+_numCyc+'</div>';
+        view += '<div style="min-width:0">';
+        view += '<div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(_race||'Cycle '+_numCyc)+(_isLast?' <span style="font-size:9px;background:#2d6a2d;color:#fff;border-radius:3px;padding:1px 4px;vertical-align:middle">Dernier</span>':'')+'</div>';
+        view += '<div style="font-size:10px;color:#556855;margin-top:1px">'+_debut+((_fin&&_fin!==_debut)?' → '+_fin:'')+(_duree?' · '+_duree:'')+'</div>';
+        view += '</div></div>';
+        // Droite : bénéfice net + chevron
+        view += '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0">';
         view += '<div style="text-align:right">';
-        view += '<div style="font-size:18px;font-weight:800;color:'+_bCol+'">'+(_benef>=0?'+':'')+fmt(_benef)+'</div>';
-        view += '<div style="font-size:10px;color:#88aa88">bénéfice net</div>';
+        view += '<div style="font-size:14px;font-weight:800;color:'+_bCol+'">'+(_benef>=0?'+':'')+fmt(_benef)+'</div>';
+        view += '<div style="font-size:9px;color:#556855">FCFA net</div>';
         view += '</div>';
+        view += '<div style="font-size:14px;color:#556855;transition:transform .2s;'
+          +(_open?'transform:rotate(90deg)':'')+'">▸</div>';
         view += '</div>';
+        view += '</div>'; // fin header
 
-        // KPIs en grille 4 colonnes
-        view += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:10px">';
-        function _kpi(v, lbl, col) {
-          return '<div style="background:#0f1f0f;border-radius:7px;padding:7px 5px;text-align:center">'
-            +'<div style="font-size:13px;font-weight:700;color:'+(col||'#fff')+'">'+v+'</div>'
-            +'<div style="font-size:9px;color:#667766;margin-top:2px">'+lbl+'</div>'
-            +'</div>';
-        }
-        view += _kpi(_gmq ? parseFloat(_gmq).toFixed(2)+'kg/j' : '—', 'GMQ', _gmq && parseFloat(_gmq)>=1 ? '#4caf50' : '#ff9800');
-        view += _kpi(_nbDep+' → '+_nbFin, 'Bêtes', '#fff');
-        view += _kpi(_deces>0 ? _deces+' ('+_tauxMort+'%)' : '0', 'Décès', _decesCol);
-        view += _kpi(_roi ? parseFloat(_roi).toFixed(1)+'%/an' : '—', 'ROI ann.', _roiCol);
-        view += '</div>';
+        // ── Détails dépliables ──
+        if (_open) {
+          view += '<div style="padding:0 10px 12px;border-top:1px solid #1a3a1a">';
 
-        // Ligne poids
-        if(_pDep || _pFin) {
-          view += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">';
-          view += _kpi(_pDep ? _pDep+'kg' : '—', 'Poids dép.', '#88aa88');
-          view += _kpi(_pFin ? _pFin+'kg' : '—', 'Poids fin', '#C8A06A');
-          view += _kpi(_gainPoids ? fmt(_gainPoids)+'kg' : '—', 'Gain total', '#88bb88');
+          // Grille 4 KPIs principaux
+          view += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;margin-top:10px;margin-bottom:8px">';
+          view += _kpi(_gmq ? parseFloat(_gmq).toFixed(2)+'kg/j' : '—', 'GMQ', _gmq && parseFloat(_gmq)>=1?'#4caf50':'#ff9800');
+          view += _kpi(_nbDep+((_nbFin&&_nbFin!==_nbDep)?' → '+_nbFin:''), 'Bêtes', '#fff');
+          view += _kpi(_deces>0?_deces+' ('+_tauxMort+'%)':'0', 'Décès', _decesCol);
+          view += _kpi(_roi?parseFloat(_roi).toFixed(1)+'%/an':'—', 'ROI', _roiCol);
           view += '</div>';
-        }
 
-        // Financier
-        view += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:'+((_patho||_fournReg||_vaccins)?'10px':'0')+'px">';
-        view += _kpi(_capital ? fmt(_capital) : '—', 'Capital (FCFA)', '#88aa88');
-        view += _kpi(_recette ? fmt(_recette) : '—', 'Recette (FCFA)', '#4caf50');
-        view += _kpi(_coutAlim ? fmt(_coutAlim) : '—', 'Coût aliment', '#ff9800');
-        view += _kpi(_benefBete ? fmt(_benefBete) : '—', 'Bénéf./bête', _benefBete>=0?'#4caf50':'#f44336');
-        view += '</div>';
+          // Poids (si dispo)
+          if (_pDep || _pFin) {
+            view += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:8px">';
+            view += _kpi(_pDep?_pDep+'kg':'—', 'Poids dép.', '#88aa88');
+            view += _kpi(_pFin?_pFin+'kg':'—', 'Poids fin', '#C8A06A');
+            view += _kpi(_gainPoids?fmt(_gainPoids)+'kg':'—', 'Gain total', '#88bb88');
+            view += '</div>';
+          }
 
-        // Infos commerciales si disponibles
-        if(_prixKgVif || _prixMoy || _foirail) {
-          view += '<div style="font-size:10px;color:#7a9a7a;background:#0a1a0a;border-radius:6px;padding:6px 8px;margin-top:8px;margin-bottom:'+((_patho||_fournReg||_vaccins)?'8px':'0')+'px">';
-          if(_foirail) view += '📍 '+_foirail+' ';
-          if(_prixKgVif) view += '· '+_prixKgVif+' FCFA/kg vif ';
-          if(_coutKg) view += '· Coût/kg gain: '+fmt(_coutKg)+' FCFA ';
-          if(_bcsEntr) view += '· BCS entrée: '+_bcsEntr;
+          // Financier 2×2
+          view += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px">';
+          view += _kpi(_capital?fmt(_capital):'—', 'Capital', '#88aa88');
+          view += _kpi(_recette?fmt(_recette):'—', 'Recette', '#4caf50');
+          view += _kpi(_coutAlim?fmt(_coutAlim):'—', 'Coût alim.', '#ff9800');
+          view += _kpi(_benefBete?fmt(_benefBete):'—', 'Bénéf./bête', _benefBete>=0?'#4caf50':'#f44336');
           view += '</div>';
-        }
 
-        // Bloc santé / terrain (si données saisies)
-        if(_patho || _fournReg || _vaccins) {
-          view += '<div style="border-top:1px solid #2a4a2a;padding-top:8px;margin-top:2px">';
-          if(_fournReg) view += '<div style="font-size:11px;color:#88aa88;margin-bottom:3px">🌍 Fournisseur : <span style="color:#ccc">'+_fournReg+'</span></div>';
-          if(_patho)   view += '<div style="font-size:11px;color:#88aa88;margin-bottom:3px">🩺 Pathologies : <span style="color:#ff9090">'+_patho+'</span></div>';
-          if(_vaccins) view += '<div style="font-size:11px;color:#88aa88">💉 Vaccins : <span style="color:#5ab4ff">'+_vaccins+'</span></div>';
-          view += '</div>';
+          // Infos terrain compactes
+          if (_foirail||_prixKgVif||_bcsEntr||_fournReg||_patho||_vaccins) {
+            view += '<div style="font-size:10px;color:#7a9a7a;background:#0a1a0a;border-radius:6px;padding:6px 8px;line-height:1.7">';
+            if (_foirail)    view += '<span>📍 '+_foirail+'</span>  ';
+            if (_prixKgVif)  view += '<span>⚖️ '+_prixKgVif+' FCFA/kg vif</span>  ';
+            if (_coutKg)     view += '<span>🌾 '+fmt(_coutKg)+' FCFA/kg gain</span>  ';
+            if (_bcsEntr)    view += '<span>📊 BCS '+_bcsEntr+'</span>  ';
+            if (_saison)     view += '<span>🌤 '+_saison+'</span>  ';
+            if (_fournReg)   view += '<br><span style="color:#88aa88">🌍 '+_fournReg+'</span>  ';
+            if (_patho)      view += '<br><span style="color:#ff9090">🩺 '+_patho+'</span>  ';
+            if (_vaccins)    view += '<br><span style="color:#5ab4ff">💉 '+_vaccins+'</span>';
+            view += '</div>';
+          }
+
+          view += '</div>'; // fin details
         }
 
         view += '</div>'; // fin carte
       });
 
-      view += '<div style="font-size:10px;color:#556855;margin-top:4px;text-align:center">'+_hRows.length+' cycle(s) archivé(s) — données depuis v2.1</div>';
-      view += '<button class="btn-sec" style="margin-top:10px;width:100%;font-size:13px" onclick="LIVE._histCycles=null;r()">🔄 Rafraîchir</button>';
+      view += '<div style="font-size:10px;color:#556855;margin-top:6px;text-align:center">'+_hRows.length+' cycle(s) · Tap pour déplier</div>';
+      view += '<button class="btn-sec" style="margin-top:8px;width:100%;font-size:12px" onclick="LIVE._histCycles=null;S._cycleExpanded={};r()">🔄 Rafraîchir</button>';
     }
   }
   return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+view+'</div>';
