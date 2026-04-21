@@ -881,16 +881,17 @@ function marquerFicheAujourdhui() {
 
 // ── Badge calendaire : statut + bouton réinitialiser ──
 function calBadge(done, msg, resetFn) {
+  var _lt = LIGHT_MODE;
   if(done) {
     return '<div style="display:flex;align-items:center;justify-content:space-between;'
-      +'background:#0a2a0a;border:1px solid #2d6a2d;border-radius:8px;padding:8px 12px;margin-bottom:10px">'
-      +'<span style="font-size:12px;color:#4caf50">✅ '+msg+'</span>'
+      +'background:'+(_lt?'#e8f5e8':'#0a2a0a')+';border:1px solid '+(_lt?'#88bb88':'#2d6a2d')+';border-radius:8px;padding:8px 12px;margin-bottom:10px">'
+      +'<span style="font-size:12px;color:'+(_lt?'#1a7a1a':'#4caf50')+'">✅ '+msg+'</span>'
       +'<button type="button" onclick="'+resetFn+'" '
-      +'style="font-size:11px;padding:3px 10px;border-radius:6px;background:#1a3a1a;'
-      +'color:#88aa88;border:1px solid #2a4a2a;cursor:pointer">Réinitialiser</button>'
+      +'style="font-size:11px;padding:3px 10px;border-radius:6px;background:'+(_lt?'#d0e8d0':'#1a3a1a')+';'
+      +'color:'+(_lt?'#2d6a2d':'#88aa88')+';border:1px solid '+(_lt?'#88bb88':'#2a4a2a')+';cursor:pointer">Réinitialiser</button>'
       +'</div>';
   }
-  return '<div style="font-size:12px;color:#88aa88;background:#0f1f0f;border-radius:8px;'
+  return '<div style="font-size:12px;color:'+(_lt?'#4a7a4a':'#88aa88')+';background:'+(_lt?'#f0f5f0':'#0f1f0f')+';border-radius:8px;'
     +'padding:8px 12px;margin-bottom:10px">📅 '+msg+'</div>';
 }
 
