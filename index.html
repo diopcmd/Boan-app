@@ -1076,6 +1076,7 @@ var S = {
   _pwdMgrCurrent:'', _pwdMgrRole:'', _pwdMgrNew:'', _pwdMgrConfirm:'', _pwdMgrNewLogin:'',
   _guideOpen: false,
   _aiOpen:false, _aiLoading:false, _aiResult:'', _aiError:'', _aiQuestion:'',
+  _clotureOpen: false, _clotureData: null,
   selectedBete: null,
   _donePesee:[], _doneSante:[], _doneInc:[],
   _sopSyncDone: false
@@ -1109,7 +1110,7 @@ function r() {
   }
   // Verrou scroll : bloque le défilement du fond quand un overlay est actif (iOS/Android)
   var _ov = SB.open || MODAL.open || CONFIRM.open ||
-    S._resetPwdOpen || S._aiOpen || S._pwdMgrOpen || S._guideOpen;
+    S._resetPwdOpen || S._aiOpen || S._pwdMgrOpen || S._guideOpen || S._clotureOpen;
   document.body.style.overflow = _ov ? 'hidden' : '';
   var html;
   if (S.page==='login') {
@@ -1128,6 +1129,7 @@ function r() {
       if (S._aiOpen) html += pageAI();
       if (S._pwdMgrOpen) html += pagePwdManager();
       if (S._guideOpen)   html += pageGuide();
+      if (S._clotureOpen) html += pageClotureCycle();
     } catch(e) {
       html = '<div style="padding:24px;max-width:400px;margin:40px auto;background:#2e1010;border:1px solid #8a0000;border-radius:12px;color:#ff7070;font-family:monospace">'
         +'<div style="font-size:15px;font-weight:700;margin-bottom:8px">⚠️ Erreur</div>'
@@ -2755,6 +2757,136 @@ function pageConfirm(){
     +'</div></div></div>';
 }
 
+// ── FORMULAIRE DE CLÔTURE CYCLE ──
+// S'affiche avant la modale init pour capturer les données finales du cycle sortant
+function pageClotureCycle() {
+  if (!S._clotureOpen) return '';
+  var d = S._clotureData || {};
+
+  // Contexte cycle sortant pour affichage
+  var _nbB = MOCK.betes || CYCLE.nbBetes || 0;
+  var _gmq = MOCK.gmq || 0;
+  var _treso = MOCK.treso || 0;
+  var _capital = CYCLE.capital || 0;
+  var _benefEst = Math.round(_treso - _capital);
+  var _dureeJ = (function(){
+    if (!CYCLE.dateDebut) return 0;
+    var d1 = parseISO(CYCLE.dateDebut);
+    if (!d1) return 0;
+    var d2 = new Date();
+    return Math.round((d2-d1)/86400000);
+  })();
+
+  function _inputCl(id, label, type, placeholder, val, handler) {
+    return '<div class="fg">'
+      +'<label style="font-size:12px;color:#88aa88">'+label+'</label>'
+      +'<input id="cloture-'+id+'" type="'+(type||'text')+'" inputmode="'+(type==='number'?'decimal':'text')+'" placeholder="'+placeholder+'" value="'+(val||'')+'" '
+      +'oninput="if(!S._clotureData)S._clotureData={};S._clotureData.'+id+'=this.value">'
+      +'</div>';
+  }
+
+  return '<div class="modal-overlay">'
+    +'<div class="modal" style="max-height:92vh">'
+
+    // En-tête
+    +'<div class="modal-head" style="background:linear-gradient(135deg,#1a2e1a,#2a1f00)">'
+    +'<div>'
+    +'<div style="font-size:16px;font-weight:700">📋 Clôture Cycle '+(CYCLE.numCycle||1)+'</div>'
+    +'<div style="font-size:11px;color:#C8A06A;margin-top:2px">Quelques données avant de démarrer le prochain cycle</div>'
+    +'</div>'
+    +'<div style="font-size:22px">📦</div>'
+    +'</div>'
+
+    // Résumé automatique du cycle
+    +'<div class="modal-body">'
+    +'<div style="background:#0f1f0f;border-radius:10px;padding:12px;margin-bottom:16px;border:1px solid #2a4a2a">'
+    +'<div style="font-size:11px;color:#88aa88;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Récapitulatif automatique</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+    +'<div style="text-align:center">'
+    +'<div style="font-size:20px;font-weight:700;color:#4caf50">'+_nbB+'</div>'
+    +'<div style="font-size:10px;color:#88aa88">bêtes</div>'
+    +'</div>'
+    +'<div style="text-align:center">'
+    +'<div style="font-size:20px;font-weight:700;color:#C8A06A">'+_gmq.toFixed(2)+'</div>'
+    +'<div style="font-size:10px;color:#88aa88">kg/j GMQ</div>'
+    +'</div>'
+    +'<div style="text-align:center">'
+    +'<div style="font-size:20px;font-weight:700;color:'+(_benefEst>=0?'#4caf50':'#f44336')+'">'+(_benefEst>=0?'+':'')+Math.round(_benefEst/1000)+'k</div>'
+    +'<div style="font-size:10px;color:#88aa88">bénéf. estim.</div>'
+    +'</div>'
+    +'</div>'
+    +'<div style="font-size:10px;color:#556855;margin-top:8px;text-align:center">Cycle '+_dureeJ+' jours — Foirail : '+(CYCLE.foirail||'N/A')+'</div>'
+    +'</div>'
+
+    // ── Bloc 1 : VENTE (critique) ──
+    +'<div style="margin-bottom:16px">'
+    +'<div style="font-size:11px;font-weight:700;color:#C8A06A;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;padding-left:8px;border-left:3px solid #C8A06A">💰 Résultats de vente</div>'
+    +'<div class="frow">'
+    +_inputCl('recetteVente','Recette totale (FCFA)','number','Ex: 18750000',d.recetteVente,'')
+    +_inputCl('prixVenteMoyen','Prix moyen / bête (FCFA)','number','Ex: 375000',d.prixVenteMoyen,'')
+    +'</div>'
+    +'<div class="al al-g" style="font-size:11px;margin-top:4px">Ces 2 champs permettent de calculer le <strong>bénéfice net réel</strong> archivé</div>'
+    +'</div>'
+
+    // ── Bloc 2 : APPROVISIONNEMENT ──
+    +'<div style="margin-bottom:16px">'
+    +'<div style="font-size:11px;font-weight:700;color:#88bb88;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;padding-left:8px;border-left:3px solid #88bb88">🐄 Approvisionnement</div>'
+    +_inputCl('fournisseurRegion','Région fournisseur','text','Ex: Louga, Bakel, Linguère',d.fournisseurRegion,'')
+    +'<div class="frow">'
+    +'<div class="fg"><label style="font-size:12px;color:#88aa88">BCS entrée (1-5)</label>'
+    +'<select onchange="if(!S._clotureData)S._clotureData={};S._clotureData.bcsEntree=this.value">'
+    +'<option value="">-- Non renseigné --</option>'
+    +'<option value="1"'+(d.bcsEntree==='1'?' selected':'')+'>1 — Très maigre</option>'
+    +'<option value="2"'+(d.bcsEntree==='2'?' selected':'')+'>2 — Maigre</option>'
+    +'<option value="2.5"'+(d.bcsEntree==='2.5'?' selected':'')+'>2.5 — Sous-état</option>'
+    +'<option value="3"'+(d.bcsEntree==='3'?' selected':'')+'>3 — Moyen</option>'
+    +'<option value="3.5"'+(d.bcsEntree==='3.5'?' selected':'')+'>3.5 — Bon</option>'
+    +'<option value="4"'+(d.bcsEntree==='4'?' selected':'')+'>4 — Très bon</option>'
+    +'</select></div>'
+    +'<div class="fg"><label style="font-size:12px;color:#88aa88">Contexte vente</label>'
+    +'<select onchange="if(!S._clotureData)S._clotureData={};S._clotureData.contexte=this.value">'
+    +'<option value="">-- Standard --</option>'
+    +'<option value="Tabaski J-30"'+(d.contexte==='Tabaski J-30'?' selected':'')+'>🐑 Tabaski (J-30)</option>'
+    +'<option value="Tabaski J-60"'+(d.contexte==='Tabaski J-60'?' selected':'')+'>🐑 Tabaski (J-60)</option>'
+    +'<option value="Gamou"'+(d.contexte==='Gamou'?' selected':'')+'>Gamou</option>'
+    +'<option value="Période creuse"'+(d.contexte==='Période creuse'?' selected':'')+'>Période creuse</option>'
+    +'<option value="Post-hivernage"'+(d.contexte==='Post-hivernage'?' selected':'')+'>Post-hivernage</option>'
+    +'</select></div>'
+    +'</div>'
+    +'</div>'
+
+    // ── Bloc 3 : SANTÉ ──
+    +'<div style="margin-bottom:16px">'
+    +'<div style="font-size:11px;font-weight:700;color:#5ab4ff;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;padding-left:8px;border-left:3px solid #5ab4ff">🩺 Bilan sanitaire</div>'
+    +_inputCl('pathologies','Pathologies observées','text','Ex: Trypano×4, Boiterie×2',d.pathologies,'')
+    +_inputCl('vaccinsAdmins','Vaccins administrés','text','Ex: CBPP, FMD, Pasteurellose',d.vaccinsAdmins,'')
+    +'</div>'
+
+    // Note bas de page
+    +'<div style="font-size:10px;color:#556855;text-align:center;padding:4px 0">Tous les champs sont optionnels — vous pouvez passer directement</div>'
+    +'</div>'
+
+    // Pied de page
+    +'<div class="modal-foot">'
+    +'<button class="btn-sec" onclick="S._clotureOpen=false;S._clotureData=null;r()" style="flex:0.5">✕ Annuler</button>'
+    +'<button class="btn-sec" onclick="_ouvrirModalInit()" style="color:#88aa88">Passer →</button>'
+    +'<button onclick="_ouvrirModalInit()" style="background:#C8A06A;color:#0f1a0f;font-weight:700">Enregistrer &amp; Continuer ✓</button>'
+    +'</div>'
+
+    +'</div></div>';
+}
+
+// Ouvre la modale init cycle (après clôture ou directement)
+function _ouvrirModalInit() {
+  S._clotureOpen = false;
+  MODAL.open = true;
+  MODAL.step = 1;
+  MODAL.data = Object.assign({}, CYCLE);
+  if (!MODAL.data.dateDebut) MODAL.data.dateDebut = todayISO();
+  closeSB();
+  r();
+}
+
 function pageModal(){
   var steps = ['Troupeau','Finances','Marché','Bêtes'];
   var dotsHtml = steps.map(function(s,i){
@@ -2916,18 +3048,25 @@ function confirmResetWithPwd() {
       S._resetPwdError = 'Mot de passe incorrect';
       r(); return;
     }
-    // Tout OK — ouvrir la modale init
+    // Tout OK — si cycle existant, ouvrir d'abord le formulaire de clôture
     S._resetPwdOpen = false;
     S._resetPwd = '';
     S._resetPwdError = '';
     S._resetGoCheck = false;
-    MODAL.open = true;
-    MODAL.step = 1;
-    MODAL.data = Object.assign({}, CYCLE);
-    // fix: oninput ne se déclenche pas si l'utilisateur ne touche pas le champ date
-    if (!MODAL.data.dateDebut) MODAL.data.dateDebut = todayISO();
-    closeSB();
-    r();
+    if (CYCLE.initialized && CYCLE.dateDebut) {
+      // Ouvrir la page de clôture avant la modale init
+      S._clotureOpen = true;
+      S._clotureData = S._clotureData || {};
+      r();
+    } else {
+      // Pas de cycle précédent — ouvrir directement la modale init
+      MODAL.open = true;
+      MODAL.step = 1;
+      MODAL.data = Object.assign({}, CYCLE);
+      if (!MODAL.data.dateDebut) MODAL.data.dateDebut = todayISO();
+      closeSB();
+      r();
+    }
   })
   .catch(function(){ S._resetPwdError = 'Erreur réseau'; r(); });
 }
@@ -4100,38 +4239,111 @@ function addBeteModal(){
 
 // ── ARCHIVAGE CYCLE ──
 // Écrit une ligne de synthèse dans Historique_Cycles (sheet fondateur uniquement).
-// Colonnes A:N — voir en-têtes dans la ligne 1 du sheet.
+// Colonnes A:W (23 colonnes) — voir commentaires ci-dessous.
 // snap : objet snapshot capturé juste avant le reset de CYCLE.
 function _archiveCycle(snap) {
   if (!snap || !snap.dateDebut) return Promise.resolve(false); // cycle jamais initialisé — rien à archiver
   if (!SID.fondateur) return Promise.resolve(false);
-  var margineBrute = Math.round(snap.tresoFin - snap.capital);
-  var margeParBete = snap.nbBetesFin > 0 ? Math.round(margineBrute / snap.nbBetesFin) : 0;
-  var dureeReelle  = (function(){
+
+  // ── Durée réelle ──
+  var dureeReelle = (function(){
     var d1 = parseISO(snap.dateDebut);
     if (!d1) return '';
-    var d2p = snap.dateFin.split('/');
-    var d2 = d2p.length===3 ? new Date(d2p[2],d2p[1]-1,d2p[0]) : new Date();
+    var d2p = snap.dateFin ? snap.dateFin.split('-') : [];
+    var d2 = d2p.length===3 ? new Date(parseInt(d2p[0]),parseInt(d2p[1])-1,parseInt(d2p[2])) : new Date();
     return Math.round((d2-d1)/86400000);
   })();
+
+  // ── Coût aliment depuis STOCK_MVTS (ajouts × prix moyen ou prixAlim config) ──
+  var _prixAlimRef = snap.prixAlim || CYCLE.prixAlim || 0;
+  var _kgAlimTotal = (snap.stockMvts || STOCK_MVTS || []).reduce(function(s, m) {
+    return s + (m.mode === 'ajouter' ? (parseFloat(m.kg) || 0) : 0);
+  }, 0);
+  var coutAlim = _prixAlimRef > 0 ? Math.round(_kgAlimTotal * _prixAlimRef) : 0;
+
+  // ── Bénéfice net = recette vente - capital investi - coûts opérationnels ──
+  // Si recette saisie manuellement, utiliser snap.recetteVente sinon tresoFin
+  var recetteVente = snap.recetteVente || snap.tresoFin || 0;
+  var beneficeNet  = Math.round(recetteVente - snap.capital);
+  var beneficeNetParBete = snap.nbBetesFin > 0 ? Math.round(beneficeNet / snap.nbBetesFin) : 0;
+
+  // ── ROI annualisé ──
+  var roiAnnualise = (dureeReelle > 0 && snap.capital > 0)
+    ? Math.round((beneficeNet / snap.capital) * (365 / dureeReelle) * 1000) / 10
+    : '';
+
+  // ── Taux mortalité ──
+  var tauxMort = snap.nbBetes > 0
+    ? Math.round((snap.deces / snap.nbBetes) * 1000) / 10
+    : 0;
+
+  // ── Gain poids total + coût/kg gain ──
+  var gainPoidsTotal = snap.nbBetesFin > 0 && snap.poidsFin && snap.poidsDepart
+    ? Math.round((snap.poidsFin - snap.poidsDepart) * snap.nbBetesFin)
+    : '';
+  var coutParKgGain = (gainPoidsTotal > 0 && coutAlim > 0)
+    ? Math.round(coutAlim / gainPoidsTotal)
+    : '';
+
+  // ── Prix kg vif moyen ──
+  var prixKgVif = (snap.recetteVente && snap.poidsFin && snap.nbBetesFin)
+    ? Math.round(snap.recetteVente / (snap.poidsFin * snap.nbBetesFin))
+    : '';
+
+  // ── Saison (calculée depuis dateDebut) ──
+  var saison = (function(){
+    if (!snap.dateDebut) return '';
+    var m = parseInt((snap.dateDebut || '').split('-')[1] || 0);
+    if (m >= 7 && m <= 10) return 'Hivernage';
+    if (m >= 11 || m <= 1) return 'Post-hivernage';
+    if (m >= 2 && m <= 4)  return 'Saison sèche';
+    return 'Saison chaude';
+  })();
+
+  // ── Contexte Tabaski (vente dans les 60j avant la fête) ──
+  var ctxTabaski = (snap.clotureContext && snap.clotureContext.indexOf('Tabaski') !== -1) ? 'Oui' : '';
+
+  // ── Colonne dateFin : uniformisée en ISO ──
+  var dateFinISO = (function(){
+    if (!snap.dateFin) return '';
+    // Si déjà ISO
+    if (/^\d{4}-\d{2}-\d{2}$/.test(snap.dateFin)) return snap.dateFin;
+    // DD/MM/YYYY → YYYY-MM-DD
+    var p = snap.dateFin.split('/');
+    return p.length===3 ? p[2]+'-'+p[1]+'-'+p[0] : snap.dateFin;
+  })();
+
   var row = [
-    snap.dateDebut,             // A — Début (ISO)
-    snap.dateFin,               // B — Fin (DD/MM/YYYY)
-    dureeReelle,                // C — Durée réelle (jours)
-    snap.race,                  // D — Race
-    snap.foirail,               // E — Foirail
-    snap.nbBetes,               // F — Nb bêtes départ
-    snap.nbBetesFin,            // G — Nb bêtes fin
-    snap.deces,                 // H — Décès
-    snap.poidsDepart,           // I — Poids moyen départ (kg)
-    snap.poidsFin || '',        // J — Poids moyen fin (kg)
-    snap.gmq,                   // K — GMQ moyen (kg/j)
-    snap.capital,               // L — Capital investi (FCFA)
-    snap.tresoFin,              // M — Tréso finale (FCFA)
-    margeParBete,               // N — Marge brute / bête (FCFA)
-    snap.numCycle || ''         // O — Numéro de cycle
+    snap.dateDebut,              // A — Début (ISO YYYY-MM-DD)
+    dateFinISO,                  // B — Fin (ISO YYYY-MM-DD) — corrigé
+    dureeReelle,                 // C — Durée réelle (jours)
+    snap.race,                   // D — Race
+    snap.foirail,                // E — Foirail
+    snap.nbBetes,                // F — Nb bêtes départ
+    snap.nbBetesFin,             // G — Nb bêtes fin
+    snap.deces,                  // H — Décès
+    tauxMort,                    // I — Taux mortalité (%)  [NOUVEAU]
+    snap.poidsDepart,            // J — Poids moyen départ (kg)
+    snap.poidsFin || '',         // K — Poids moyen fin (kg)
+    snap.gmq,                    // L — GMQ moyen (kg/j)
+    gainPoidsTotal,              // M — Gain poids total lot (kg) [NOUVEAU]
+    snap.capital,                // N — Capital investi (FCFA)
+    coutAlim,                    // O — Coût aliment estimé (FCFA) [NOUVEAU]
+    recetteVente,                // P — Recette vente (FCFA) [NOUVEAU — ex tréso finale]
+    beneficeNet,                 // Q — Bénéfice net (FCFA) [NOUVEAU — remplace marge brute]
+    beneficeNetParBete,          // R — Bénéfice net / bête (FCFA) [NOUVEAU]
+    roiAnnualise,                // S — ROI annualisé (%) [NOUVEAU]
+    coutParKgGain,               // T — Coût / kg de gain (FCFA) [NOUVEAU]
+    prixKgVif,                   // U — Prix kg vif (FCFA/kg) [NOUVEAU]
+    saison,                      // V — Saison [NOUVEAU]
+    snap.fournisseurRegion || '', // W — Région fournisseur [NOUVEAU]
+    snap.bcsEntree || '',         // X — BCS entrée [NOUVEAU]
+    snap.pathologies || '',       // Y — Pathologies observées [NOUVEAU]
+    snap.vaccinsAdmins || '',     // Z — Vaccins administrés [NOUVEAU]
+    snap.prixVenteMoyen || '',    // AA — Prix vente moyen / bête (FCFA) [NOUVEAU]
+    snap.numCycle || ''           // AB — Numéro de cycle
   ];
-  return appendRow(SID.fondateur, 'Historique_Cycles!A:O', row);
+  return appendRow(SID.fondateur, 'Historique_Cycles!A:AB', row);
 }
 
 function saveCycle(){
@@ -4146,7 +4358,7 @@ function saveCycle(){
   // ── Snapshot du cycle sortant (avant écrasement de CYCLE) ──
   var _prevCycleSnap = CYCLE.initialized ? {
     dateDebut:   CYCLE.dateDebut  || '',
-    dateFin:     today(),
+    dateFin:     todayISO(),
     nbBetes:     CYCLE.nbBetes    || 4,
     nbBetesFin:  MOCK.betes       || CYCLE.nbBetes || 4,
     deces:       Math.max(0, (CYCLE.nbBetes||4) - (MOCK.betes||CYCLE.nbBetes||4)),
@@ -4157,10 +4369,20 @@ function saveCycle(){
     gmq:         MOCK.gmq         || 0,
     capital:     CYCLE.capital    || 0,
     tresoFin:    MOCK.treso       || 0,
+    prixAlim:    CYCLE.prixAlim   || 0,
+    stockMvts:   (STOCK_MVTS || []).slice(), // copie des mouvements pour calcul coût aliment
     race:        CYCLE.race       || '',
     dureeMois:   CYCLE.dureeMois  || 8,
     foirail:     CYCLE.foirail    || '',
-    numCycle:    CYCLE.numCycle   || 1
+    numCycle:    CYCLE.numCycle   || 1,
+    // Champs manuels — remplis par pageClotureCycle() AVANT saveCycle()
+    recetteVente:      S._clotureData ? (parseInt(S._clotureData.recetteVente)||0) : 0,
+    prixVenteMoyen:    S._clotureData ? (parseInt(S._clotureData.prixVenteMoyen)||0) : 0,
+    fournisseurRegion: S._clotureData ? (S._clotureData.fournisseurRegion||'') : '',
+    bcsEntree:         S._clotureData ? (S._clotureData.bcsEntree||'') : '',
+    pathologies:       S._clotureData ? (S._clotureData.pathologies||'') : '',
+    vaccinsAdmins:     S._clotureData ? (S._clotureData.vaccinsAdmins||'') : '',
+    clotureContext:    S._clotureData ? (S._clotureData.contexte||'') : ''
   } : null;
   // ── Backup local IMMÉDIAT — protège contre perte réseau ou crash pendant le reset ──
   if (_prevCycleSnap && _prevCycleSnap.dateDebut) lsSet('_cycleToArchive', _prevCycleSnap);
@@ -7352,14 +7574,18 @@ function viewLiv(){
     })() + (view ? '<div class="sep"></div>' + view : '');
   } else if(S.sub==='cycles'){
     // ── Historique des cycles ──
+    // Nouvelle structure colonnes A:AB (28 cols)
+    // A=dateDebut B=dateFin C=duree D=race E=foirail F=nbBetes G=nbBetesFin H=deces
+    // I=tauxMort J=poidsDep K=poidsFin L=gmq M=gainPoids N=capital O=coutAlim
+    // P=recetteVente Q=beneficeNet R=beneficeNetParBete S=roiAnnualise T=coutParKgGain
+    // U=prixKgVif V=saison W=fournisseurRegion X=bcsEntree Y=pathologies Z=vaccins
+    // AA=prixVenteMoyen AB=numCycle
     view='<div class="stitle">📜 Historique des cycles</div>';
     if(!SID.fondateur){
       view+='<div style="color:#ff9800;font-size:12px">SID fondateur introuvable.</div>';
     } else if(!LIVE._histCycles){
       LIVE._histCycles='loading';
-      readSheet(SID.fondateur,'Historique_Cycles!A:O').then(function(rows){
-        // rows[0] = en-têtes éventuels (si présent) ou première ligne de données
-        // On garde toutes les lignes non-vides
+      readSheet(SID.fondateur,'Historique_Cycles!A:AB').then(function(rows){
         LIVE._histCycles = (rows || []).filter(function(r){ return r && r[0] && r[0]!=='Début'; });
         r();
       }).catch(function(){
@@ -7370,43 +7596,114 @@ function viewLiv(){
     } else if(LIVE._histCycles==='loading'){
       view+='<div style="color:#7a9a7a;font-size:12px">Chargement…</div>';
     } else if(!LIVE._histCycles.length){
-      view+='<div style="color:#7a9a7a;font-size:12px">Aucun cycle archivé pour le moment.<br>À chaque clôture de cycle un snapshot est enregistré ici automatiquement.</div>';
+      view+='<div style="color:#7a9a7a;font-size:12px;padding:12px 0">Aucun cycle archivé pour le moment.<br><br>À chaque clôture de cycle, un snapshot enrichi est enregistré automatiquement ici.</div>';
     } else {
-      // Tableau — affichage du plus récent au plus ancien
       var _hRows=[].concat(LIVE._histCycles).reverse();
-      view+='<div style="overflow-x:auto">';
-      view+='<table style="width:100%;border-collapse:collapse;font-size:11px">';
-      view+='<thead><tr style="color:#7a9a7a;border-bottom:1px solid #2a4a2a">';
-      ['Début','Fin','Durée','Race','Bêtes↓','Décès','P.dép','P.fin','GMQ','Capital','Tréso fin','Marge/tête'].forEach(function(h){
-        view+='<th style="padding:4px 6px;text-align:right;white-space:nowrap">'+h+'</th>';
+      // Afficher chaque cycle comme une carte pliable
+      _hRows.forEach(function(row, idx){
+        var _numCyc = row[27] || row[14] || (idx+1); // AB ou fallback O (ancien format)
+        var _debut  = isoToFr(row[0]||'');
+        var _fin    = isoToFr(row[1]||'');
+        var _duree  = row[2] ? row[2]+' j' : '';
+        var _race   = row[3]||'';
+        var _foirail= row[4]||'';
+        var _nbDep  = row[5]||'';
+        var _nbFin  = row[6]||'';
+        var _deces  = parseInt(row[7]||0);
+        var _tauxMort = row[8]||'';
+        var _pDep   = row[9]||''; var _pFin = row[10]||''; var _gmq = row[11]||'';
+        var _gainPoids = row[12]||'';
+        var _capital = parseInt(row[13]||0);
+        var _coutAlim = parseInt(row[14]||0);
+        var _recette = parseInt(row[15]||0) || parseInt(row[12]||0); // P ou fallback ancien M
+        var _benef   = parseInt(row[16]||0) || (_recette - _capital);
+        var _benefBete = parseInt(row[17]||0);
+        var _roi     = row[18]||'';
+        var _coutKg  = row[19]||'';
+        var _prixKgVif = row[20]||'';
+        var _saison  = row[21]||'';
+        var _fournReg= row[22]||'';
+        var _bcsEntr = row[23]||'';
+        var _patho   = row[24]||'';
+        var _vaccins = row[25]||'';
+        var _prixMoy = row[26]||'';
+
+        // Couleurs performance
+        var _bCol = _benef >= 0 ? '#4caf50' : '#f44336';
+        var _decesCol = _deces > 0 ? '#f44336' : '#7a9a7a';
+        var _roiCol = _roi && parseFloat(_roi) >= 20 ? '#4caf50' : _roi && parseFloat(_roi) >= 10 ? '#ff9800' : '#f44336';
+
+        var _cardBg = idx===0 ? 'background:linear-gradient(135deg,#0f2a1a,#162510);border:1px solid #3a7a3a' : 'background:#1a2e1a;border:1px solid #2a4a2a';
+        view += '<div style="'+_cardBg+';border-radius:12px;padding:14px;margin-bottom:12px">';
+
+        // En-tête carte
+        view += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">';
+        view += '<div>';
+        view += '<div style="font-size:14px;font-weight:700">Cycle '+_numCyc+' <span style="font-size:11px;color:#88aa88;font-weight:400">— '+_race+(idx===0?' <span style="font-size:10px;background:#2d6a2d;color:#fff;border-radius:4px;padding:1px 5px">Dernier</span>':'')+'</span></div>';
+        view += '<div style="font-size:11px;color:#88aa88;margin-top:2px">'+_debut+' → '+_fin+' ('+_duree+')'+('' + _saison ? ' · '+_saison : '')+'</div>';
+        view += '</div>';
+        view += '<div style="text-align:right">';
+        view += '<div style="font-size:18px;font-weight:800;color:'+_bCol+'">'+(_benef>=0?'+':'')+fmt(_benef)+'</div>';
+        view += '<div style="font-size:10px;color:#88aa88">bénéfice net</div>';
+        view += '</div>';
+        view += '</div>';
+
+        // KPIs en grille 4 colonnes
+        view += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:10px">';
+        function _kpi(v, lbl, col) {
+          return '<div style="background:#0f1f0f;border-radius:7px;padding:7px 5px;text-align:center">'
+            +'<div style="font-size:13px;font-weight:700;color:'+(col||'#fff')+'">'+v+'</div>'
+            +'<div style="font-size:9px;color:#667766;margin-top:2px">'+lbl+'</div>'
+            +'</div>';
+        }
+        view += _kpi(_gmq ? parseFloat(_gmq).toFixed(2)+'kg/j' : '—', 'GMQ', _gmq && parseFloat(_gmq)>=1 ? '#4caf50' : '#ff9800');
+        view += _kpi(_nbDep+' → '+_nbFin, 'Bêtes', '#fff');
+        view += _kpi(_deces>0 ? _deces+' ('+_tauxMort+'%)' : '0', 'Décès', _decesCol);
+        view += _kpi(_roi ? parseFloat(_roi).toFixed(1)+'%/an' : '—', 'ROI ann.', _roiCol);
+        view += '</div>';
+
+        // Ligne poids
+        if(_pDep || _pFin) {
+          view += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">';
+          view += _kpi(_pDep ? _pDep+'kg' : '—', 'Poids dép.', '#88aa88');
+          view += _kpi(_pFin ? _pFin+'kg' : '—', 'Poids fin', '#C8A06A');
+          view += _kpi(_gainPoids ? fmt(_gainPoids)+'kg' : '—', 'Gain total', '#88bb88');
+          view += '</div>';
+        }
+
+        // Financier
+        view += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:'+((_patho||_fournReg||_vaccins)?'10px':'0')+'px">';
+        view += _kpi(_capital ? fmt(_capital) : '—', 'Capital (FCFA)', '#88aa88');
+        view += _kpi(_recette ? fmt(_recette) : '—', 'Recette (FCFA)', '#4caf50');
+        view += _kpi(_coutAlim ? fmt(_coutAlim) : '—', 'Coût aliment', '#ff9800');
+        view += _kpi(_benefBete ? fmt(_benefBete) : '—', 'Bénéf./bête', _benefBete>=0?'#4caf50':'#f44336');
+        view += '</div>';
+
+        // Infos commerciales si disponibles
+        if(_prixKgVif || _prixMoy || _foirail) {
+          view += '<div style="font-size:10px;color:#7a9a7a;background:#0a1a0a;border-radius:6px;padding:6px 8px;margin-top:8px;margin-bottom:'+((_patho||_fournReg||_vaccins)?'8px':'0')+'px">';
+          if(_foirail) view += '📍 '+_foirail+' ';
+          if(_prixKgVif) view += '· '+_prixKgVif+' FCFA/kg vif ';
+          if(_coutKg) view += '· Coût/kg gain: '+fmt(_coutKg)+' FCFA ';
+          if(_bcsEntr) view += '· BCS entrée: '+_bcsEntr;
+          view += '</div>';
+        }
+
+        // Bloc santé / terrain (si données saisies)
+        if(_patho || _fournReg || _vaccins) {
+          view += '<div style="border-top:1px solid #2a4a2a;padding-top:8px;margin-top:2px">';
+          if(_fournReg) view += '<div style="font-size:11px;color:#88aa88;margin-bottom:3px">🌍 Fournisseur : <span style="color:#ccc">'+_fournReg+'</span></div>';
+          if(_patho)   view += '<div style="font-size:11px;color:#88aa88;margin-bottom:3px">🩺 Pathologies : <span style="color:#ff9090">'+_patho+'</span></div>';
+          if(_vaccins) view += '<div style="font-size:11px;color:#88aa88">💉 Vaccins : <span style="color:#5ab4ff">'+_vaccins+'</span></div>';
+          view += '</div>';
+        }
+
+        view += '</div>'; // fin carte
       });
-      view+='</tr></thead><tbody>';
-      _hRows.forEach(function(row,idx){
-        var bg = idx%2===0 ? '#0f1f0f' : '#0a180a';
-        // A=dateDebut B=dateFin C=duree D=race E=foirail F=nbBetes G=nbBetesFin H=deces I=poidsDep J=poidsFin K=gmq L=capital M=tresoFin N=margeParBete
-        var marge = parseInt(row[13]||0);
-        var mCol = marge>=0 ? '#4caf50' : '#f44336';
-        view+='<tr style="background:'+bg+'">';
-        view+='<td style="padding:4px 6px;white-space:nowrap">'+isoToFr(row[0]||'')+'</td>';
-        view+='<td style="padding:4px 6px;white-space:nowrap">'+(row[1]||'')+'</td>';
-        view+='<td style="padding:4px 6px;text-align:right">'+(row[2]||'')+' j</td>';
-        view+='<td style="padding:4px 6px">'+(row[3]||'')+'</td>';
-        view+='<td style="padding:4px 6px;text-align:right">'+(row[5]||0)+' → '+(row[6]||0)+'</td>';
-        view+='<td style="padding:4px 6px;text-align:right;color:'+(parseInt(row[7]||0)>0?'#f44336':'#7a9a7a')+'">'+(row[7]||0)+'</td>';
-        view+='<td style="padding:4px 6px;text-align:right">'+(row[8]||'')+(row[8]?'kg':'')+'</td>';
-        view+='<td style="padding:4px 6px;text-align:right">'+(row[9]||'')+(row[9]?'kg':'')+'</td>';
-        view+='<td style="padding:4px 6px;text-align:right">'+(row[10]||'')+(row[10]?'kg/j':'')+'</td>';
-        view+='<td style="padding:4px 6px;text-align:right">'+(row[11]?fmt(parseInt(row[11])):'')+'</td>';
-        view+='<td style="padding:4px 6px;text-align:right">'+(row[12]?fmt(parseInt(row[12])):'')+'</td>';
-        view+='<td style="padding:4px 6px;text-align:right;color:'+mCol+'">'+(row[13]?fmt(marge):'—')+'</td>';
-        view+='</tr>';
-      });
-      view+='</tbody></table></div>';
-      view+='<div style="font-size:10px;color:#556855;margin-top:8px">'+_hRows.length+' cycle(s) archivé(s). Marge = Tréso fin − Capital investi ÷ Nb bêtes fin.</div>';
-      // Bouton refresh
-      view+='<button class="btn" style="margin-top:10px;width:100%" onclick="LIVE._histCycles=null;r()">🔄 Rafraîchir</button>';
+
+      view += '<div style="font-size:10px;color:#556855;margin-top:4px;text-align:center">'+_hRows.length+' cycle(s) archivé(s) — données depuis v2.1</div>';
+      view += '<button class="btn-sec" style="margin-top:10px;width:100%;font-size:13px" onclick="LIVE._histCycles=null;r()">🔄 Rafraîchir</button>';
     }
-  }
   return '<div class="cnt"><div class="subtabs">'+stabs+'</div>'+view+'</div>';
 }
 
