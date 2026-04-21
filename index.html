@@ -26,10 +26,10 @@ input,textarea,select,button,a{touch-action:manipulation}
 .splash-sub{font-size:13px;color:#88aa88;margin-top:6px}
 .splash-dot{width:6px;height:6px;border-radius:50%;background:#C8A06A;margin-top:24px;animation:pulse 1s infinite}
 #app{min-height:100vh}
-.hdr{background:#1e4a1e;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,0.35)}
+.hdr{background:#1e4a1e;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,0.35);transition:transform .25s ease,opacity .25s ease}.hdr.hdr-hidden{transform:translateY(-100%);opacity:0}
 .logo{display:flex;align-items:center;gap:10px}
 .logo-b{width:36px;height:36px;background:#2d6a2d;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px}
-.tabs{background:#1a3a1a;display:flex;border-bottom:1px solid #2d4a2d;overflow-x:auto}
+.tabs{background:#1a3a1a;display:flex;border-bottom:1px solid #2d4a2d;overflow-x:auto;position:sticky;top:60px;z-index:9;transition:transform .25s ease,opacity .25s ease}.tabs.tabs-hidden{transform:translateY(calc(-100% - 60px));opacity:0}
 .tabs::-webkit-scrollbar{display:none}
 .tab{padding:12px 20px;font-size:14px;color:#88bb88;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent}
 .tab.on{color:#fff;border-bottom-color:#fff;background:rgba(255,255,255,0.07)}
@@ -2563,6 +2563,35 @@ function loadAlimPrix(force) {
 
 var SWIPE = { x0:0, y0:0, active:false, dir:0 }; // dir: -1=gauche, 1=droite
 
+var _scrollLastY = 0;
+var _scrollTicking = false;
+function _initScrollHide() {
+  // Détacher l'ancien listener avant d'en ajouter un nouveau
+  if (window._scrollHideHandler) window.removeEventListener('scroll', window._scrollHideHandler, {passive:true});
+  _scrollLastY = window.scrollY;
+  window._scrollHideHandler = function() {
+    if (_scrollTicking) return;
+    _scrollTicking = true;
+    requestAnimationFrame(function() {
+      var y = window.scrollY;
+      var hdr = document.querySelector('.hdr');
+      var tabs = document.querySelector('.tabs');
+      if (hdr && tabs) {
+        if (y > _scrollLastY && y > 80) {
+          hdr.classList.add('hdr-hidden');
+          tabs.classList.add('tabs-hidden');
+        } else {
+          hdr.classList.remove('hdr-hidden');
+          tabs.classList.remove('tabs-hidden');
+        }
+      }
+      _scrollLastY = y;
+      _scrollTicking = false;
+    });
+  };
+  window.addEventListener('scroll', window._scrollHideHandler, {passive:true});
+}
+
 function initSwipe() {
   var el = document.getElementById('tab-wrap');
   if (!el) return;
@@ -2582,6 +2611,7 @@ function initSwipe() {
     if (dx < 0 && idx < utabs.length-1) chTabSwipe(utabs[idx+1], 'left');
     if (dx > 0 && idx > 0) chTabSwipe(utabs[idx-1], 'right');
   }, {passive:true});
+  _initScrollHide();
 }
 
 function chTabSwipe(t, dir) {
