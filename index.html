@@ -1953,8 +1953,8 @@ function doSubmit(type) {
     });
     if (_stockErr) { S.msg = 'err:Stock insuffisant — ' + _stockErr; r(); return; }
   }
-  if (type==='inc' && (!S.fin.type || !S.fin.desc)) {
-    S.msg='err:Type et description sont obligatoires'; r(); return;
+  if (type==='inc' && !S.fin.type) {
+    S.msg='err:Le type incident est obligatoire'; r(); return;
   }
   if (type==='pesee' && (!S.fp.id || !S.fp.poids)) {
     S.msg='err:ID bête et poids sont obligatoires'; r(); return;
@@ -5944,7 +5944,7 @@ function viewSaisie(){
       +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'stock\')">Enregistrer</button>'+msgHtml()+'</div>';
   } else if(S.sub==='inc'){
     var f=S.fin; if(!f.date)f.date=td;
-    var prog=formProgress(countFilled([f.date,f.type,f.desc]),3);
+    var prog=formProgress(countFilled([f.date,f.type]),2);
     var _incCount=(function(){ var t=today(); return HISTORY.filter(function(h){return h.type==='inc'&&h.date===t;}).length; })();
     form='<div class="card">'+prog
       +(_incCount>0?'<div class="al al-o" style="margin-bottom:8px">'+_incCount+' incident(s) saisi(s) aujourd\'hui — vous pouvez en ajouter un autre</div>':'')
