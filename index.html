@@ -235,7 +235,7 @@ body.light .sb-foot{background:#f0f5f0;color:#334433}
 body.light .sb-foot *{color:#334433}
 /* override les spans colorés dans la sidebar */
 body.light .sb-ok{color:#334433 !important}
-body.light .sb-ko{color:#c82020 !important}
+body.light .sb-ko, body.light .sb-body .sb-ko{color:#c82020 !important}
 body.light .kval-ok{color:#1a7a1a !important}
 body.light .kval-warn{color:#b86a00 !important}
 body.light .kval-crit{color:#c82020 !important}
@@ -425,6 +425,9 @@ body.light [style*="background:rgba(76,175,80,0.15)"]{background:rgba(45,106,45,
 body.light [style*="background:rgba(200,160,106,0.12)"]{background:rgba(122,80,16,0.15) !important}
 body.light [style*="background:rgba(90,180,255,0.08)"]{background:rgba(26,58,122,0.10) !important}
 
+/* Accordéon historique cycles — light mode */
+body.light [style*="background:#0f2a1a;"]{background:#e8f5ea !important}
+body.light [style*="background:#131f13;"]{background:#f0f5f0 !important}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .ai-pulse{animation:spin 1.2s linear infinite;display:inline-block}
 </style>
