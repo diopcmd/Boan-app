@@ -1,5 +1,5 @@
 ﻿# BOAN — Roadmap Notifications & Sinistres
-> **Version 3.0 — Refonte panel experts — 22 Avril 2026**
+> **Version 3.1 — Corrections post-audit incohérences — 22 Avril 2026**
 > Statut : **BLOQUÉ — Prérequis métier non satisfaits** (voir section 0)
 > Panel de révision :
 >   🚔 Adj. Chef Mbaye — Gendarmerie Brigade Thiès
@@ -29,7 +29,7 @@
 | 8 | [Checklist implémentation](#8-checklist-dimplémentation) | BLOC A/B/C/D/E à cocher | Développeur |
 | 9 | [Statut actuel](#9-statut-actuel) | Ce qui est fait / manque | Tous |
 | 10 | [KPIs sinistres](#10-kpis-sinistres--qualité-dossier---recommandations-panel) | Métriques qualité + export PDF + photo initiale | Fondateur · RGA |
-| **11** | **[Guides opérationnels](#11-guides-opérationnels-par-rôle)** | **Guides pratiques fondateur / gérant / RGA issus du panel** | **Fondateur · Gérant · RGA** |
+| **11** | **[Guides opérationnels](#11-guides-opérationnels-par-rôle)** | **Guides fondateur / gérant / RGA + SOP — issus du panel** | **Fondateur · Gérant · RGA** |
 
 > 💡 **Lecteur non-technique** : commencer par la **section 11** (guides par rôle), puis la **section 0** (prérequis) et la **section 7** (pièces CNAAS).
 
@@ -148,7 +148,7 @@ La CNAAS exige que l'animal décédé reste intact jusqu'au passage de leur expe
 | A | 0 | Date | DD/MM/YYYY — date du sinistre |
 | B | 1 | Type | `DECES` `VOL` |
 | C | 2 | ID_Animal_s | `C1-001` ou `C1-001,C1-002` (multi pour VOL) |
-| D | 3 | N_PV_Gendarmerie | VOL uniquement — obligatoire |
+| D | 3 | N_Recepisse | VOL — N° récépissé tamponné — **obligatoire J+0** |
 | E | 4 | Statut_CNAAS | `EN_COURS` `DOSSIER_RECU` `EXPERT_ASSIGNE` `EXPERTISE_PASSEE` `CONFIRME` `REJETE` `CLOTURE` `ANNULE` |
 | F | 5 | Date_Email_J0 | YYYY-MM-DD |
 | G | 6 | Appel_Fondateur_J0 | date/heure appel vocal fondateur — **saisi manuellement** |
@@ -158,6 +158,17 @@ La CNAAS exige que l'animal décédé reste intact jusqu'au passage de leur expe
 | K | 10 | email_pending | `OUI` / `NON` — flag décès offline, lu par le cron |
 | L | 11 | Date_Visite_Vet_Prevue | YYYY-MM-DD — saisi par fondateur après appel J+0 |
 | M | 12 | Date_Visite_Expert_CNAAS_Prevue | YYYY-MM-DD — saisi par fondateur après appel CNAAS J+0 |
+| N | 13 | N_PV_Officiel | VOL — N° PV officiel — optionnel J+0, **obligatoire avant clôture** |
+| O | 14 | Heure_Vol | HH:MM — heure supposée du vol (si connue) |
+| P | 15 | Heure_Decouverte | HH:MM — heure constat gérant — **obligatoire pour VOL** |
+
+> 🎨 **Convention couleur UI** (appliquée dans tout le code frontend) :
+> | Couleur | Code | Usage |
+> |---|---|---|
+> | 🔴 Rouge foncé | `#2a0a0a` | Urgence absolue — décès non enterré, VOL < 6h restantes |
+> | 🟠 Orange `border` | `#f0a500` | Alerte importante — SOP J-1, champ manquant, N° PV absent |
+> | 🟡 Fond sombre | `#1a1a00` | Information non bloquante |
+> | 🟢 Vert | `#25d366` | Action WhatsApp (couleur standard WA) |
 
 ---
 
@@ -192,7 +203,7 @@ J+0 — Gérant constate le décès
        1️⃣ 📞 Appeler CNAAS — tel:[contact_cnaas_tel]
        2️⃣ 📞 Appeler Vétérinaire — tel:[contact_vet_tel]
        3️⃣ 💬 WhatsApp Vétérinaire — wa.me msg 6.1
-       ⚠️ Annuler (erreur de saisie) — visible 30 min seulement
+       ⚠️ Annuler (erreur de saisie) — visible **4 heures** (fenêtre validée panel — ⚖️ Maître Diallo)
 
 J+0 — Fondateur reçoit notification
   4. Fondateur appelle CNAAS Thiès vocalement
@@ -319,14 +330,49 @@ function safeTextClient(s) {
 
 ### 3.2 Saisie > Incident (type VOL) — Gérant
 
-| Élément | Détail |
-|---|---|
-| Champ N° PV gendarmerie | `required` — submit bloqué si vide |
-| Champ date/heure dépôt plainte | Preuve délai |
-| Sélection bêtes concernées | `beteMultiSelect()` — helper section 3.8 |
-| Post-submit | 1️⃣ 📞 Appeler CNAAS + 2️⃣ 💬 WhatsApp CNAAS (msg 6.5) |
+> 💡 **Règle clé** : le gérant revient de la gendarmerie avec un récépissé tamponné — pas encore le N° PV officiel (24-72h plus tard). BOAN accepte immédiatement avec le récépissé seul.
 
-**Initialisation** : ajouter `S.fin.beteIds = []` dans le reset de `S.fin` (~L1899).
+| Élément | Détail | Obligatoire |
+|---|---|---|
+| N° récépissé gendarmerie | Champ texte — **submit bloqué si vide** | ✅ OUI (J+0) |
+| N° PV officiel | Champ texte — non bloquant J+0, ajout ultérieur | ⚠️ Avant clôture |
+| Heure de découverte | `<input type="time">` — **submit bloqué si vide** | ✅ OUI |
+| Heure du vol (si connue) | `<input type="time">` | Non |
+| Date/heure dépôt plainte | Preuve délai | Non |
+| Sélection bêtes concernées | `beteMultiSelect()` — helper section 3.8 | ✅ OUI |
+| Post-submit | 1️⃣ 📞 Appeler CNAAS + 2️⃣ 💬 WhatsApp CNAAS (msg 6.5) | |
+
+**Bloc brigade — affiché dans le modal post-submit VOL** (chaîne HTML) :
+```js
+// Insérer après les boutons CNAAS, fond orange doux #1a1200
+html += '<div style="background:#1a1200;border:1px solid #f0a500;border-radius:8px;'
+  + 'padding:12px;margin-top:12px">'
+  + '<strong>🚔 Brigade Gendarmerie Thiès</strong><br>'
+  + '<span style="color:#f0a500;font-size:13px">'
+  + 'Accueil : 07h00–22h00 — Urgence nuit : appel téléphonique direct au permanencier'
+  + '</span><br><br>'
+  + '<span style="color:#aaa;font-size:12px">'
+  + 'ℹ️ Vous avez le récépissé tamponné ? C\'est suffisant pour BOAN et la CNAAS.<br>'
+  + 'Le N° PV officiel arrive en 24-72h — à ajouter ensuite dans Livrables > Incidents.'
+  + '</span></div>';
+```
+
+**localStorage au submit VOL :**
+```js
+lsSet('vol_pending', {
+  beteIds:          S.fin.beteIds,
+  noRecepisse:      safeTextClient(S.fin.noRecepisse),
+  heureDecouverte:  Date.now(),       // timestamp ms — base du chrono 48h
+  heureVol:         S.fin.heureVol || '',
+  dateVol:          td
+});
+```
+
+**Initialisation** : ajouter dans le reset de `S.fin` (~L1899) :
+```js
+S.fin.beteIds = []; S.fin.noRecepisse = ''; S.fin.noVpOfficiel = '';
+S.fin.heureDecouverte = ''; S.fin.heureVol = '';
+```
 
 ### 3.3 Dashboard gérant — Bannières WhatsApp proactives
 
@@ -443,6 +489,56 @@ if (S.user === 'gerant') {
 - Bannière rouge ⛔ : si `(lsGet('sinistres_ouverts')||[]).some(function(s){return !s.expertPasse;})`
 - Badge numérique onglet Livrables (fondateur/rga) : `(LIVE.sinistres||[]).filter(function(r){return r[4]==='EN_COURS';}).length > 0`
 
+**Contexte C — Fondateur : décès > 24h sans expert + risque décomposition (bannière rouge foncé)**
+
+Condition : `S.user === 'fondateur'` ET sinistre ouvert dont `ts` > 24h ET `expertPasse = false`.
+
+```js
+function _checkDecesUrgenceFondateur() {
+  if (S.user !== 'fondateur') return '';
+  var html = '';
+  (lsGet('sinistres_ouverts') || []).forEach(function(so) {
+    if (so.expertPasse) return;
+    var h = (Date.now() - (so.ts || 0)) / 3600000;
+    if (h < 24) return;
+    var cnaasTel = lsGet('cfg_contact_cnaas_tel') || '';
+    var vetTel   = lsGet('cfg_contact_vet_tel') || '';
+    var hArrondi = Math.round(h);
+    // Fond #2a0a0a (rouge profond) si > 30h — sinon #1a0505
+    var bg = h > 30 ? '#2a0a0a' : '#1a0505';
+    html += '<div style="background:' + bg + ';border:1px solid #cc2200;border-radius:8px;'
+      + 'padding:12px;margin-bottom:10px">'
+      + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+      + '<span style="font-size:18px">⛔</span>'
+      + '<strong style="color:#ff6666">' + so.id + ' — ' + hArrondi + 'h sans expert CNAAS</strong>'
+      + '</div>'
+      + '<div style="color:#ffaaaa;font-size:13px;margin-bottom:10px">'
+      + '🩺 Chaleur Thiès : décomposition visible dès 6-8h. Après 24-36h, l\'expert ne peut plus constater correctement.'
+      + '<br>Si l\'expert CNAAS n\'est pas confirmé, demander une <strong>autorisation d\'inhumation d\'urgence</strong>.'
+      + '</div>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      + (cnaasTel ? '<a href="tel:+' + cnaasTel.replace(/\D/g,'') + '"'
+        + ' style="background:#cc2200;color:#fff;padding:8px 14px;border-radius:6px;'
+        + 'text-decoration:none;font-size:13px">📞 Appeler CNAAS — Autorisation urgence</a>' : '')
+      + (vetTel ? '<a href="tel:+' + vetTel.replace(/\D/g,'') + '"'
+        + ' style="background:#333;color:#fff;padding:8px 14px;border-radius:6px;'
+        + 'text-decoration:none;font-size:13px">📞 Relancer vétérinaire</a>' : '')
+      + '<button onclick="var so=lsGet(\'sinistres_ouverts\')||[];'
+        + 'so.forEach(function(s){if(s.id===\'' + so.id + '\')s.expertPasse=true;});'
+        + 'lsSet(\'sinistres_ouverts\',so);r();"
+        + ' style="background:#1a2e1a;color:#aaa;border:1px solid #2a4a2a;'
+        + 'padding:8px 14px;border-radius:6px;font-size:13px;cursor:pointer">✓ Vétérinaire confirmé</button>'
+      + '</div></div>';
+  });
+  return html;
+}
+// Intégration dans viewDash() fondateur — avant les KPI cards :
+// if (S.user === 'fondateur') {
+//   var _urgBanner = _checkDecesUrgenceFondateur();
+//   if (_urgBanner) html += '<div style="margin-bottom:12px">' + _urgBanner + '</div>';
+// }
+```
+
 ### 3.5 Livrables > "Contacts & Assurance" — Fondateur uniquement
 
 Nouveau sous-onglet dans `viewLiv()`. Champs persistés dans `Config_App` via `_syncConfigApp()`.
@@ -491,6 +587,7 @@ Extension du sous-onglet `incidents` existant :
 | Bouton CNAAS confirmé réception | → Statut_CNAAS = CLOTURE |
 | Bouton Arrêter les relances | → col J (index 9) = OUI |
 | Bouton Annuler (4h) | → Statut = ANNULE + email correctif CNAAS |
+| **Champ N° PV officiel** (VOL uniquement) | Visible si `Type = VOL` ET col N vide — `border:#f0a500` + label `⚠️ N° PV manquant — à compléter dès réception` → col N (index 13) |
 
 **Réconciliation lsGet('sinistres_ouverts') depuis LIVE.sinistres :**
 ```js
@@ -561,7 +658,7 @@ function beteMultiSelect() {
 ```js
 // Dans loadLiveData(), dans le Promise.all de la Vague 2 — fondateur/rga uniquement
 if (S.user === 'fondateur' || S.user === 'rga') {
-  readSheet(SID.fondateur, 'Sinistres_CNAAS!A2:M200').then(function(rows) {
+  readSheet(SID.fondateur, 'Sinistres_CNAAS!A2:Q200').then(function(rows) {
     LIVE.sinistres = rows || [];
     _reconcileSinistresOuverts();
   });
@@ -570,6 +667,73 @@ if (S.user === 'fondateur' || S.user === 'rga') {
   });
 }
 ```
+
+> ⚠️ Range mis à jour : `A2:M200` → **`A2:Q200`** (schema étendu 16 colonnes — section 1.2).
+
+### 3.10 Dashboard gérant — Chronomètre 48h VOL
+
+> **Requis** par le process (sections 0.6 et 2.2) et le guide terrain (section 11.3).
+> Affiché dans `viewDash()` gérant tant que `lsGet('vol_pending')` existe et < 48h.
+
+```js
+function _checkVolChronoBanner() {
+  if (S.user !== 'gerant') return '';
+  var vol = lsGet('vol_pending');
+  if (!vol || !vol.heureDecouverte) return '';
+  var heuresRestantes = 48 - (Date.now() - vol.heureDecouverte) / 3600000;
+  if (heuresRestantes <= 0) {
+    // Fenêtre dépassée — bannière info grise
+    return '<div style="background:#1a1a1a;border:1px solid #555;border-radius:8px;padding:12px">'
+      + '⏱️ Fenêtre 48h dépassée — continuer les démarches CNAAS et gendarmerie.'
+      + '</div>';
+  }
+  var h = Math.floor(heuresRestantes);
+  var m = Math.floor((heuresRestantes - h) * 60);
+  // Couleur selon urgence : < 6h = rouge profond #3a0a0a, < 12h = rouge #2a0a0a, sinon #1a0505
+  var bg = heuresRestantes < 6 ? '#3a0a0a' : heuresRestantes < 12 ? '#2a0a0a' : '#1a0505';
+  var borderCol = heuresRestantes < 6 ? '#ff3300' : '#cc2200';
+  // Barre de progression (% restant sur 48h)
+  var pct = Math.round(heuresRestantes / 48 * 100);
+  var barColor = heuresRestantes < 6 ? '#ff3300' : heuresRestantes < 12 ? '#cc2200' : '#884400';
+  var icon = heuresRestantes < 6 ? '🚨' : '⏱️';
+  var titre = heuresRestantes < 6
+    ? 'CRITIQUE — ' + h + 'h ' + m + 'min restantes'
+    : 'Fenêtre VOL — Poursuite chaude';
+  var cnaasTel = (lsGet('cfg_contact_cnaas_tel') || '').replace(/\D/g, '');
+  return '<div style="background:' + bg + ';border:1px solid ' + borderCol + ';border-radius:8px;padding:12px;margin-bottom:10px">'
+    + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+    + '<span style="font-size:18px">' + icon + '</span>'
+    + '<strong style="color:#ff8866;font-size:15px">' + titre + '</strong>'
+    + '</div>'
+    // Barre de progression
+    + '<div style="background:#333;border-radius:4px;height:8px;margin-bottom:10px">'
+    + '<div style="background:' + barColor + ';width:' + pct + '%;height:8px;border-radius:4px"></div>'
+    + '</div>'
+    + '<div style="color:#ffbbaa;font-size:13px;margin-bottom:10px">'
+    + '<strong>' + h + 'h ' + m + 'min</strong> restantes sur 48h de poursuite chaude. '
+    + 'Brigade Thiès : 07h00–22h00 — Urgence nuit : appel direct permanencier.'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    + (cnaasTel ? '<a href="tel:+' + cnaasTel + '"'
+      + ' style="background:#884400;color:#fff;padding:7px 14px;border-radius:6px;'
+      + 'text-decoration:none;font-size:13px">📞 Brigade / CNAAS</a>' : '')
+    + '<button onclick="lsSet(\'vol_pending\',null);r();"'
+      + ' style="background:#1a2e1a;color:#aaa;border:1px solid #2a4a2a;'
+      + 'padding:7px 14px;border-radius:6px;font-size:13px;cursor:pointer">✓ Pris en charge</button>'
+    + '</div></div>';
+}
+// Intégration dans viewDash() gérant — AVANT les autres bannières :
+// var _volChrono = _checkVolChronoBanner();
+// if (_volChrono) html += '<div style="margin-bottom:8px">' + _volChrono + '</div>';
+```
+
+**Flags localStorage — TTL naturel (date dans la clé) :**
+
+| Clé localStorage | Expire naturellement |
+|---|---|
+| `vol_pending` | `lsSet('vol_pending', null)` au clic "✓ Pris en charge" ou > 48h |
+| `boanr_wa_vet_j1_[acteKey]_[YYYY-MM-DD]` | Le lendemain (date dans la clé change) |
+| `boanr_wa_vet_deces_relance_[id]_[YYYY-MM-DD]` | Le lendemain |
 
 ---
 
@@ -600,10 +764,11 @@ async function ensureSheetExists(token, sid, sheetName) {
   var HEADERS = {
     Notifications_Log: [['Date_Envoi','Type','Reference_ID','Destinataire','Canal',
                           'Statut','Tentative_N','Date_Confirmation','Notes']],
-    Sinistres_CNAAS:   [['Date','Type','ID_Animal_s','N_PV_Gendarmerie','Statut_CNAAS',
+    Sinistres_CNAAS:   [['Date','Type','ID_Animal_s','N_Recepisse','Statut_CNAAS',
                           'Date_Email_J0','Appel_Fondateur_J0','Certif_Vet_Recu',
                           'Expert_Passe','Relances_Stop','email_pending',
-                          'Date_Visite_Vet_Prevue','Date_Visite_Expert_CNAAS_Prevue']]
+                          'Date_Visite_Vet_Prevue','Date_Visite_Expert_CNAAS_Prevue',
+                          'N_PV_Officiel','Heure_Vol','Heure_Decouverte']]
   };
   var hdrs = HEADERS[sheetName];
   if (!hdrs) return;
@@ -1168,13 +1333,15 @@ Objet : Déclaration sinistre — Vol bétail — Police n°[CYCLE.numCnaas]
 
 TYPE DE SINISTRE  : Vol de bétail
 N° POLICE         : [CYCLE.numCnaas]
-N° PV GENDARMERIE : [safeText(no_pv)]
-DATE DU VOL       : [date] à [heure]
+N° RÉCÉPISSÉ      : [safeText(no_recepisse)]
+N° PV OFFICIEL    : [safeText(no_pv) si non vide, sinon "En attente — sera transmis dès réception"]
+HEURE VOL         : [heure_vol si connue, sinon "Inconnue"]
+HEURE DÉCOUVERTE  : [heure_decouverte]
+DATE              : [date]
 LIEU              : Ferme BOAN, Thiès, Sénégal
 
 --- ANIMAUX VOLÉS ---
-  [ID | Race | Poids entrée kg | Valeur FCFA]
-  TOTAL estimé : [somme] FCFA
+  [ID | Race | Poids entrée kg | photoRef si disponible]
 
 Circonstances  : [safeText(desc)]
 Dépôt plainte  : Gendarmerie Thiès, le [date_plainte]
@@ -1356,12 +1523,13 @@ Ferme BOAN — [lsGet('cfg_contact_gerant_tel')]
 □ doSubmit('sante') si décès=OUI :
     lsSet last_deces_ts, sinistres_ouverts, deces_pending (si offline)
     + window.addEventListener('online') → createSinistrePending()
-□ Modal + boutons post-submit décès : 1️⃣📞CNAAS 2️⃣📞Vét 3️⃣💬WA vét + Annuler 30min
+□ Modal + boutons post-submit décès : 1️⃣📞CNAAS 2️⃣📞Vét 3️⃣💬WA vét + Annuler 4h
 □ viewSaisie() VOL : beteMultiSelect() (section 3.8) + S.fin.beteIds=[] dans reset (~L1899)
     + champ N° PV bloquant + boutons CNAAS post-submit
 □ viewDash() : bannière ⛔ sinistre ouvert (tous rôles)
-□ viewDash() gérant : _checkVetJ1Banners() + _checkDecesVetBanners() (section 3.3)
-□ LIVE.sinistres + LIVE.notifLog chargés en Vague 2 loadLiveData (section 3.9)
+□ viewDash() fondateur : _checkDecesUrgenceFondateur() (section 3.4 contexte C)
+□ viewDash() gérant : _checkVolChronoBanner() (section 3.10) + _checkVetJ1Banners() + _checkDecesVetBanners() (section 3.3)
+□ LIVE.sinistres + LIVE.notifLog chargés en Vague 2 loadLiveData (section 3.9, range A2:Q200)
     + _reconcileSinistresOuverts() en fin de Vague 2
 □ viewLiv() incidents enrichi (section 3.6) :
     bannière ⛔, timeline, champs L/M, alerte croisée,
@@ -1776,7 +1944,44 @@ Page 5 — Coordonnées & engagement
 
 ---
 
-### 11.6 Matrice de décision rapide — Qui fait quoi ?
+### 11.6 Guide gérant + fondateur — SOP Vétérinaire (actes planifiés)
+
+> Le flux SOP est **quotidien et fréquent** — c'est la routine la plus visible de BOAN. Bien le maîtriser évite les rappels inutiles et les ratés de vaccination (cause d'exclusion CNAAS).
+
+#### Rôle gérant — J-1 (la veille de l'acte)
+
+1. Ouvrir BOAN → voir la **bannière orange 🔔** sur le dashboard
+   - `Vétérinaire demain — [acte.label] le [date]`
+2. Taper le bouton **💬 Rappel WhatsApp** → message pré-rempli envoyé au vétérinaire (msg 6.7)
+3. Si le vét répond qu'il vient → taper **"✓ Déjà prévenu"** → bannière disparaît
+4. Si pas de réponse → appeler vocalement
+
+> ⚠️ Ne jamais faire partir le bouton WA par code automatique — toujours un tap utilisateur (règle navigateur).
+
+#### Rôle gérant — Jour J de l'acte
+
+1. Dashboard : bouton **"🔔 Rappel urgent J-0"** visible dans **Livrables > SOP Véto** (gérant uniquement)
+2. Un tap → message WA urgent pré-rempli (msg 6.3)
+3. Préparer la zone d'intervention : contenir le troupeau, accès libre
+4. Être présent lors de l'acte
+
+#### Rôle fondateur — Email CC reçu (J-3/J-2/J-1)
+
+1. Email reçu en CC du rappel SOP (section 5.1) → vérification silencieuse que le cron tourne
+2. Si le vét ne répond pas sous 24h → appel vocal direct + WA
+3. En cas d'absence vét confirmée : noter la date de report dans BOAN (Livrables > SOP Véto)
+
+#### Rôle fondateur — Après l'acte
+
+1. Livrables > SOP Véto → bouton **"✓ Vétérinaire a confirmé"** (dans les 7j suivant l'acte prévu)
+2. Cela remplit `Date_Confirmation` dans `Notifications_Log` → stop automatique des relances
+3. Timeline J-3/J-2/J-1 affichée : ✓ envoyé / 🟢 confirmé / ⏳ en attente
+
+> 📋 **Résumé SOP** : `📱 Bannière J-1 → 💬 WA → ✅ Acte → ☑ Fondateur confirme dans BOAN`
+
+---
+
+### 11.7 Matrice de décision rapide — Qui fait quoi ?
 
 | Événement | Action immédiate | Qui | Délai max |
 |---|---|---|---|
@@ -1804,7 +2009,7 @@ Page 5 — Coordonnées & engagement
 
 ---
 
-### 11.7 Points de vigilance critiques — Synthèse du panel
+### 11.8 Points de vigilance critiques — Synthèse du panel
 
 > Chaque point est issu d'une intervention concrète du panel.
 > Chaque point a un impact direct mesuré sur l'acceptation ou le rejet du dossier CNAAS.
