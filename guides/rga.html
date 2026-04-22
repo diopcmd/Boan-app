@@ -72,7 +72,7 @@
 <h2>📆 Contrôle mensuel</h2>
 <div class="card">
   <div class="row"><div class="ico">🌽</div><div><div class="label">Rapport mensuel aliments</div><div class="desc">Marché > Prix aliments > bouton "Rapport mensuel". Compare prix ce mois vs mois précédent par type. Partager à la Direction.</div></div></div>
-  <div class="row"><div class="ico">📜</div><div><div class="label">Comparer avec cycle précédent</div><div class="desc">Livrables > Cycles — historique archivé. Comparer GMQ, marge/tête, durée, décès.</div></div></div>
+  <div class="row"><div class="ico">📜</div><div><div class="label">Comparer avec cycle précédent</div><div class="desc">Livrables > Cycles — accordéon archivé (tap pour déplier). <strong>28 colonnes enrichies</strong> par cycle : bénéfice net réel, ROI annualisé, taux mortalité, coût aliment estimé, gain poids total, coût/kg gain, prix kg vif, BCS entrée, pathologies observées, vaccins, région fournisseur, saison. Comparer GMQ, bénéfice net/bête, durée, décès entre cycles.</div></div></div>
   <div class="row"><div class="ico">💰</div><div><div class="label">Coût de revient vs objectif</div><div class="desc">Livrables > KPI. Coût réel / kg gain vs coutRevientMax configuré. Écart > 10% = alerte.</div></div></div>
   <div class="row"><div class="ico">🎯</div><div><div class="label">Réviser les objectifs si besoin</div><div class="desc">Si le marché ou la race change, adapter GMQ cible, marge min, prix aliment dans Livrables > Objectifs.</div></div></div>
 </div>
@@ -92,7 +92,7 @@
 <div class="lexique">
   <div class="lex-row"><div class="lex-term">GMQ (kg/j)</div><div class="lex-def">Gain Moyen Quotidien = (poids fin − poids départ) ÷ nombre de jours. Mesure la vitesse de croissance. Cible typique : 1,0 kg/j. Vérification manuelle : (poids pesée 2 − poids pesée 1) ÷ jours entre les deux pesées.</div></div>
   <div class="lex-row"><div class="lex-term">Coût de revient (F/kg)</div><div class="lex-def">Total charges sur le cycle ÷ kg de gain de poids produit. Décomposition : alimentation + santé + charges fixes. L'app calcule un coût estimé. Compléter manuellement avec : transport, commission foirail, gardiennage.</div></div>
-  <div class="lex-row"><div class="lex-term">Marge brute / tête</div><div class="lex-def">= (Prix de vente × poids fin) − Capital investi ÷ nb bêtes. L'app calcule Tréso finale − Capital. ⚠️ Ne déduit pas transport ni commission courtier (à déduire manuellement).</div></div>
+  <div class="lex-row"><div class="lex-term">Bénéfice net / tête</div><div class="lex-def">= Recette vente réelle − Capital investi (÷ nb bêtes). Archivé dans Historique_Cycles col Q (bénéfice net) et R (bénéfice net / bête). Plus précis que l'ancienne "marge brute" car basé sur la recette saisie à la clôture. ⚠️ Ne déduit pas transport ni commission courtier (à déduire manuellement).</div></div>
   <div class="lex-row"><div class="lex-term">Taux de mortalité (%)</div><div class="lex-def">= (Nb bêtes départ − Nb bêtes fin) ÷ Nb bêtes départ × 100. Seuil acceptable : ≤ 3% sur un cycle de 8 mois. Au-delà = signaler et investiguer.</div></div>
   <div class="lex-row"><div class="lex-term">Plancher tréso</div><div class="lex-def">Solde minimal de sécurité en FCFA. Si le solde passe sous ce seuil → alerte rouge dans Dashboard. Ne pas laisser la tréso atteindre ce plancher sans anticipation.</div></div>
   <div class="lex-row"><div class="lex-term">Capital investi</div><div class="lex-def">= Prix d'achat total des bêtes au foirail. C'est la mise de départ du cycle. Configuré dans Saisie > Nouveau cycle.</div></div>

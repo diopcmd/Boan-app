@@ -1,7 +1,7 @@
 ﻿# DOCUMENTATION TECHNIQUE — BOAN App
 
 Référence développeur pour l'application de gestion d'élevage **BOAN**.  
-**Commit HEAD** : `f7a962b` — ~8 600 lignes — 20 Avril 2026
+**Commit HEAD** : `0a96562` — ~9 030 lignes — 22 Avril 2026
 
 ---
 
@@ -31,6 +31,10 @@ Référence développeur pour l'application de gestion d'élevage **BOAN**.
 | `HISTORY` | `addHistory()`, `buildHistoryFromSheets()`, `saveCycle()` | Tous les anti-doublons (`ficheDejaSoumise`, `bilanDejaFaitCetteSemaine`, `joursSince`) — **trié desc** |
 | `LIVE.pesees` | `loadPesees()` | GMQ live dashboard, section Bêtes, SOP véto pesée |
 | `LIVE.deceased` | `loadLiveData()` Vague 1, `saveCycle()` | `beteSelect()`, `beteDropdown()`, `loadPesees()` |
+| `LIVE._histCycles` | `viewLiv sub=cycles`, `saveCycle()` | Accordéon cycles — `null`=non chargé, `'loading'`=en cours, `[]`=vide, `[...]`=données |
+| `S._clotureData` | `pageClotureCycle()` oninput, `confirmResetWithPwd()` | Données manuelles de clôture (recetteVente, BCS, etc.) — effacé par `saveCycle()` et bouton Annuler |
+| `S._cycleExpanded` | `viewLiv sub=cycles` onclick | État accordéon `{idx: bool}` — reset sur Rafraîchir |
+| `S._clotureOpen` | `confirmResetWithPwd()`, `_ouvrirModalInit()` | Contrôle affichage `pageClotureCycle` via `r()` |
 
 ### Fonctions à fort impact — modifier avec précaution
 
@@ -420,15 +424,38 @@ function readSheet(sid, range) {
 Écrit dans `Config_Cycle!A1:S1` (colonnes A–N standard + P=dureeMois + Q=simCharges + R=prixAlim + **S=numCycle**).  
 **Avant la mise à jour** : appelle `_archiveCycle()` si le cycle est terminé.
 
-**Reset à l'init cycle** — variables remises à zéro dans `saveCycle()` (audit Avril 2026) :
+**Nouveau (commit `8728afb`)** : lit `S._clotureData` (rempli par `pageClotureCycle`) pour enrichir le snapshot avec les données manuelles (recetteVente, prixVenteMoyen, fournisseurRegion, bcsEntree, pathologies, vaccinsAdmins, contexte). Efface `S._clotureData = null` après capture pour éviter contamination du prochain cycle.
+
+**Reset à l'init cycle** — variables remises à zéro dans `saveCycle()` :
 ```javascript
 // Après Object.assign(CYCLE, MODAL.data) :
-CYCLE.gonogo     = {contrats:false, infra:false, assurance:false, securite:false};
+CYCLE.gonogo     = {cash:false, betes:false, contrats:false, infra:false, securite:false};
 CYCLE.simCharges = {};       // charges simulateur spécifiques au cycle sortant
 CYCLE._mktUpdated = '';      // date modif marché — repart de zéro
+S._clotureData   = null;     // données clôture capturées — ne pas polluer le prochain cycle
 S._sopEd = null; S._sopInlineIdx = null; S._sopCtx = null; S._sopInlineData = {};
 LIVE._histCycles = null;     // cache férimé — forcé à recharger depuis Sheets
 ```
+
+---
+
+### pageClotureCycle() *(commit `8728afb`)*
+Modal de saisie manuelle affiché **avant** la modale init du nouveau cycle.  
+Déclenché par `confirmResetWithPwd()` si `CYCLE.initialized && CYCLE.dateDebut`.  
+3 blocs : 💰 Vente (recetteVente + prixVenteMoyen), 🐄 Approvisionnement (fournisseurRegion, bcsEntree, contexte), 🩺 Santé (pathologies, vaccinsAdmins).  
+Stocké dans `S._clotureData` via `oninput`. Boutons : Annuler (`S._clotureData=null`), Passer →, Enregistrer & Continuer — les deux derniers appellent `_ouvrirModalInit()`.
+
+### _ouvrirModalInit() *(commit `8728afb`)*
+`S._clotureOpen = false; MODAL.open = true; MODAL.step = 1; MODAL.data = Object.assign({}, CYCLE); closeSB(); r();`
+
+### viewLiv — sub=cycles — accordéon *(commit `cadc03a`)*
+- Lit `Historique_Cycles!A:AB` (28 colonnes)
+- Inverse les lignes (`_hRows = [...LIVE._histCycles].reverse()`)
+- Chaque carte : en-tête toujours visible (badge N°, race, dates, bénéfice net, chevron ▸)
+- `S._cycleExpanded[idx]` toggle via onclick → réaffichage complet
+- Couleurs adaptatives via `var _lt = LIGHT_MODE` (pas CSS statique)
+
+
 
 ### _sopEntryAfterReset(h) *(commit ff578e2)*
 
@@ -453,30 +480,24 @@ function _sopEntryAfterReset(h) {
 
 ---
 
-### _archiveCycle(snap) *(commit 5a0ca03, mis à jour 6fb1b19)*
-Archive un snapshot du cycle terminé dans `Historique_Cycles!A:O` :
-```javascript
-function _archiveCycle(snap) {
-  var row = [
-    snap.dateDebut,         // A — Début (ISO YYYY-MM-DD)
-    isoToFr(snap.dateFin),  // B — Fin (DD/MM/YYYY)
-    snap.duree,             // C — Durée (jours)
-    snap.race,              // D — Race
-    snap.foirail,           // E — Foirail/lieu de vente
-    snap.nbBetes,           // F — NbBêtesDépart
-    snap.nbBetesFin,        // G — NbBêtesFin
-    snap.deces,             // H — Décès
-    snap.poidsDepart,       // I — PoidsDépart moyen (kg)
-    snap.poidsFin,          // J — PoidsFin moyen (kg)
-    snap.gmq,               // K — GMQ réalisé (kg/j)
-    snap.capital,           // L — Capital investi (FCFA)
-    snap.tresoFin,          // M — TrésoFin (FCFA)
-    margeParBete,           // N — Marge brute / bête (FCFA)
-    snap.numCycle || ''     // O — Numéro de cycle
-  ];
-  appendRow(SID.fondateur, 'Historique_Cycles!A:O', row);
-}
+### _archiveCycle(snap) *(mis à jour commit `8728afb`)*
+Archive un snapshot du cycle terminé dans `Historique_Cycles!A:AB` (**28 colonnes**) :
 ```
+A=dateDebut(ISO)  B=dateFin(ISO)      C=durée(j)        D=race
+E=foirail          F=nbBêtesDép       G=nbBêtesFin      H=décès
+I=tauxMort(%)     J=poidsDép(kg)     K=poidsFin(kg)    L=gmq(kg/j)
+M=gainPoids(kg)   N=capital(FCFA)    O=coutAlim(FCFA)  P=recetteVente(FCFA)
+Q=bénéficeNet     R=bénéfice/bête    S=roiAnnualisé(%) T=coût/kgGain
+U=prixKgVif       V=saison           W=fournisseurRég  X=bcsEntrée
+Y=pathologies     Z=vaccins          AA=prixVenteMoyen  AB=numCycle
+```
+- `coutAlim` : calculé depuis `snap.stockMvts` × `snap.prixAlim`
+- `recetteVente` : `snap.recetteVente` (manuel) ou fallback `snap.tresoFin`
+- `bénéficeNet` : `recetteVente - snap.capital`
+- `roiAnnualisé` : `(bénéfice / capital) × (365 / duréeJours) × 100`
+- `dateFin` : toujours ISO YYYY-MM-DD (converti si besoin)
+- Backup localStorage : `_cycleToArchive` — retry au prochain `loadLiveData()` si réseau ko
+
 
 ### _sopValider(idx) — déclenchement acte SOP
 Appelée depuis les boutons ✅ / ⚠️ de l'onglet Protocole :

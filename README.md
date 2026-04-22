@@ -3,9 +3,9 @@
 Application web mobile de gestion d'élevage bovin pour la **Ferme BOAN** (Thiès, Sénégal).  
 Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale.
 
-**Production** → https://boan-app-ur3x.vercel.app  
+**Production** → https://boan-app-9u5e.vercel.app  
 **Stack** : Vanilla JS ES5 · Vercel Serverless · Google Sheets API v4  
-**État** : commit `e1aa293` — ~8 600 lignes — Avril 2026
+**État** : commit `0a96562` — ~9 030 lignes — Avril 2026
 
 ---
 
@@ -61,7 +61,8 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
   - Champ `sopLabel` sur chaque entrée SOP → isole les étapes proches (ex: Vitamine J+1 vs Déparasitage J+7 ne se valident plus mutuellement)
   - Pesée SOP → formulaire pesée avec bannière contextuelle J+N
   - Éditeur du protocole (onglet SOP Véto) : ajout/modif/suppression étapes, persisté dans `Config_App` — **fondateur uniquement**
-- **Cycles archivés** — historique de tous les cycles clôturés dans `Historique_Cycles` (snapshot automatique avant reset, colonnes A:O incl. N° de cycle). **Backup localStorage** (`_cycleToArchive`) protège contre perte réseau. Archivage garanti dans `getTok().then()` + retry automatique au démarrage si échec précédent.
+- **Cycles archivés** — accordéon (tap pour déplier) dans Livrables > Cycles. Archive automatique **28 colonnes** (A:AB) : bénéfice net, ROI annualisé, taux mortalité, coût aliment, gain poids total, coût/kg gain, prix kg vif, BCS entrée, pathologies, vaccins, région fournisseur, saison. Backup localStorage (`_cycleToArchive`) protège contre perte réseau.
+- **Formulaire de clôture** (`pageClotureCycle`) — 3 blocs avant reset : 💰 Vente (recette + prix moyen/bête), 🐄 Approvisionnement (région, BCS, contexte Tabaski), 🩺 Santé (pathologies, vaccins). Tous optionnels.
 - **Numéro de cycle** — `CYCLE.numCycle` éditable par le fondateur (modal init + onglet Objectifs) ; IDs bêtes préfixés `Cx-NNN` ; affiché sur le dashboard hero card
 
 ### Marché (fondateur / RGA / Commerciale)

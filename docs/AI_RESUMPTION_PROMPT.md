@@ -8,12 +8,12 @@
 
 Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bovin pour la Ferme BOAN au Sénégal (région de Thiès). L'app est une **SPA vanilla HTML/CSS/JS** déployée sur **Vercel**. Le pilotage s'effectue à distance depuis la France.
 
-- **Production** : https://boan-app-ur3x.vercel.app
+- **Production** : https://boan-app-9u5e.vercel.app
 - **GitHub** : https://github.com/diopcmd/Boan-app (branche `main`)
 - **Dossier local** : `C:\Temp\Boan-app\`
 - **Langue** : Tout en français (code, UI, communications)
-- **Dernier commit** : `c0f3b1e` — Fix CNAAS oninput→onblur + docs — Avril 2026
-- **Webhook Vercel** : cassé → redeploy manuel sur vercel.com (Deployments → Redeploy)
+- **Dernier commit** : `0a96562` — fix calBadge + 3 bugs audit (accordion light mode, _clotureData, _recette fallback) — Avril 2026
+- **Webhook Vercel** : actif → auto-déploiement sur push `main`
 
 ---
 
@@ -21,7 +21,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 
 | Couche | Technologie |
 |---|---|
-| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~8 000 lignes) |
+| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~9 030 lignes) |
 | Backend | Vercel Serverless Functions (ES Module `export default async function handler`) |
 | Auth | Session token custom HMAC-SHA256 (`base64(payload).hmac_hex`), 8h |
 | Données | Google Sheets API v4 via Service Account RS256 JWT |
@@ -665,8 +665,15 @@ if (_pendingArch && _pendingArch.dateDebut && SID.fondateur) {
 | `dd5c3c7` | fix: MOCK.betes seed depuis localStorage au démarrage + guides MAJ |
 | `14468d4` | feat: onglet Guide par rôle + 4 guides HTML imprimables en PDF |
 | `7db6560` | feat: Objectifs — card Marché & Ration (prixAlim + objectifPrix + mix ration lié + badge date) |
-| `5a0ca03` | feat: Historique_Cycles — snapshot avant reset + vue fondateur/rga |
-| `fa31f67` | fix: MOCK.betes=4 persistant — sync depuis CYCLE.nbBetes dès step1, decesV2 vague2 |
+| `0a96562` | **fix** : calBadge (fiche du jour + SOP) — couleurs adaptatives thème clair/sombre |
+| `95c84d2` | **fix** : accordéon cycles — lisibilité thème sombre et clair (couleurs adaptatives JS) |
+| `42cf4e8` | **fix** : light mode — sb-ko rouge visible + fonds accordéon cycles lisibles |
+| `cadc03a` | **feat** : historique cycles — accordéon compact (tap pour déplier), `S._cycleExpanded` |
+| `abb94ee` | **fix** : accolade manquante dans viewLiv sub=cycles — corrige page blanche au login |
+| `8728afb` | **feat** : archives cycle enrichies — 28 colonnes (A:AB), formulaire clôture `pageClotureCycle`, bénéfice net, ROI annualisé |
+| `d221b76` | fix: incident — description optionnelle, seul le type est obligatoire |
+| `573e0fc` | feat: header + tabs hide-on-scroll (option B) |
+| `c0f3b1e` | **fix** : CNAAS oninput→onblur (évite saut clavier) + docs mis à jour |
 | `8f676ef` | fix: cycle non démarré (dateDebut vide modale), GMQ diviseur peseeFreq, parseISO dates locales |
 | `79eb9a5` | refactor: suppression redondances SOP — calendrier fusionné dans sopvet (Livrables) |
 | `aecfc6e` | fix: guide commerciale (auth fallou→commerciale) |

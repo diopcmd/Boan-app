@@ -63,7 +63,7 @@
     <div class="row"><div class="ico">📈</div><div><div class="label">KPI</div><div class="desc">GMQ, mortalité, coût de revient, rentabilité projetée.</div></div></div>
     <div class="row"><div class="ico">✅</div><div><div class="label">Go/No-Go</div><div class="desc">Feux de décision de vente sur 6 critères.</div></div></div>
     <div class="row"><div class="ico">⚙️</div><div><div class="label">Objectifs + Marché</div><div class="desc">Réglages GMQ cible, prix aliment, mix ration, protocole SOP.</div></div></div>
-    <div class="row"><div class="ico">📜</div><div><div class="label">Cycles archivés</div><div class="desc">Historique de tous les cycles clôturés.</div></div></div>
+    <div class="row"><div class="ico">📜</div><div><div class="label">Cycles archivés</div><div class="desc">Historique de tous les cycles clôturés. Vue accordéon : <strong>tap pour déplier</strong> chaque cycle. Données enrichies (28 colonnes) : bénéfice net, ROI annualisé, taux mortalité, coût aliment estimé, gain poids total, prix kg vif, BCS entrée, pathologies, vaccins, région fournisseur, saison.</div></div></div>
   </div>
   <div class="card">
     <h3>Marché</h3>
@@ -104,7 +104,11 @@
   <div class="row"><div class="ico">3️⃣</div><div><div class="label">Simuler la marge finale</div><div class="desc">Marché > Simulateur. Tester prix bas / moyen / haut. Valider que marge > margeParBeteMin.</div></div></div>
   <div class="row"><div class="ico">4️⃣</div><div><div class="label">Confirmer les poids individuels</div><div class="desc">Livrables > Bêtes. Toutes les bêtes au-dessus du poidsVenteMin ?</div></div></div>
   <div class="row"><div class="ico">5️⃣</div><div><div class="label">Déclencher la vente</div><div class="desc">Coordonner avec Fallou pour le foirail, le transporteur, la date.</div></div></div>
-  <div class="row"><div class="ico">6️⃣</div><div><div class="label">Clôturer le cycle dans l'app</div><div class="desc">Saisie > Clôturer cycle. Archive automatique dans Livrables > Cycles. Données vidées pour nouveau cycle.</div></div></div>
+  <div class="row"><div class="ico">6️⃣</div><div><div class="label">Clôturer le cycle dans l'app</div><div class="desc">Saisie > Nouveau cycle (bouton clôture). <strong>Formulaire de clôture en 3 blocs</strong> s'ouvre d'abord :<br>
+      &nbsp;💰 <strong>Vente</strong> : recette totale (FCFA) + prix moyen par bête — calcule le <em>bénéfice net réel</em>.<br>
+      &nbsp;🐄 <strong>Approvisionnement</strong> : région fournisseur, BCS entrée (1–5), contexte (Tabaski, Gamou, etc.).<br>
+      &nbsp;🩺 <strong>Santé</strong> : pathologies observées, vaccins administrés.<br>
+      Tous les champs sont optionnels → bouton <em>Passer →</em> pour ignorer. Après validation : archive automatique 28 colonnes dans Google Sheets (Historique_Cycles!A:AB), puis ouverture du nouveau cycle.</div></div></div>
 </div>
 
 <!-- ═══ RÉGLAGES MID-CYCLE ═══ -->
