@@ -1,11 +1,37 @@
 ﻿# BOAN — Roadmap Notifications & Sinistres
-> Version 2.1 — Audit mis à jour le 22 Avril 2026
+> **Version 3.0 — Refonte panel experts — 22 Avril 2026**
 > Statut : **BLOQUÉ — Prérequis métier non satisfaits** (voir section 0)
-> Revue par : Architecte Backend · Expert UX Offline-first · Sécurité OWASP
->             Expert Email Afrique · Expert Assurance/Droit Sénégalais · Expert Terrain
-
+> Panel de révision :
+>   🚔 Adj. Chef Mbaye — Gendarmerie Brigade Thiès
+>   📋 M. Diouf — Agent CNAAS Dakar
+>   🩺 Dr Sow — Vétérinaire agréé région Thiès
+>   🤠 Oumar — Gérant terrain ferme bovine Thiès
+>   ⚖️ Maître Diallo — Juriste droit CIMA / assurance agricole Dakar
+>   🌍 Dr Fernandez — DG ferme internationale (Sénégal/Espagne)
+>
 > **Référence code** : `index.html` ~9 030 lignes, ES5 strict (`var`, pas `const`/`let`/arrow).
-> Commit HEAD : `a8bdee3`. App en prod : `https://boan-app-9u5e.vercel.app`
+> Commit HEAD : `407c7a7`. App en prod : `https://boan-app-9u5e.vercel.app`
+
+---
+
+## Sommaire
+
+| # | Section | Contenu | Public cible |
+|---|---|---|---|
+| 0 | [Prérequis métier](#0-prérequis-métier---bloquants-avant-tout-code) | Ce qu'il faut avoir **avant** tout code | Fondateur |
+| 1 | [Schémas de données](#1-schémas-de-données-google-sheets) | Structure `Notifications_Log` + `Sinistres_CNAAS` | Développeur |
+| 2 | [Processus métier](#2-processus-métier-bout-en-bout) | Flux complets décès / VOL / SOP vétérinaire | Tous |
+| 3 | [Interface utilisateur](#3-interface-utilisateur---modifications-indexhtml) | Modifications `index.html` | Développeur |
+| 4 | [API serveur](#4-api-serveur) | Code `/api/cron.js` + `/api/notify.js` | Développeur |
+| 5 | [Templates emails](#5-templates-emails-plain-text-strict) | Textes emails prêts à intégrer | Développeur |
+| 6 | [Templates WhatsApp](#6-templates-whatsapp) | Messages WA pré-remplis | Développeur |
+| 7 | [Pièces CNAAS](#7-pièces-cnaas---table-de-référence) | Checklist documents dossier | Fondateur · RGA |
+| 8 | [Checklist implémentation](#8-checklist-dimplémentation) | BLOC A/B/C/D/E à cocher | Développeur |
+| 9 | [Statut actuel](#9-statut-actuel) | Ce qui est fait / manque | Tous |
+| 10 | [KPIs sinistres](#10-kpis-sinistres--qualité-dossier---recommandations-panel) | Métriques qualité + export PDF + photo initiale | Fondateur · RGA |
+| **11** | **[Guides opérationnels](#11-guides-opérationnels-par-rôle)** | **Guides pratiques fondateur / gérant / RGA issus du panel** | **Fondateur · Gérant · RGA** |
+
+> 💡 **Lecteur non-technique** : commencer par la **section 11** (guides par rôle), puis la **section 0** (prérequis) et la **section 7** (pièces CNAAS).
 
 ---
 
@@ -1498,3 +1524,347 @@ Page 5 — Coordonnées & engagement
 - Champ optionnel — ne bloque pas la création du cycle si absent
 
 **Implémentation** : ajouter champ `photoRef` dans le formulaire d'ajout de bête dans `_ouvrirModalInit()` — input URL texte optionnel sous le champ race.
+
+---
+
+## 11. Guides opérationnels par rôle
+
+> Recommandations consolidées du panel experts — rédigées pour une **lecture terrain directe**, sans jargon technique.
+> Sources : Adj. Chef Mbaye (Gendarmerie) · M. Diouf (CNAAS) · Dr Sow (Vétérinaire) · Oumar (Gérant terrain) · Maître Diallo (Juriste) · Dr Fernandez (DG international)
+
+---
+
+### 11.0 À faire une seule fois — Fondateur (avant le 1er sinistre)
+
+> ⛔ Sans ces étapes, aucun dossier CNAAS ne peut aboutir, quelle que soit la qualité de l'élevage.
+
+#### Étape A — Souscrire la police CNAAS
+
+1. Contacter CNAAS (siège Dakar ou agence Thiès) et souscrire **« Assurance Mortalité Bétail Tout Risque »**
+2. Récupérer impérativement :
+   - N° de police exact
+   - Email officiel de déclaration sinistres
+   - Téléphone agent CNAAS Thiès (vocal, pas seulement email)
+   - Délai de déclaration contractuel (standard Code CIMA = 5 jours **ouvrables**)
+   - Grille officielle d'indemnisation par race / classe d'âge
+3. Lire les **exclusions** dans la police :
+   - Animaux non vaccinés selon le protocole SOP défini → les enregistrements SOP de BOAN constituent la preuve
+   - Maladie non déclarée lors de la souscription
+   - Sinistre hors délai contractuel → l'email J+0 de BOAN est la protection contre ce risque
+4. Comprendre la **franchise** (typiquement 10% de la valeur indemnisée) et le **délai réel d'indemnisation (30-60 jours)**
+5. Saisir toutes ces infos dans BOAN : **Livrables > Contacts & Assurance**
+
+#### Étape B — Contractualiser un vétérinaire agréé Thiès
+
+1. Trouver un vétérinaire agréé en région de Thiès
+2. Convenir de sa disponibilité pour : actes SOP planifiés + **constats de décès en urgence**
+3. Récupérer : nom complet · email · numéro WhatsApp +221XXXXXXXXX
+4. Saisir dans BOAN : **Livrables > Contacts & Assurance**, champ vétérinaire
+5. ⚠️ **Sans certificat vétérinaire → dossier CNAAS rejeté** — c'est la pièce la plus critique
+
+#### Étape C — Photographier chaque bête à son entrée (avec le gérant)
+
+1. Pour chaque bête introduite dans le cycle : **photo de face + profil** avec marque auriculaire visible
+2. Uploader sur Google Drive ou envoyer par WhatsApp
+3. Coller l'URL dans BOAN : formulaire ajout bête, champ **"Photo de référence"**
+4. En cas de vol : cette photo sera transmise à la gendarmerie pour signalement inter-brigades
+5. En cas de litige CNAAS sur l'identité de l'animal : preuve irréfutable
+
+> 🌍 Dr Fernandez : *"Les fermes avec photos initiales ont un taux d'acceptation CNAAS de 85-95% vs 30-40% sans documentation."*
+
+---
+
+### 11.1 Guide gérant — Décès d'un animal
+
+> Contexte : vous découvrez qu'une bête est morte. **Les 30 premières minutes sont critiques.**
+
+#### ÉTAPE 1 — Photographier AVANT tout geste (immédiat)
+
+1. 📸 Photographier l'animal mort : vue de face · profil gauche/droit · boucle auriculaire · plaies ou signes visibles
+2. 📸 Photographier l'environnement immédiat (abreuvoir, foin, voisinage)
+3. Horodater les photos (regarder l'heure exacte sur le téléphone)
+4. ⛔ **NE PAS ABATTRE — NE PAS ENTERRER — ne déplacer l'animal qu'en dernier recours**
+
+#### ÉTAPE 2 — Appeler le fondateur VOCALEMENT
+
+1. Appel téléphonique immédiat — ne pas envoyer un SMS d'abord
+2. Donner : ID de l'animal · heure du constat · état visuel · votre position
+3. Le fondateur se charge des appels CNAAS et vétérinaire — votre rôle est de rester sur place
+
+#### ÉTAPE 3 — Saisir dans BOAN (dans l'heure)
+
+1. Aller dans **Saisie > Santé**
+2. Sélectionner l'animal → Décès = OUI
+3. Remplir : symptômes observés · traitements donnés · coût estimé
+4. Valider → l'app affiche la bannière rouge ⛔ et envoie les alertes automatiquement
+5. ⚠️ Si pas de connexion réseau : **saisir quand même** — l'app garde les données et les envoie dès le retour réseau
+
+#### ÉTAPE 4 — Maintenir l'animal intact
+
+1. Couvrir l'animal avec une bâche (protection vautours, soleil direct)
+2. Prendre des photos supplémentaires toutes les **6 heures** pour documenter l'état de dégradation
+3. ⚠️ **Chaleur Thiès 35-40°C : décomposition visible dès 6-8h** — si aucun vétérinaire confirmé après 24h, appeler le fondateur
+4. **Ne jamais enterrer sans autorisation écrite** du fondateur (qui aura obtenu l'accord CNAAS par SMS ou email)
+
+> ⚖️ Maître Diallo : *"Une inhumation sans accord écrit peut être qualifiée de destruction de preuve sous le Code CIMA — pas seulement un risque de rejet de dossier, un risque juridique réel."*
+
+#### ÉTAPE 5 — Accompagner le vétérinaire (J+1 à J+5)
+
+1. Être présent lors du passage du vétérinaire
+2. Lui montrer l'animal + les photos prises + votre carnet d'observations
+3. S'assurer qu'il **signe le certificat de constatation** ce jour-là — ne pas repartir sans
+4. Transmettre le certificat au fondateur immédiatement (photo WhatsApp)
+
+> 📋 **Résumé gérant décès** : `📸 Photo → 📞 Fondateur → BOAN → ⛔ Ne pas enterrer → ✅ Certif vét`
+
+---
+
+### 11.2 Guide fondateur — Décès d'un animal
+
+> Vous recevez l'appel du gérant ou la notification BOAN. Vous êtes probablement à Dakar.
+
+#### ÉTAPE 1 — Appeler la CNAAS (dans l'heure)
+
+1. Appeler l'**agent CNAAS Thiès** vocalement — l'appel crée une trace horodatée
+2. Déclarer le sinistre à l'oral (à titre conservatoire)
+3. Donner : N° police · ID animal · date/heure · race · poids entrée
+4. ⚠️ **Demander explicitement** : *"Pouvez-vous coordonner la date de passage de votre expert avec la venue de notre vétérinaire Dr [nom] ?"*
+5. Noter dans BOAN : **Livrables > Incidents** → heure de l'appel CNAAS (champ dédié)
+
+#### ÉTAPE 2 — Appeler le vétérinaire
+
+1. Appeler vocalement → confirmer la date de venue
+2. Lui rappeler : certificat de constatation obligatoire + l'expert CNAAS viendra après lui
+3. **La date vétérinaire doit être AVANT la date expert CNAAS** — sinon rejet dossier
+4. Saisir les deux dates dans BOAN : **Livrables > Incidents** — l'app affiche une alerte si incohérence
+
+#### ÉTAPE 3 — Surveiller via BOAN
+
+1. La bannière rouge ⛔ est visible pour tous les rôles tant que le dossier est ouvert
+2. Dashboard : si > 24h sans confirmation vétérinaire → le gérant reçoit une bannière WhatsApp relance automatique
+3. Ne jamais cocher « Expert CNAAS passé » avant qu'il soit réellement venu
+
+#### ÉTAPE 4 — Si l'expert CNAAS n'arrive pas dans les 24-36h
+
+> 🩺 Dr Sow : *"À 35-40°C la décomposition est visible dès 6-8h. Après 24-36h, l'animal n'est plus présentable à un expert. Ne pas attendre 48h."*
+
+1. **Appeler l'agent CNAAS Thiès vocalement**
+2. Demander une **autorisation d'inhumation d'urgence**
+3. Confirmer par **SMS ou email** — la confirmation écrite est obligatoire
+4. N'enterrer qu'après réception de la confirmation écrite
+5. Continuer à documenter par photos jusqu'à l'inhumation
+
+#### ÉTAPE 5 — Suivi dossier J+7 / J+14
+
+1. BOAN envoie des relances email automatiques à J+7 et J+14 si statut EN_COURS
+2. À J+14 sans réponse → **appel vocal CNAAS recommandé** (l'app envoie une notification fondateur)
+3. Suivre dans **Livrables > Incidents** : timeline dossier · checkboxes · statut CNAAS
+
+#### ÉTAPE 6 — Clôture et capitalisation
+
+1. Quand CNAAS confirme → cocher **"CNAAS a confirmé"** → statut CLOTURE
+2. En fin de cycle, renseigner dans `Historique_Cycles` (section 10.1) :
+   - Nombre de sinistres déclarés (col AC)
+   - Nombre indemnisés (col AD)
+   - Montant CNAAS reçu FCFA (col AE)
+3. Calculer le taux d'acceptation : **objectif ≥ 80%** (benchmark documenté : 85-95%)
+
+> 📋 **Résumé fondateur décès** : `📞 CNAAS + dates → 📞 Vét → 👁️ Surveillance BOAN → 📝 Autorisation si > 24-36h → Suivi J+7/J+14 → ✅ Clôture + KPIs`
+
+---
+
+### 11.3 Guide gérant — Vol de bétail
+
+> Contexte : vous constatez qu'un ou plusieurs animaux ont disparu.
+
+> ⏱️ **FENÊTRE CRITIQUE : 48 heures pour la poursuite chaude.**
+> Chaque heure perdue réduit les chances de retrouver les animaux de 10-15%.
+
+#### ÉTAPE 1 — Sécuriser les preuves AVANT de bouger (5-10 min)
+
+1. 📸 Photographier : accès forcé (serrure brisée, clôture), traces de passage, zone de disparition, animaux restants
+2. Noter l'**heure exacte de découverte** (≠ heure supposée du vol) — regarder le téléphone
+3. Interroger les témoins présents (veilleur, ouvriers) — noter leurs noms
+4. Ne toucher à rien sur la scène avant d'avoir tout photographié
+
+#### ÉTAPE 2 — Appeler le fondateur VOCALEMENT
+
+1. Appel immédiat
+2. Donner : liste des animaux disparus (IDs) · heure de découverte · état des lieux · témoins
+
+#### ÉTAPE 3 — Aller à la gendarmerie de Thiès (immédiatement)
+
+> 🚔 Adj. Chef Mbaye : *"Chaque heure dans la fenêtre 48h compte. Photographiez d'abord, venez nous voir ensuite avec les photos."*
+
+1. Horaires accueil : **07h00–22h00** — urgence nuit : appel téléphonique direct à la brigade
+2. Apporter : **photos des animaux** (photoRef si disponibles) · photos du lieu · pièce d'identité · liste animaux volés (ID, race, couleur, marques)
+3. Déposer plainte → vous obtenez un **RÉCÉPISSÉ TAMPONNÉ** (immédiat, le même jour)
+4. ⚠️ Le **N° PV officiel** est établi par la gendarmerie **24-72h plus tard** — c'est normal, **ne pas attendre** pour saisir dans BOAN
+5. Garder précieusement le récépissé (c'est la pièce CNAAS J+0)
+
+#### ÉTAPE 4 — Saisir dans BOAN (dès retour de la gendarmerie)
+
+1. **Saisie > Incident > type = VOL**
+2. Sélectionner tous les animaux volés (sélection multiple)
+3. Saisir : heure du vol (si connue) + **heure de découverte** (champs distincts) · circonstances · N° récépissé gendarmerie
+4. Le N° PV officiel peut être ajouté plus tard quand la gendarmerie le fournit
+5. Valider → app envoie email CNAAS automatiquement + affiche le chronomètre 48h
+
+#### ÉTAPE 5 — Suivre le chronomètre 48h dans BOAN
+
+1. Dashboard gérant affiche un compte à rebours 48h dès la saisie du VOL
+2. Si des pistes apparaissent (témoins, traces, informations) → **appeler le fondateur immédiatement**
+3. Rester disponible pour la gendarmerie (rappels possibles pour précisions)
+4. À réception du N° PV officiel : mettre à jour dans **Livrables > Incidents**
+
+> 📋 **Résumé gérant vol** : `📸 Photos → 📞 Fondateur → 🚔 Gendarmerie (récépissé) → BOAN → ⏱️ Chrono 48h`
+
+---
+
+### 11.4 Guide fondateur — Vol de bétail
+
+> Vous recevez l'appel du gérant ou la notification BOAN.
+
+#### ÉTAPE 1 — Appeler la CNAAS (dans l'heure)
+
+1. Appeler l'agent CNAAS Thiès vocalement
+2. Déclarer le sinistre VOL à l'oral
+3. Donner : N° police · liste animaux volés · N° récépissé gendarmerie · date et heure vol estimée
+4. Demander : procédure spécifique VOL, pièces supplémentaires requises par votre police
+5. L'email J+0 est envoyé automatiquement par BOAN — confirmer à l'oral que c'est fait
+
+#### ÉTAPE 2 — Transmettre les photoRef à la gendarmerie
+
+1. Si des photos initiales `photoRef` existent dans BOAN → les envoyer **immédiatement** à la brigade Thiès
+2. Canal : WhatsApp au numéro brigade · ou email officiel gendarmerie
+3. Ces photos permettent un **signalement inter-brigades** dans la fenêtre critique 48h
+
+#### ÉTAPE 3 — Suivi jusqu'à clôture
+
+1. Ajouter le N° PV officiel dans BOAN dès réception (24-72h après le dépôt)
+2. Relances J+7 et J+14 envoyées automatiquement par BOAN
+3. Clôture : cocher **"CNAAS a confirmé réception"** → statut CLOTURE
+
+---
+
+### 11.5 Guide RGA — Surveillance et escalade sinistres
+
+> Rôle RGA : supervision des dossiers ouverts, escalade si blocage, contribution aux KPIs de fin de cycle.
+
+#### Surveillance quotidienne
+
+1. Ouvrir BOAN chaque matin → vérifier **badge numérique** sur l'onglet Livrables
+2. **Livrables > Incidents** → passer en revue les dossiers EN_COURS
+3. Signaux d'alerte à surveiller :
+   - Dossier EN_COURS depuis **> 14 jours** sans mouvement → alerter le fondateur
+   - `Certif_Vet_Recu` vide à J+7 → relancer le fondateur (vétérinaire non passé)
+   - `Expert_Passe` vide à J+10 → relancer le fondateur (coordination CNAAS insuffisante)
+   - Statut VOL avec N° PV manquant depuis > 3j → demander au gérant de vérifier à la brigade
+
+#### En cas de dossier bloqué
+
+1. Vérifier que tous les champs BOAN sont remplis (N° PV si VOL, dates visite, certif vét)
+2. Si aucune réponse CNAAS à J+14 → recommander un **appel vocal** fondateur → CNAAS Thiès (l'email seul ne suffit plus)
+3. Si dossier REJETE → analyser les raisons avec le fondateur (exclusion ? délai ? certif manquant ?) → corriger pour les prochains cycles
+
+#### En fin de cycle
+
+1. Vérifier que **tous** les sinistres ont un statut terminal (CLOTURE · REJETE · ANNULE)
+2. Signaler au fondateur les dossiers encore ouverts avant l'archivage du cycle
+3. Contribuer au remplissage des **KPIs CNAAS** dans `Historique_Cycles` (section 10.1) :
+   - `nb_sinistres` · `sinistres_indemnises` · `montant_cnaas_recu` · `delai_moyen_cloture_j`
+
+---
+
+### 11.6 Matrice de décision rapide — Qui fait quoi ?
+
+| Événement | Action immédiate | Qui | Délai max |
+|---|---|---|---|
+| Décès constaté | Photographier l'animal | Gérant | **Immédiat** |
+| Décès constaté | Appeler fondateur vocalement | Gérant | < 30 min |
+| Décès constaté | Saisir dans BOAN | Gérant | < 1h |
+| Décès constaté | Appeler CNAAS vocalement + noter heure | Fondateur | < 1h |
+| Décès constaté | Appeler vétérinaire + fixer date | Fondateur | < 1h |
+| Décès constaté | Email CNAAS J+0 + email vét | **BOAN auto** | J+1 07h02 |
+| Décès > 24h sans vét confirmé | Relancer vétérinaire (bannière WA) | Gérant (1 tap) | Dès bannière |
+| Décès > 24-36h sans expert | Appeler CNAAS, demander autorisation inhumation **écrite** | Fondateur | Avant inhumation |
+| Décès — expert non venu à J+7 | Relance email auto CNAAS | **BOAN auto** | J+7 07h04 |
+| Décès — J+14 sans réponse | Appel vocal CNAAS + alerte fondateur | Fondateur | J+14 |
+| Vétérinaire signe le certificat | Transmettre au fondateur (WhatsApp) | Gérant | Jour J |
+| Certificat reçu | Cocher dans BOAN + transmettre CNAAS | Fondateur | Jour J |
+| Expert CNAAS passé | Cocher dans BOAN → bannière ⛔ levée | Fondateur | Jour J |
+| CNAAS confirme indemnisation | Clôturer dans BOAN + noter montant | Fondateur | Jour J |
+| Vol constaté | Photographier lieu + animaux restants | Gérant | **Immédiat** |
+| Vol constaté | Appeler fondateur | Gérant | < 30 min |
+| Vol constaté | Aller à la gendarmerie (récépissé) | Gérant | < 2h **(fenêtre 48h)** |
+| Vol — récépissé obtenu | Saisir dans BOAN | Gérant | Même jour |
+| Vol — N° PV reçu (J+1-3) | Mettre à jour BOAN | Gérant ou RGA | Dès réception |
+| Vol — photoRef disponibles | Transmettre à la gendarmerie | Fondateur | < 1h |
+| Cycle terminé | Renseigner KPIs CNAAS | Fondateur + RGA | Avant archivage |
+
+---
+
+### 11.7 Points de vigilance critiques — Synthèse du panel
+
+> Chaque point est issu d'une intervention concrète du panel.
+> Chaque point a un impact direct mesuré sur l'acceptation ou le rejet du dossier CNAAS.
+
+---
+
+**🩺 Dr Sow (Vétérinaire, Thiès) — Décomposition dès 6-8h à 35-40°C**
+
+> Ne pas attendre 48h. Si le vétérinaire ne peut pas venir dans les **24-36h**, le fondateur doit proactivement appeler CNAAS pour une autorisation d'inhumation d'urgence. Sans cette démarche, l'animal sera dans un état qui compromet à la fois la présentation à l'expert et la dignité de la procédure. L'app doit aider à déclencher cette conversation au bon moment.
+
+**Action BOAN associée** : alerte fondateur dans la bannière ⛔ si > 24h sans confirmation vétérinaire + bouton « Appeler CNAAS urgence » dans l'interface fondateur.
+
+---
+
+**📋 M. Diouf (CNAAS, Dakar) — Les 3 raisons de rejet les plus fréquentes**
+
+> 1. Animaux non vaccinés selon le protocole SOP défini dans la police → les enregistrements SOP de BOAN constituent la preuve — **ne jamais négliger la saisie SOP**
+> 2. Déclaration hors délai contractuel → l'email J+0 automatique de BOAN est la protection — **ne pas attendre pour saisir**
+> 3. Absence du certificat vétérinaire lors du passage de l'expert CNAAS → la coordination vét/expert est critique — **fixer les deux dates le J+0**
+
+**Action BOAN associée** : alerte croisée si `Date_Visite_Expert < Date_Visite_Vet` dans Livrables > Incidents.
+
+---
+
+**🚔 Adj. Chef Mbaye (Gendarmerie, Thiès) — Erreur terrain la plus coûteuse**
+
+> Aller à la gendarmerie sans photos des animaux et sans l'heure exacte de découverte. Le récépissé sera établi, mais le signalement inter-brigades sera inefficace dans la fenêtre 48h. **Photographier d'abord, toujours, avant de se déplacer.**
+
+> Le récépissé tamponné est une pièce CNAAS valide en J+0. Le N° PV officiel vient 24-72h plus tard. BOAN ne doit pas bloquer la déclaration sur l'absence du N° PV.
+
+**Action BOAN associée** : champ N° récépissé (obligatoire J+0) + champ N° PV (optionnel J+0, obligatoire avant clôture).
+
+---
+
+**⚖️ Maître Diallo (Juriste, Dakar) — Point légal mal connu**
+
+> L'inhumation d'un animal sinistré sans accord écrit CNAAS peut être qualifiée de **destruction de preuve** sous le Code CIMA. Ce n'est pas qu'un risque de rejet de dossier — c'est un risque de mise en cause juridique. **L'autorisation doit être écrite** (SMS ou email). Un accord vocal seul ne suffit pas.
+
+> La fenêtre d'annulation d'une saisie erronée à 30 minutes était injouable : le fondateur est souvent à Dakar, le gérant n'a parfois pas de réseau immédiatement. **4 heures est le minimum viable et légalement défendable.**
+
+**Action BOAN associée** : bannière ⛔ avec mention explicite « Autorisation CNAAS écrite obligatoire avant inhumation » + bouton annulation visible 4h.
+
+---
+
+**🤠 Oumar (Gérant terrain, Thiès) — Réalité terrain ignorée**
+
+> La brigade de Thiès ferme l'accueil public à 22h. Un vol découvert à 23h impose d'attendre 07h le lendemain pour déposer plainte — soit 8h perdues sur les 48h de poursuite chaude. L'app doit afficher le **numéro d'urgence** de la brigade pour la nuit + l'heure d'ouverture.
+
+> Les week-ends et jours fériés allongent le délai d'établissement du PV. L'app doit être compréhensive si le N° PV arrive J+3 ou J+4 — et ne pas bloquer la déclaration CNAAS à cause de ça.
+
+**Action BOAN associée** : afficher horaires brigade + numéro urgence dans le modal post-saisie VOL.
+
+---
+
+**🌍 Dr Fernandez (DG ferme internationale) — L'écart documenté**
+
+> Les fermes qui documentent correctement (photo initiale par bête, SOP validés régulièrement, dossier sinistre complet assemblé avant la venue de l'expert) ont un taux d'acceptation CNAAS de **85-95%**. Les fermes sans documentation systématique : **30-40%**. La différence n'est pas la qualité de l'élevage — c'est la documentation. BOAN peut fermer cet écart dès le premier cycle si les fonctionnalités de section 10 sont implémentées.
+
+**Action BOAN associée** : `photoRef` dans `CYCLE.betes[i]` + export PDF dossier complet (section 10.2) + KPIs fin de cycle (section 10.1).
+
+---
+
+> 📌 **Rappel architectural** : toutes les actions BOAN listées ci-dessus correspondent à des éléments déjà spécifiés dans les sections 2-10 de ce roadmap. La section 11 est le point d'entrée terrain vers la documentation technique.
