@@ -7623,7 +7623,15 @@ function viewLiv(){
           +'</div>';
       }
       _hRows.forEach(function(row, idx){
-        var _numCyc  = row[27] || row[14] || (idx+1);
+        // Rétrocompatibilité schéma :
+        //   v1 = ancien A:O (15 cols, avant commit 8728afb) :
+        //        [0]début [1]fin [2]durée [3]race [4]foirail [5]nbDep [6]nbFin
+        //        [7]deces [8]poidsDep [9]poidsFin [10]gmq [11]capital
+        //        [12]tresoFin [13]margeParBete [14]numCycle
+        //   v2 = nouveau A:AB (28 cols) : tauxMort inséré en [8],
+        //        décale tout de +1, + colonnes supplémentaires
+        var _v1 = (row.length <= 15);
+        var _numCyc  = (_v1 ? row[14] : row[27]) || (idx+1);
         var _debut   = isoToFr(row[0]||'');
         var _fin     = isoToFr(row[1]||'');
         var _duree   = row[2] ? row[2]+' j' : '';
@@ -7631,22 +7639,26 @@ function viewLiv(){
         var _foirail = row[4]||'';
         var _nbDep   = row[5]||''; var _nbFin = row[6]||'';
         var _deces   = parseInt(row[7]||0);
-        var _tauxMort= row[8]||'';
-        var _pDep    = row[9]||''; var _pFin = row[10]||''; var _gmq = row[11]||'';
-        var _gainPoids = row[12]||'';
-        var _capital = parseInt(row[13]||0);
-        var _coutAlim= parseInt(row[14]||0);
-        var _recette = parseInt(row[15]||0); // P=recetteVente (nouvelle schema) — row[12] serait gainPoids, pas recette
-        var _benef   = parseInt(row[16]||0) || (_recette ? _recette - _capital : 0);
-        var _benefBete = parseInt(row[17]||0);
-        var _roi     = row[18]||'';
-        var _coutKg  = row[19]||'';
-        var _prixKgVif = row[20]||'';
-        var _saison  = row[21]||'';
-        var _fournReg= row[22]||'';
-        var _bcsEntr = row[23]||'';
-        var _patho   = row[24]||'';
-        var _vaccins = row[25]||'';
+        var _tauxMort= _v1 ? ''            : (row[8]||'');
+        var _pDep    = _v1 ? (row[8]||'') : (row[9]||'');
+        var _pFin    = _v1 ? (row[9]||'') : (row[10]||'');
+        var _gmq     = _v1 ? (row[10]||'') : (row[11]||'');
+        var _gainPoids = _v1 ? '' : (row[12]||'');
+        var _capital = parseInt((_v1 ? row[11] : row[13])||0);
+        var _coutAlim= _v1 ? 0  : parseInt(row[14]||0);
+        var _recette = parseInt((_v1 ? row[12] : row[15])||0); // v1:tresoFin v2:recetteVente
+        var _benefBete = parseInt((_v1 ? row[13] : row[17])||0); // v1:margeParBete v2:beneficeNetParBete
+        var _benef   = _v1
+          ? (_recette - _capital)                                              // v1 : tresoFin - capital
+          : (parseInt(row[16]||0) || (_recette ? _recette - _capital : 0));   // v2 : beneficeNet
+        var _roi     = _v1 ? '' : (row[18]||'');
+        var _coutKg  = _v1 ? '' : (row[19]||'');
+        var _prixKgVif = _v1 ? '' : (row[20]||'');
+        var _saison  = _v1 ? '' : (row[21]||'');
+        var _fournReg= _v1 ? '' : (row[22]||'');
+        var _bcsEntr = _v1 ? '' : (row[23]||'');
+        var _patho   = _v1 ? '' : (row[24]||'');
+        var _vaccins = _v1 ? '' : (row[25]||'');
 
         var _bCol     = _benef >= 0 ? (_lt?'#1a7a1a':'#4caf50') : (_lt?'#c82020':'#f44336');
         var _decesCol = _deces > 0 ? (_lt?'#c82020':'#f44336') : _subCol;
