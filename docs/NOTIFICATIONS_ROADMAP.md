@@ -1,4 +1,4 @@
-# BOAN — Roadmap Notifications & Sinistres
+﻿# BOAN — Roadmap Notifications & Sinistres
 > Version 2.1 — Audit mis à jour le 22 Avril 2026
 > Statut : **BLOQUÉ — Prérequis métier non satisfaits** (voir section 0)
 > Revue par : Architecte Backend · Expert UX Offline-first · Sécurité OWASP
@@ -26,15 +26,29 @@ Contacter CNAAS (siège Dakar ou agence Thiès) et obtenir :
 - Police **"Assurance Mortalité Bétail Tout Risque"** souscrite AVANT tout sinistre
 - Numéro de police exact
 - Email officiel de déclaration sinistres + téléphone agent Thiès
-- **Délai contractuel** : Code CIMA = 5 jours ouvrables standard. Certaines polices imposent 24h — lire la police. L'email J+0 sert dans tous les cas de preuve horodatée.
+- **Délai de déclaration contractuel** : Code CIMA = 5 jours **ouvrables** (pas calendaires) standard. Certaines polices imposent 24h — lire la police. L'email J+0 horodaté sert de preuve dans tous les cas.
 - Liste exacte des pièces requises
 - **Grille officielle d'indemnisation** par race/classe d'âge (`poids × prix_foirail` sera rejeté)
+- **Franchise** : typiquement **10% de la valeur indemnisée** — à vérifier dans la police. Si animal assuré à 800 000 FCFA, indemnisation nette = 720 000 FCFA.
+- **Délai d'indemnisation réel** : **30 à 60 jours calendaires** après dossier complet accepté. Dossiers contestés : jusqu'à 6 mois. Communiquer cette expectation réaliste au fondateur.
+- **Exclusions fréquentes à vérifier à la souscription** :
+  - Maladie non déclarée lors de la souscription de la police
+  - Animaux non vaccinés selon le protocole SOP défini dans la police ← les enregistrements SOP de BOAN constituent la preuve de vaccination
+  - Cause de mort exclue (ex: certaines épizooties selon la police)
+  - Sinistre déclaré hors délai contractuel
 
 > **Déjà dans l'app** : `CYCLE.numCnaas` (clé `numCnaas` dans `Config_App` — modal init step 2 + Go/No-Go, commit `9766040`). Ne pas recréer.
 
 ### 0.3 Clause critique : NE PAS ABATTRE NI ENTERRER
 La CNAAS exige que l'animal décédé reste intact jusqu'au passage de leur expert.
-- ⚠️ Chaleur Thiès 35–40°C : après **48h**, risque sanitaire. Si expert CNAAS absent > 48h → contacter CNAAS pour autorisation d'inhumation.
+- ⚠️ **Chaleur Thiès 35–40°C : décomposition visible dès 6-8h.** Après **24-36h**, risque sanitaire réel et état présentable à l'expert compromis. Ne pas attendre 48h.
+- Si l'expert CNAAS n'est pas arrivé dans les **24-36h** → appeler l'agent CNAAS Thiès **par téléphone** pour obtenir une **autorisation d'inhumation d'urgence**.
+- ⚠️ **PROCÉDURE OBLIGATOIRE avant inhumation** :
+  1. Appel vocal agent CNAAS Thiès
+  2. Confirmation par SMS ou email (preuve écrite horodatée)
+  3. Prendre des photos datées toutes les 6h pour documenter l'état de l'animal
+  4. N'enterrer qu'après confirmation écrite reçue
+- 🚨 **Inhumation sans autorisation écrite = risque de rejet du dossier + risque de qualification en destruction de preuve (art. Code CIMA)**
 - L'app affiche une bannière rouge persistante dès qu'un décès est saisi.
 
 ### 0.4 Coordination vétérinaire / expert CNAAS
@@ -48,6 +62,40 @@ La CNAAS exige que l'animal décédé reste intact jusqu'au passage de leur expe
 - [ ] `CRON_SECRET` dans les Secrets Vercel + GitHub
 - [ ] `SID_FONDATEUR` dans les Variables Vercel (valeur de `SID.fondateur` dans l'app)
 - [ ] Onglets `Notifications_Log` et `Sinistres_CNAAS` → **auto-créés au 1er run cron** (section 4.1)
+
+### 0.6 Police / Gendarmerie — Procédure VOL : ce que l'app doit savoir
+
+> Synthèse issue du panel terrain — Adj. Chef Mbaye, Gendarmerie Brigade Thiès
+
+**Fenêtre de poursuite chaude : 48 heures absolues**
+- Dans les 48h suivant le constat de vol, la gendarmerie peut déclencher une traque active (patrouilles, appels réseaux inter-brigades). Au-delà, les chances de retrouver les animaux tombent à 10-15%.
+- **L'app doit capturer l'heure exacte** de découverte du vol — pas seulement la date. Un chronomètre de compte à rebours 48h doit s'afficher dans la bannière dashboard gérant dès qu'un vol est saisi.
+
+**Récépissé ≠ N° PV**
+- Le gérant ressort de la gendarmerie avec un **récépissé tamponné** — immédiat.
+- Le **procès-verbal officiel** avec numéro est établi par l'officier en 24-72h.
+- BOAN doit distinguer les deux dans `Sinistres_CNAAS` et accepter la déclaration CNAAS dès que le récépissé est obtenu (le N° PV sera ajouté ultérieurement).
+
+**Horaires Brigade de Gendarmerie Thiès**
+- Accueil public : 07h00–22h00 en général
+- Nuit/urgence : appel téléphonique direct au permanencier de la brigade
+- ⚠️ Les week-ends et jours fériés peuvent allonger le délai de rédaction du PV
+
+**Inventaire photographique initial — recommandation forte**
+- Photographier chaque bête à son entrée dans le cycle (face, profil, marques distinctives, tatouage/boucle auriculaire)
+- En cas de vol, la gendarmerie peut diffuser le signalement avec photos
+- En cas de litige identitaire CNAAS, la photo est preuve irréfutable
+- **Implémentation BOAN** : ajouter `photoRef` dans `CYCLE.betes[i]` — une URL WhatsApp ou un lien Google Drive suffit
+
+**Pièces à transmettre à la gendarmerie (copie dans BOAN)**
+```
+- Identité propriétaire (fondateur)
+- Inventaire animaux volés : ID, race, poids, couleur, marques
+- Heure vol + heure découverte (distincts)
+- Circonstances (clôture forcée ? Veilleur présent ?)
+- Témoin(s) éventuel(s)
+- Photos inventaire initial si disponibles
+```
 
 ---
 
@@ -158,13 +206,26 @@ Clôture
 ```
 J+0 — Gérant constate le vol
 
+  ⚠️ AVANT D'ALLER À LA GENDARMERIE :
+     1. Photographier le lieu immédiatement (traces, accès forcé, survivants)
+     2. Noter l'heure exacte de la découverte (≠ heure du vol supposé)
+     3. Appeler le fondateur VOCALEMENT — ne pas attendre
+
+  ⏱️ FENÊTRE CRITIQUE : 48 heures pour la poursuite chaude
+     Chaque heure perdue réduit les chances de retrouver les animaux.
+     Brigade Gendarmerie Thiès : 07h00–22h00 — urgence nuit : appel téléphonique.
+
   1. Gérant va IMMÉDIATEMENT à la gendarmerie de Thiès
-     → Récupère récépissé PV (SANS ce numéro : pas de remboursement)
+     → Obtient un RÉCÉPISSÉ DE DÉPÔT DE PLAINTE (tamponné, immédiat)
+     → Le N° PV officiel est établi par la gendarmerie en 24-72h ensuite
+     → BOAN accepte le récépissé en J+0 — le N° PV peut être ajouté ultérieurement
 
   2. Gérant saisit dans BOAN (Saisie > Incident > type = VOL) :
      - Animaux concernés — beteMultiSelect() (sélection multiple)
-     - N° PV gendarmerie — champ OBLIGATOIRE BLOQUANT
-     - Date/heure vol, circonstances
+     - Heure du vol (si connue) + Heure de découverte — champs distincts
+     - N° récépissé gendarmerie — champ OBLIGATOIRE BLOQUANT
+     - N° PV définitif — champ optionnel au J+0, obligatoire avant clôture dossier
+     - Date/heure dépôt plainte, circonstances
 
   3. App envoie email CNAAS auto (section 5.4) + affiche :
      1️⃣ 📞 Appeler CNAAS    2️⃣ 💬 WhatsApp CNAAS (msg 6.5)
@@ -209,7 +270,7 @@ Dashboard gérant (jour J-1)
 | 1️⃣ 📞 Appeler CNAAS | `tel:[contact_cnaas_tel]` | Post-submit |
 | 2️⃣ 📞 Appeler Vétérinaire | `tel:[contact_vet_tel]` | Post-submit |
 | 3️⃣ 💬 WhatsApp Vétérinaire | `wa.me/[contact_vet_tel]?text=...` msg 6.1 | Post-submit |
-| ⚠️ Annuler — erreur de saisie | Visible 30 min — email correctif CNAAS | `Date.now() - lsGet('last_deces_ts') < 30*60*1000` |
+| ⚠️ Annuler — erreur de saisie | Visible **4 heures** — email correctif CNAAS | `Date.now() - lsGet('last_deces_ts') < 4*60*60*1000` |
 
 **Logique submit décès — ajouts dans doSubmit('sante') :**
 ```js
@@ -403,7 +464,7 @@ Extension du sous-onglet `incidents` existant :
 | Appel_Fondateur_J0 | Heure appel vocal — saisie manuelle → col G (index 6) |
 | Bouton CNAAS confirmé réception | → Statut_CNAAS = CLOTURE |
 | Bouton Arrêter les relances | → col J (index 9) = OUI |
-| Bouton Annuler (30 min) | → Statut = ANNULE + email correctif CNAAS |
+| Bouton Annuler (4h) | → Statut = ANNULE + email correctif CNAAS |
 
 **Réconciliation lsGet('sinistres_ouverts') depuis LIVE.sinistres :**
 ```js
@@ -953,7 +1014,7 @@ jobs:
         run: |
           curl -f -X GET \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
-            "https://boan-app-ur3x.vercel.app/api/cron?type=${{ steps.resolve.outputs.type }}"
+            "https://boan-app-9u5e.vercel.app/api/cron?type=${{ steps.resolve.outputs.type }}"
 ```
 
 ---
@@ -1046,7 +1107,7 @@ LIEU              : Ferme BOAN, Thiès, Sénégal
   Poids entrée : [poidsEntree] kg
   Date entrée  : [dateIntro DD/MM/YYYY]
   Poids actuel : [poids_dernier] kg (pesée du [date_derniere_pesee])
-  Valeur estimée : [cnaas_grille[race] ou poidsEntree × prix_foirail] FCFA
+  Valeur assurée : selon grille contractuelle CNAAS (voir police n°[CYCLE.numCnaas])
 
 --- HISTORIQUE DES SOINS ---
   Symptômes    : [safeText(sym)]
@@ -1369,3 +1430,71 @@ Ferme BOAN — [lsGet('cfg_contact_gerant_tel')]
 | `/api/notify.js` | ⬛ **Absent** |
 | `.github/workflows/cron-notifications.yml` | ⬛ **Absent** (répertoire `.github` inexistant) |
 | `/api/ai.js`, `/api/auth.js`, `/api/token.js`, `/api/sheets.js`, `/api/change-password.js` | ✅ **Présents** — réutilisables |
+
+---
+
+## 10. KPIs sinistres & qualité dossier — Recommandations panel
+
+> Synthèse issue du panel — Dr Fernandez (DG international) + M. Diouf (CNAAS)
+
+### 10.1 KPIs à suivre par cycle (nouveaux champs `Historique_Cycles`)
+
+Ajouter 3 colonnes à la fin de `Historique_Cycles` (colonnes AC, AD, AE) pour capitaliser sur chaque cycle :
+
+| Col | Nom | Valeurs |
+|---|---|---|
+| AC | Sinistres_Declares | entier — nombre de sinistres déclarés (décès + vol) |
+| AD | Sinistres_Indemnises | entier — nombre effectivement indemnisés par CNAAS |
+| AE | Montant_CNAAS_Recu | entier FCFA — somme réelle indemnisée |
+| AF | Delai_Moyen_Cloture_j | entier — jours moyens entre déclaration et clôture dossier |
+
+**Calcul taux de succès :** `Sinistres_Indemnises / Sinistres_Declares × 100`
+
+> Benchmark Dr Fernandez : fermes avec dossier complet photographique = **85-95%** de taux d'indemnisation. Sans documentation = **30-40%**. BOAN vise 80%+ dès la 1ère saison.
+
+### 10.2 Export PDF dossier sinistre — Feature prioritaire (post-prérequis)
+
+> "Un éleveur qui arrive chez nous avec un dossier complet PDF pré-assemblé est traité 2× plus vite." — M. Diouf, CNAAS
+
+**Déclencheur** : bouton "📄 Exporter dossier complet" dans `viewLiv()` sub=`incidents`, visible fondateur/rga si `Statut_CNAAS !== 'CLOTURE'`
+
+**Contenu du dossier généré (HTML → print → PDF via `window.print()`)** :
+
+```
+Page 1 — Déclaration conservatoire
+  N° police · Date · Animal · Engagement non enterrement
+
+Page 2 — Identification animal
+  CYCLE.betes[i] : race, poids entrée, date intro, photoRef
+
+Page 3 — Historique des soins
+  Sante_Mortalite : date · sym · tra · cout · sopLabel
+  (les enregistrements SOP prouvent la conformité protocole vaccinal)
+
+Page 4 — Historique des pesées
+  LIVE.pesees : 3 dernières pesées + GMQ
+
+Page 5 — Coordonnées & engagement
+  Fondateur · Vétérinaire · CNAAS · Date déclaration
+```
+
+**Note technique** : utiliser `window.print()` après génération HTML dans un `<div id="print-dossier">` masqué. CSS `@media print` adapté. Pas de dépendance externe.
+
+### 10.3 Référence photo initiale par bête — Feature prévention
+
+> Recommandé par Adj. Chef Mbaye (police) + Dr Fernandez (international)
+
+**Champ à ajouter dans `CYCLE.betes[i]`** :
+```js
+{ id: 'C1-001', race: 'Zébu Sénégalais', poidsEntree: 280,
+  dateIntro: '2026-01-10',
+  photoRef: 'https://wa.me/...' // URL photo WhatsApp ou lien Drive
+}
+```
+
+**Usage** :
+- En cas de vol : fondateur partage `photoRef` avec la gendarmerie (signalement)
+- En cas de litige CNAAS sur identité de l'animal : preuve photographique horodatée
+- Champ optionnel — ne bloque pas la création du cycle si absent
+
+**Implémentation** : ajouter champ `photoRef` dans le formulaire d'ajout de bête dans `_ouvrirModalInit()` — input URL texte optionnel sous le champ race.
