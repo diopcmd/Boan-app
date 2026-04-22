@@ -549,7 +549,7 @@ Vue onglet Guide — contenu adapté par rôle (`window.ROLE`) :
 - Fondateur : checklist cycle, pilotage hebdo, décision vente, limites
 - Gérant : rythme quotidien, urgences, lien vers `guides/gerant.html`
 - RGA : contrôle hebdo/mensuel, lexique, lien vers `guides/rga.html`
-- Fallou : cadence relevés, signaux vente, lien vers `guides/fallou.html`
+- Commerciale : cadence relevés, signaux vente, lien vers `guides/commerciale.html`
 
 ### calcGMQ() — calcul GMQ réel
 Utilise les intervalles réels entre pesées consécutives par bête :
@@ -699,7 +699,7 @@ Mots de passe et SIDs uniquement dans les variables d'environnement Vercel — j
 | `guides/fondateur.html` | Direction | Rôle fondateur, checklist démarrage cycle, pilotage hebdo, décision vente Go/No-Go, limites du modèle, glossaire |
 | `guides/gerant.html` | Gérant terrain | Rythme matin/soir, checklist quotidienne, urgences (symptômes → action), contacts à remplir, FAQ terrain |
 | `guides/rga.html` | RGA | Contrôles hebdo/mensuel, lecture des KPI, lexique économique (IC, GMQ, IRR, burn rate), procédure d'escalade |
-| `guides/fallou.html` | Commerciale | Cadence des relevés de prix, comment lire un prix foirail, signaux de vente, simulateur mental |
+| `guides/commerciale.html` | Commerciale | Cadence des relevés de prix, comment lire un prix foirail, signaux de vente, simulateur mental |
 
 ---
 

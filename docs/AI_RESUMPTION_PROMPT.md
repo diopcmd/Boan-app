@@ -1,4 +1,4 @@
-# Prompt de reprise — Projet BOANR
+﻿# Prompt de reprise — Projet BOANR
 > Colle ce prompt au début d'une nouvelle conversation avec n'importe quelle IA
 > pour reprendre le projet exactement où il en est.
 
@@ -50,7 +50,7 @@ Boan-app/
 │   ├── fondateur.html
 │   ├── gerant.html
 │   ├── rga.html
-│   └── fallou.html
+│   └── commerciale.html
 ├── docs/
 │   ├── DOCUMENTATION_TECHNIQUE.md
 │   ├── AI_RESUMPTION_PROMPT.md (ce fichier)
@@ -178,8 +178,8 @@ Fusionne 7 onglets Sheets avec HISTORY local. Déduplication par clé `type|date
 | `Config_Passwords` | Fondateur | role, pwd_base64, updated_at, login_override |
 | `Config_Cycle` | Fondateur | **A1:S1** — A=dateDebut, B=nbBetes, C=poidsDepart, D=race, E=ration, F=capital, G=objectifPrix, H=budgetSante, I=vétérinaire, J=foirail, K=commission, L=contactUrgence, M=peseeFreq, N=betes(JSON), O=stockLines(JSON), P=dureeMois, **Q=simCharges(JSON)**, **R=prixAlim**, **S=numCycle** |
 | `Config_App` | Fondateur | A=clé, B=valeur — extensible (gmqCible, gmqWarn, poidsCible, poidsVenteMin, tauxMortMax, coutRevientMax, margeParBeteMin, alerteSeuilTreso, sopProtocol, dureeMois, lastFicheDate…) |
-| `Suivi_Marche` | Fallou + Fondateur | Date, Foirail, Bas, Moy, Haut, Vol, Note |
-| `Suivi_Aliments` | Fondateur + RGA + Fallou | Date, Type, Prix/kg — **à créer manuellement** (données ligne 4+) |
+| `Suivi_Marche` | Commerciale + Fondateur | Date, Foirail, Bas, Moy, Haut, Vol, Note |
+| `Suivi_Aliments` | Fondateur + RGA + Commerciale | Date, Type, Prix/kg — **à créer manuellement** (données ligne 4+) |
 
 ---
 
@@ -200,7 +200,7 @@ Fusionne 7 onglets Sheets avec HISTORY local. Déduplication par clé `type|date
 
 ```js
 // Modifie CYCLE.dureeMois localement ET réécrit Config_Cycle!A1:O1 dans les 4 sheets
-// Disponible fondateur / rga / fallou depuis la sidebar
+// Disponible fondateur / rga / commerciale depuis la sidebar
 // Même effet que saveCycle() sur ce seul paramètre
 function updateDureeMois(v) { /* v = 1–60 */ }
 ```
@@ -495,7 +495,7 @@ Gérant tab today :
   Sélecteur fréquence pesée réservé fondateur uniquement
 ```
 
-### Sidebar — structure globale (sans input — évite reset au re-render) — fondateur/rga/fallou — plage 1–60 mois — `updateDureeMois(v)` → `_syncCycle()`
+### Sidebar — structure globale (sans input — évite reset au re-render) — fondateur/rga/commerciale — plage 1–60 mois — `updateDureeMois(v)` → `_syncCycle()`
 - **Rappel pesée** : boutons compacts 7/14/21/30j — **fondateur uniquement** — `updatePeseeFreq(v)` → `_syncCycle()`
 - Les deux contrôles synchronisent `Config_Cycle!A1:O1` dans les 4 sheets — tous les acteurs verront la nouvelle valeur au prochain `loadLiveData`
 - Durée cycle et Rappel pesée sont dans le `sb-body` scrollable (pas dans le footer fixe)
@@ -573,9 +573,9 @@ if (_pendingArch && _pendingArch.dateDebut && SID.fondateur) {
 - Partage WhatsApp synthèse + KPI
 - Export PDF rapport mensuel
 
-### Prix aliments (fondateur / rga / fallou)
+### Prix aliments (fondateur / rga / commerciale)
 - Onglet "Prix aliments" dans Marché — feuille `Suivi_Aliments` (Date, Type, Prix/kg)
-- `loadAlimPrix()` : lit depuis `SID.fondateur || SID.fallou || SID.rga`, filtré par `CYCLE.dateDebut`
+- `loadAlimPrix()` : lit depuis `SID.fondateur || SID.commerciale || SID.rga`, filtré par `CYCLE.dateDebut`
 - Dernier prix par type affiché + historique + rapport mensuel partageable (📤)
 - Formulaire saisie : Date + Type (datalist) + Prix/kg → `doSubmit('alim')`
 

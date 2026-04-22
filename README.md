@@ -83,7 +83,7 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
   - `guides/fondateur.html` — checklist cycle, pilotage hebdo, décision vente, limites du modèle
   - `guides/gerant.html` — rythme quotidien, urgences, contacts à remplir (plastifiable)
   - `guides/rga.html` — contrôle hebdo/mensuel, lexique économique, escalade
-  - `guides/fallou.html` — cadence relevés, lire un prix foirail, signaux vente
+  - `guides/commerciale.html` — cadence relevés, lire un prix foirail, signaux vente
 
 ---
 
@@ -108,7 +108,7 @@ Boan-app/
 │   ├── fondateur.html      Guide PDF imprimable — Direction
 │   ├── gerant.html         Guide PDF imprimable — Gérant terrain
 │   ├── rga.html            Guide PDF imprimable — RGA
-│   └── fallou.html         Guide PDF imprimable — Commerciale
+│   └── commerciale.html    Guide PDF imprimable — Commerciale
 │
 ├── docs/
 │   ├── DOCUMENTATION_TECHNIQUE.md   Architecture et référence développeur
@@ -136,8 +136,8 @@ Boan-app/
 | `Sante_Mortalite` | Gérant + Fondateur | Soins + décès (col G = OUI → bête décédée) |
 | `Hebdomadaire` | Gérant + Fondateur | Bilans hebdomadaires |
 | `KPI_Mensuels` | Fondateur | Trésorerie réelle mensuelle (col H) |
-| `Suivi_Marche` | Fallou + Fondateur | Prix foirail (Date, Foirail, Bas, Moy, Haut) |
-| `Suivi_Aliments` | Fondateur + RGA + Fallou | Prix aliments (Date, Type, Prix/kg) |
+| `Suivi_Marche` | Commerciale + Fondateur | Prix foirail (Date, Foirail, Bas, Moy, Haut) |
+| `Suivi_Aliments` | Fondateur + RGA + Commerciale | Prix aliments (Date, Type, Prix/kg) |
 
 ---
 
@@ -216,4 +216,4 @@ git push origin main
 | [guides/fondateur.html](guides/fondateur.html) | Guide opérationnel PDF — Direction |
 | [guides/gerant.html](guides/gerant.html) | Guide opérationnel PDF — Gérant terrain |
 | [guides/rga.html](guides/rga.html) | Guide opérationnel PDF — RGA |
-| [guides/fallou.html](guides/fallou.html) | Guide opérationnel PDF — Commerciale |
+| [guides/commerciale.html](guides/commerciale.html) | Guide opérationnel PDF — Commerciale |

@@ -491,7 +491,7 @@ Client                          Serveur (/api/auth)
   - fondateur : les 4
   - gerant : gerant + fondateur
   - rga : rga + fondateur
-  - commerciale : fallou + fondateur
+  - commerciale : commerciale + fondateur
 
 ### 8.2 `/api/token.js` (62 lignes)
 

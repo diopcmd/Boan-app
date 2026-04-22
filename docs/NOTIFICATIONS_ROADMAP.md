@@ -1,11 +1,11 @@
 # BOAN — Roadmap Notifications & Sinistres
-> Version 2.0 — Intégralement refondue le 20 Avril 2026
+> Version 2.1 — Audit mis à jour le 22 Avril 2026
 > Statut : **BLOQUÉ — Prérequis métier non satisfaits** (voir section 0)
 > Revue par : Architecte Backend · Expert UX Offline-first · Sécurité OWASP
 >             Expert Email Afrique · Expert Assurance/Droit Sénégalais · Expert Terrain
 
-> **Référence code** : `index.html` ~8 600 lignes, ES5 strict (`var`, pas `const`/`let`/arrow).
-> Commit HEAD : `f4fb2e3`. App en prod : `https://boan-app-ur3x.vercel.app`
+> **Référence code** : `index.html` ~9 030 lignes, ES5 strict (`var`, pas `const`/`let`/arrow).
+> Commit HEAD : `a8bdee3`. App en prod : `https://boan-app-9u5e.vercel.app`
 
 ---
 
@@ -1328,6 +1328,8 @@ Ferme BOAN — [lsGet('cfg_contact_gerant_tel')]
 
 ## 9. Statut actuel
 
+### Prérequis métier (BLOC A)
+
 | Item | Statut |
 |---|---|
 | Vétérinaire contractualisé (Thiès) | ⛔ Non fait — **bloquant absolu** |
@@ -1336,7 +1338,34 @@ Ferme BOAN — [lsGet('cfg_contact_gerant_tel')]
 | Compte SendGrid | ⛔ Non fait |
 | Variables Vercel + GitHub Secrets | ⛔ Non fait |
 | `Notifications_Log` + `Sinistres_CNAAS` | ⬛ Auto-créés au 1er run cron (section 4.1) |
-| **`CYCLE.numCnaas`** | **✅ Implémenté** — modal init + Config_App + Go/No-Go (commit `9766040`) |
-| **`CYCLE.veterinaire`** | **✅ Implémenté** — Config_Cycle col I |
-| **`CYCLE.dateDebut` format ISO** | **✅ Déjà YYYY-MM-DD** — aucune conversion nécessaire |
-| Code BLOC B + C + D | ⬛ En attente des prérequis BLOC A |
+
+### Code frontend — BLOC B (index.html)
+
+| Item | Statut | Détail |
+|---|---|---|
+| `CYCLE.numCnaas` | ✅ **Implémenté** | Modal init + Config_App + Go/No-Go (commit `9766040`) |
+| `CYCLE.veterinaire` | ✅ **Implémenté** | Config_Cycle col I + Go/No-Go |
+| `CYCLE.dateDebut` format ISO | ✅ **Déjà YYYY-MM-DD** | Aucune conversion nécessaire |
+| Sous-onglet « Contacts & Assurance » | ⬛ **Non implémenté** | Aucun champ `cfg_contact_*` dans le code |
+| `safeTextClient()` | ⬛ **Non implémenté** | Fonction absente de index.html |
+| Bannière ⛔ NE PAS ABATTRE dans saisie santé | ⬛ **Non implémenté** | Actuellement : alerte rouge basique + bouton G3 |
+| Alerte photo + alerte N° police absent | ⬛ **Non implémenté** | |
+| `doSubmit('sante')` enrichi (décès=OUI) | ⬛ **Non implémenté** | Pas de `sinistres_ouverts`, `deces_pending`, `online` listener |
+| Modal post-submit décès (boutons tél/WA) | ⬛ **Non implémenté** | Actuellement : simple `showConfirm` |
+| VOL : `beteMultiSelect()` + N° PV bloquant | ⬛ **Non implémenté** | Fonction absente |
+| Dashboard bannière ⛔ sinistre ouvert | ⬛ **Non implémenté** | `lsGet('sinistres_ouverts')` non utilisé |
+| `_checkVetJ1Banners()` + `_checkDecesVetBanners()` | ⬛ **Non implémenté** | Fonctions absentes |
+| `LIVE.sinistres` + `LIVE.notifLog` (Vague 2) | ⬛ **Non implémenté** | Pas dans `loadLiveData()` |
+| `_reconcileSinistresOuverts()` | ⬛ **Non implémenté** | Fonction absente |
+| `viewLiv()` incidents enrichi (section 3.6) | ⬛ **Non implémenté** | Timeline / checkboxes / statut CNAAS absents |
+| `viewLiv()` SOP Véto — bouton « Vét a confirmé » | ⬛ **Non implémenté** | |
+| Badge numérique onglet Livrables | ⬛ **Non implémenté** | |
+
+### Code serveur — BLOC C (API) + BLOC D (GitHub Actions)
+
+| Fichier | Statut |
+|---|---|
+| `/api/cron.js` | ⬛ **Absent** |
+| `/api/notify.js` | ⬛ **Absent** |
+| `.github/workflows/cron-notifications.yml` | ⬛ **Absent** (répertoire `.github` inexistant) |
+| `/api/ai.js`, `/api/auth.js`, `/api/token.js`, `/api/sheets.js`, `/api/change-password.js` | ✅ **Présents** — réutilisables |

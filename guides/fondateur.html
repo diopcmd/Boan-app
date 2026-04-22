@@ -76,7 +76,7 @@
 <h2>🚀 Checklist — Démarrer un nouveau cycle</h2>
 <div class="card">
   <div class="row"><div class="ico">1️⃣</div><div><div class="label">Vérifier la trésorerie disponible</div><div class="desc">Livrables > Trésorerie. Solde suffisant pour capital + 2 mois de charges ?</div></div></div>
-  <div class="row"><div class="ico">2️⃣</div><div><div class="label">Relever le prix aliment du marché actuel</div><div class="desc">Appeler le fournisseur ou vérifier avec Fallou. Prix son de blé + tourteau arachide ce jour.</div></div></div>
+  <div class="row"><div class="ico">2️⃣</div><div><div class="label">Relever le prix aliment du marché actuel</div><div class="desc">Appeler le fournisseur ou vérifier avec la Commerciale. Prix son de blé + tourteau arachide ce jour.</div></div></div>
   <div class="row"><div class="ico">3️⃣</div><div><div class="label">Saisir le nouveau cycle</div><div class="desc">Saisie > Nouveau cycle : race, nb bêtes, capital investi, foirail d'achat, durée prévue, date de début.</div></div></div>
   <div class="row"><div class="ico">4️⃣</div><div><div class="label">Mettre à jour le prix aliment</div><div class="desc">Livrables &gt; Objectifs &gt; Marché &amp; Ration. Saisir prixAlim = prix/kg actuel, mix ration si changé.<br><em>Note : le nombre de bêtes saisi est persisté en cache local ET dans Google Sheets (Config_Cycle col B) — il est restauré instantanément même hors ligne.</em></div></div></div>
   <div class="row"><div class="ico">5️⃣</div><div><div class="label">Vérifier les objectifs du cycle</div><div class="desc">GMQ cible, marge min/bête, plancher tréso. Les adapter si race ou saison différente.</div></div></div>
@@ -92,7 +92,7 @@
   <div class="row"><div class="ico">📈</div><div><div class="label">GMQ dans la cible ?</div><div class="desc">Dashboard > bloc GMQ ou Livrables > KPI. Vert = OK, Orange = surveiller, Rouge = agir.</div></div></div>
   <div class="row"><div class="ico">💵</div><div><div class="label">Trésorerie au-dessus du plancher ?</div><div class="desc">Livrables > Trésorerie. Si sous plancher → ajuster charges ou accélérer vente.</div></div></div>
   <div class="row"><div class="ico">⚠️</div><div><div class="label">Incidents non traités ?</div><div class="desc">Livrables > Incidents. Chaque incident doit être lu et décision prise.</div></div></div>
-  <div class="row"><div class="ico">💹</div><div><div class="label">Cours foirail à jour (Fallou) ?</div><div class="desc">Marché > Prix foirail. Dernier relevé > 7 jours = demander à Fallou de relever.</div></div></div>
+  <div class="row"><div class="ico">💹</div><div><div class="label">Cours foirail à jour (Commerciale) ?</div><div class="desc">Marché > Prix foirail. Dernier relevé > 7 jours = demander à la Commerciale de relever.</div></div></div>
   <div class="row"><div class="ico">⚖️</div><div><div class="label">Pesée à jour ?</div><div class="desc">Dashboard > alerte pesée. Si en retard, relancer le gérant.</div></div></div>
 </div>
 
@@ -103,7 +103,7 @@
   <div class="row"><div class="ico">2️⃣</div><div><div class="label">Vérifier le cours foirail actuel</div><div class="desc">Marché > Prix foirail. Comparer prix moyen actuel vs objectifPrix configuré.</div></div></div>
   <div class="row"><div class="ico">3️⃣</div><div><div class="label">Simuler la marge finale</div><div class="desc">Marché > Simulateur. Tester prix bas / moyen / haut. Valider que marge > margeParBeteMin.</div></div></div>
   <div class="row"><div class="ico">4️⃣</div><div><div class="label">Confirmer les poids individuels</div><div class="desc">Livrables > Bêtes. Toutes les bêtes au-dessus du poidsVenteMin ?</div></div></div>
-  <div class="row"><div class="ico">5️⃣</div><div><div class="label">Déclencher la vente</div><div class="desc">Coordonner avec Fallou pour le foirail, le transporteur, la date.</div></div></div>
+  <div class="row"><div class="ico">5️⃣</div><div><div class="label">Déclencher la vente</div><div class="desc">Coordonner avec la Commerciale pour le foirail, le transporteur, la date.</div></div></div>
   <div class="row"><div class="ico">6️⃣</div><div><div class="label">Clôturer le cycle dans l'app</div><div class="desc">Saisie > Nouveau cycle (bouton clôture). <strong>Formulaire de clôture en 3 blocs</strong> s'ouvre d'abord :<br>
       &nbsp;💰 <strong>Vente</strong> : recette totale (FCFA) + prix moyen par bête — calcule le <em>bénéfice net réel</em>.<br>
       &nbsp;🐄 <strong>Approvisionnement</strong> : région fournisseur, BCS entrée (1–5), contexte (Tabaski, Gamou, etc.).<br>
