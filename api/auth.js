@@ -5,10 +5,10 @@ import { createHmac, createSign, timingSafeEqual } from 'node:crypto';
 
 export default async function handler(req, res) {
   const USERS = {
-    fondateur: { name:'Direction',      pwd: process.env.PWD_FONDATEUR, tabs:['dashboard','saisie','livrables','marche'], sid: process.env.SID_FONDATEUR },
-    gerant:    { name:'Gerant terrain', pwd: process.env.PWD_GERANT,    tabs:['dashboard','saisie'],                      sid: process.env.SID_GERANT    },
-    rga:       { name:'RGA',            pwd: process.env.PWD_RGA,       tabs:['dashboard','livrables'],                   sid: process.env.SID_RGA       },
-    fallou:    { name:'Commerciale',    pwd: process.env.PWD_FALLOU,    tabs:['dashboard','marche','guide'],               sid: process.env.SID_FALLOU    },
+    fondateur: { name:'Direction',      pwd: process.env.PWD_FONDATEUR, tabs:['dashboard','saisie','livrables','marche','guide'], sid: process.env.SID_FONDATEUR },
+    gerant:    { name:'Gerant terrain', pwd: process.env.PWD_GERANT,    tabs:['dashboard','saisie','guide'],                      sid: process.env.SID_GERANT    },
+    rga:       { name:'RGA',            pwd: process.env.PWD_RGA,       tabs:['dashboard','livrables','marche','guide'],          sid: process.env.SID_RGA       },
+    fallou:    { name:'Commerciale',    pwd: process.env.PWD_FALLOU,    tabs:['dashboard','marche','guide'],                      sid: process.env.SID_FALLOU    },
   };
 
   // R-03 : restreindre CORS — autoriser les domaines Vercel légitimes + localhost dev

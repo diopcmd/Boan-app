@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     let response, data;
 
     if (action === 'read') {
-      response = await fetch(baseUrl, { headers });
+      response = await fetch(baseUrl + '?valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING', { headers });
       data = await response.json();
       return res.status(200).json({ ok: true, values: data.values || [] });
 
@@ -66,8 +66,11 @@ export default async function handler(req, res) {
 let _tokenCache = { token: null, exp: 0 };
 async function getGoogleToken() {
   if (_tokenCache.token && Date.now() < _tokenCache.exp - 60000) return _tokenCache.token;
-  const privateKey = process.env.SA_PRIVATE_KEY.replace(/\\n/g, '\n');
+  const pk = process.env.SA_PRIVATE_KEY;
+  if (!pk) return null;
+  const privateKey = pk.replace(/\\n/g, '\n');
   const clientEmail = process.env.SA_CLIENT_EMAIL;
+  if (!clientEmail) return null;
   const now = Math.floor(Date.now() / 1000);
   const header  = b64u(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
   const payload = b64u(JSON.stringify({ iss:clientEmail, scope:'https://www.googleapis.com/auth/spreadsheets', aud:'https://oauth2.googleapis.com/token', exp:now+3600, iat:now }));

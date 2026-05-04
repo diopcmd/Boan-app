@@ -27,8 +27,15 @@ export default async function handler(req, res) {
   if (newLogin && !/^[a-z0-9_]{3,}$/.test(newLogin)) return res.status(400).json({ error: 'Identifiant invalide (3+ caractères, minuscules/chiffres/_)' });
   if (!founderPassword) return res.status(400).json({ error: 'Mot de passe fondateur requis' });
 
-  // 3. Re-vérifier le mot de passe fondateur
-  if (founderPassword !== process.env.PWD_FONDATEUR) {
+  // 3. Re-vérifier le mot de passe fondateur (comparaison en temps constant — protection timing attack)
+  const _fpExpected = process.env.PWD_FONDATEUR || '';
+  const _fpB1 = Buffer.from(String(founderPassword));
+  const _fpB2 = Buffer.from(String(_fpExpected));
+  const _fpMax = Math.max(_fpB1.length, _fpB2.length);
+  const _fpPad1 = Buffer.concat([_fpB1, Buffer.alloc(_fpMax - _fpB1.length)]);
+  const _fpPad2 = Buffer.concat([_fpB2, Buffer.alloc(_fpMax - _fpB2.length)]);
+  const _fpMatch = timingSafeEqual(_fpPad1, _fpPad2) && _fpB1.length === _fpB2.length;
+  if (!_fpMatch) {
     return res.status(401).json({ error: 'Mot de passe fondateur incorrect' });
   }
 
@@ -110,8 +117,11 @@ export default async function handler(req, res) {
 let _tokenCache = { token: null, exp: 0 };
 async function getGoogleToken() {
   if (_tokenCache.token && Date.now() < _tokenCache.exp - 60000) return _tokenCache.token;
-  const privateKey = process.env.SA_PRIVATE_KEY.replace(/\\n/g, '\n');
+  const pk = process.env.SA_PRIVATE_KEY;
+  if (!pk) return null;
+  const privateKey = pk.replace(/\\n/g, '\n');
   const clientEmail = process.env.SA_CLIENT_EMAIL;
+  if (!clientEmail) return null;
   const now = Math.floor(Date.now() / 1000);
   const h = b64u(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
   const p = b64u(JSON.stringify({ iss:clientEmail, scope:'https://www.googleapis.com/auth/spreadsheets', aud:'https://oauth2.googleapis.com/token', exp:now+3600, iat:now }));
