@@ -16,7 +16,7 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
 | Fondateur / Direction | `fondateur` | Dashboard · Saisie · Livrables · Marché · Guide | Lecture/écriture total, configuration, clôture cycle |
 | Gérant terrain | `gerant` | Dashboard · Saisie · Guide | Saisies quotidiennes terrain |
 | RGA | `rga` | Dashboard · Livrables · Marché · Guide | Analyse, contrôle, recommandations |
-| Commerciale | `fallou` | Dashboard · Marché · Guide | Veille prix foirail et aliments |
+| Commerciale | `commerciale` | Dashboard · Marché · Guide | Veille prix foirail et aliments |
 
 ---
 
