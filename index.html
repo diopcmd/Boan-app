@@ -1258,7 +1258,8 @@ var TABLE_RANGES = {
   'KPI_Mensuels':       { start: 4, end: 50  },
   'KPI_Hebdo':          { start: 4, end: 50  },
   'Historique_Cycles':  { start: 2, end: 200 },  // ligne 1 = en-têtes, données à partir de 2
-  'SOP_Protocol':       { start: 5, end: 50  }   // vitrine SOP : structure + statut auto
+  'SOP_Protocol':       { start: 5, end: 50  },  // vitrine SOP : structure + statut auto
+  'Ventes_Betes':       { start: 4, end: 500 }   // log ventes — auto-créé si absent
 };
 
 function appendRow(sid, range, vals) {
@@ -2113,6 +2114,21 @@ function _autoFillTel(nomVal) {
     // Mettre à jour le champ tel directement sans r() (évite perte de focus sur input acheteur)
     var telEl = document.querySelector('input[type="tel"]');
     if (telEl) telEl.value = match.tel;
+  }
+}
+// Mise à jour du total vente sans reconstruire le DOM (évite fuite du clavier mobile)
+function _updateVenteTotal() {
+  var _p  = parseFloat(S.fv.poids)  || 0;
+  var _px = parseFloat(S.fv.prixKg) || 0;
+  var _t  = (_p && _px) ? Math.round(_p * _px) : 0;
+  var box = document.getElementById('fv-total-box');
+  if (!box) return;
+  if (_t > 0) {
+    box.style.display = 'flex';
+    var numEl = document.getElementById('fv-total-num');
+    if (numEl) numEl.textContent = fmt(_t);
+  } else {
+    box.style.display = 'none';
   }
 }
 
@@ -8874,14 +8890,14 @@ function viewMarche(){
           +'</div>'
           +'<div class="frow">'
           +'<div class="fg"><label>Poids vente (kg)</label>'
-          +'<input type="number" inputmode="decimal" placeholder="ex: 385" value="'+(fv.poids||'')+'" oninput="S.fv.poids=this.value;r()"></div>'
+          +'<input type="number" inputmode="decimal" placeholder="ex: 385" value="'+(fv.poids||'')+'" oninput="S.fv.poids=this.value;_updateVenteTotal()"></div>'
           +'<div class="fg"><label>Prix/kg (FCFA)</label>'
-          +'<input type="number" inputmode="decimal" placeholder="ex: '+(CYCLE.objectifPrix||2000)+'" value="'+(fv.prixKg||'')+'" oninput="S.fv.prixKg=this.value;r()"></div>'
+          +'<input type="number" inputmode="decimal" placeholder="ex: '+(CYCLE.objectifPrix||2000)+'" value="'+(fv.prixKg||'')+'" oninput="S.fv.prixKg=this.value;_updateVenteTotal()"></div>'
           +'</div>'
-          +(_vTotLive ? '<div style="background:#1a3a1a;border-radius:8px;padding:12px 14px;margin-bottom:13px;display:flex;justify-content:space-between;align-items:center">'
-            +'<span style="font-size:12px;color:#88aa88">Prix total</span>'
-            +'<span style="font-size:22px;font-weight:700;color:#C8A06A">'+fmt(_vTotLive)+' <span style="font-size:13px">FCFA</span></span>'
-            +'</div>' : '')
+          +'<div id="fv-total-box" style="background:#1a3a1a;border-radius:8px;padding:12px 14px;margin-bottom:13px;display:'+(_vTotLive?'flex':'none')+';justify-content:space-between;align-items:center">'
+          +'<span style="font-size:12px;color:#88aa88">Prix total</span>'
+          +'<span style="font-size:22px;font-weight:700;color:#C8A06A"><span id="fv-total-num">'+(_vTotLive?fmt(_vTotLive):'—')+'</span> <span style="font-size:13px">FCFA</span></span>'
+          +'</div>'
           +'<div class="fg"><label>Nom acheteur</label>'
           +'<input type="search" list="dl-acheteurs" autocomplete="off" placeholder="ex: Mamadou Diallo" value="'+(fv.acheteur||'')+'" oninput="S.fv.acheteur=this.value;_autoFillTel(this.value)">'
           +'<datalist id="dl-acheteurs"></datalist></div>'
