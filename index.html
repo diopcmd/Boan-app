@@ -5450,7 +5450,7 @@ function buildSidebar(){
           }).length;
           return '<div class="sb-row"><span class="sb-lbl">Incidents cette semaine</span><span class="sb-val '+(nbInc>0?'kval-crit':'kval-ok')+'">'+nbInc+'</span></div>';
         })()
-        +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'kval-ok':MOCK.gmq>=(CYCLE.gmqWarn||0.8)?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'kval-ok':MOCK.gmq>0?'kval-warn':'kval-warn')+'">'+(MOCK.gmq>0?MOCK.gmq:'—')+' kg/j</span></div>'
         +(function(){var _pFw=CYCLE.peseeFreq||30;var _pJw=joursSince('pesee');var _pClw=_pJw>=999?'kval-crit':_pJw>_pFw?'kval-crit':_pJw>_pFw-3?'kval-warn':'kval-ok';var _remw=_pFw-_pJw;var _pTxw=_pJw>=999?'\u2717 Aucune':_pJw>_pFw?'\u2717 Retard '+(_pJw-_pFw)+'j':_pJw>_pFw-3?(_remw===0?'\u26a0 Aujourd\'hui !':_remw===1?'\u26a0 Demain !':'\u26a0 Dans '+_remw+'j'):'\u2713 '+_pJw+'j / '+_pFw+'j';return '<div class="sb-row"><span class="sb-lbl">Pes\u00e9e (/'+_pFw+'j)</span><span class="sb-val '+_pClw+'">'+_pTxw+'</span></div>';})()
         +(function(){
           var _n3=_nowDakar();
@@ -5494,7 +5494,7 @@ function buildSidebar(){
             var p=h.date.split('/'); if(p.length!==3) return false;
             return new Date(p[2],p[1]-1,p[0]) >= _moisDeb2;
           }).length;
-          var _mort=Math.max(0,(CYCLE.nbBetes||4)-MOCK.betes);
+          var _mort=(LIVE.deceased||[]).length; // décès réels uniquement
           var _incCl=_nbIncMois===0?'kval-ok':_nbIncMois<=2?'kval-warn':'kval-crit';
           return '<div class="sb-row"><span class="sb-lbl">Incidents ce mois</span><span class="sb-val '+_incCl+'">'+_nbIncMois+'</span></div>'
             +'<div class="sb-row"><span class="sb-lbl">Décès cycle</span><span class="sb-val '+(_mort===0?'kval-ok':'kval-crit')+'">'+_mort+'</span></div>';
@@ -5537,8 +5537,8 @@ function buildSidebar(){
         +'</div>';
     } else {
       body='<div class="sb-card">'
-        +'<div class="sb-row"><span class="sb-lbl">'+_gmqLabel()+'</span><span class="sb-val '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'kval-ok':MOCK.gmq>=(CYCLE.gmqWarn||0.8)?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
-        +(function(){ var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0; var _tmRga=CYCLE.tauxMortMax||3; return '<div class="sb-row"><span class="sb-lbl">Mortalité</span><span class="sb-val '+(mort===0?'kval-ok':mort<=_tmRga?'kval-warn':'kval-crit')+'">'+mort+'%</span></div>'; })()
+        +'<div class="sb-row"><span class="sb-lbl">'+_gmqLabel()+'</span><span class="sb-val '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'kval-ok':MOCK.gmq>0?'kval-warn':'kval-warn')+'">'+(MOCK.gmq>0?MOCK.gmq:'—')+' kg/j</span></div>'
+        +(function(){ var mort=CYCLE.nbBetes>0?Math.round((LIVE.deceased||[]).length/(CYCLE.nbBetes||4)*100):0; var _tmRga=CYCLE.tauxMortMax||3; return '<div class="sb-row"><span class="sb-lbl">Mortalité</span><span class="sb-val '+(mort===0?'kval-ok':mort<=_tmRga?'kval-warn':'kval-crit')+'">'+mort+'%</span></div>'; })()
         +(function(){ var nbSop=HISTORY.filter(function(h){return h.type==='sop';}).length; var sem=calcSemaine(); var joursTotal=Math.max(sem*7,1); var pct=Math.min(100,Math.round(nbSop/joursTotal*100*7)); return '<div class="sb-row"><span class="sb-lbl">Conformité SOP</span><span class="sb-val '+(pct>=80?'kval-ok':pct>=50?'kval-warn':'kval-crit')+'">'+pct+'%</span></div>'; })()+(function(){ var freq=CYCLE.peseeFreq||30; var _dernP=0; var hp=HISTORY.filter(function(h){return h.type==='pesee';}); if(hp.length){var p=hp[0].date.split('/');if(p.length===3)_dernP=(function(){var _nd=_nowDakar();return Math.round((new Date(_nd.year,_nd.month-1,_nd.day)-new Date(p[2],p[1]-1,p[0]))/86400000);})();} var pesOk=_dernP<=freq; return '<div class="sb-row"><span class="sb-lbl">Dernière pesée</span><span class="sb-val '+(pesOk?'kval-ok':'kval-crit')+'">'+(_dernP===0?'Aucune':_dernP+' jours')+'</span></div>'; })()
     }
 
@@ -6060,7 +6060,7 @@ function viewDash(){
       :'')
     +'<div class="stitle">Alertes</div>'
     +(function(){
-      var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;
+      var mort=CYCLE.nbBetes>0?Math.round((LIVE.deceased||[]).length/(CYCLE.nbBetes||4)*100):0;
       var _tmSeuil=CYCLE.tauxMortMax||3;
       if(mort===0) return '<div class="al al-g">✅ Mortalité 0% — aucune perte ce cycle</div>';
       if(mort<=_tmSeuil) return '<div class="al al-o">⚠️ Mortalité '+mort+'% — surveiller le troupeau (seuil : '+_tmSeuil+'%)</div>';
@@ -6096,6 +6096,7 @@ function viewDash(){
         }
       }
       // Fallback MOCK
+      if(!MOCK.gmq||MOCK.gmq<=0) return '<div class="al al-o">⏳ GMQ — aucune pesée enregistrée ce cycle</div>';
       return '<div class="al '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'al-g':MOCK.gmq>=(CYCLE.gmqWarn||0.8)?'al-o':'al-r')+'">GMQ '+MOCK.gmq+' kg/j — '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'au-dessus de la cible':'en dessous de la cible')+'</div>';
     })()
 
@@ -7622,8 +7623,8 @@ function viewLiv(){
         +'</div>';
     }
     var _gc=CYCLE.gmqCible||1, _gw=CYCLE.gmqWarn||0.8;
-    var _gmqBadge=MOCK.gmq>=_gc?'✅ Actuel '+MOCK.gmq+' ≥ cible':MOCK.gmq>=_gw?'⚠️ Actuel '+MOCK.gmq+' < cible':'🔴 Actuel '+MOCK.gmq+' — sous seuil';
-    var _betesMort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;
+    var _gmqBadge=MOCK.gmq<=0?'⏳ Aucune pesée':(MOCK.gmq>=_gc?'✅ Actuel '+MOCK.gmq+' ≥ cible':MOCK.gmq>=_gw?'⚠️ Actuel '+MOCK.gmq+' < cible':'🔴 Actuel '+MOCK.gmq+' — sous seuil');
+    var _betesMort=CYCLE.nbBetes>0?Math.round((LIVE.deceased||[]).length/(CYCLE.nbBetes||4)*100):0;
     var _mortBadge=_betesMort<=(CYCLE.tauxMortMax||3)?'✅ '+_betesMort+'% ≤ seuil alerte':'🔴 '+_betesMort+'% > seuil';
     var _tresoSeuil=CYCLE.alerteSeuilTreso||100000;
     var _tresoBadge=MOCK.treso>=_tresoSeuil?'✅ '+Math.round(MOCK.treso/1000)+'k FCFA > plancher':'🔴 '+Math.round(MOCK.treso/1000)+'k FCFA — sous plancher';
@@ -9075,7 +9076,7 @@ function viewGuide(){
     view += '<div style="background:#0a1a0a;border:1px solid #2a4a2a;border-radius:12px;padding:14px;margin-bottom:14px">'
       + '<div style="font-size:11px;color:#C8A06A;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;font-weight:700">📍 Santé du cycle en ce moment</div>'
       + '<div style="display:flex;flex-wrap:wrap;gap:8px">'
-      + '<div style="background:#0a150a;border-radius:8px;padding:7px 12px;font-size:12px;color:'+(MOCK.gmq>=(CYCLE.gmqCible||1)?'#4caf50':MOCK.gmq>=(CYCLE.gmqWarn||0.8)?'#ff9800':'#f44336')+'">GMQ '+MOCK.gmq+' kg/j</div>'
+      + '<div style="background:#0a150a;border-radius:8px;padding:7px 12px;font-size:12px;color:'+(MOCK.gmq>=(CYCLE.gmqCible||1)?'#4caf50':MOCK.gmq>0?'#ff9800':'#88aa88')+'">GMQ '+(MOCK.gmq>0?MOCK.gmq:'—')+' kg/j</div>'
       + '<div style="background:#0a150a;border-radius:8px;padding:7px 12px;font-size:12px;color:'+(MOCK.treso>=(CYCLE.alerteSeuilTreso||100000)*2?'#4caf50':MOCK.treso>=(CYCLE.alerteSeuilTreso||100000)?'#ff9800':'#f44336')+'">Tréso '+Math.round(MOCK.treso/1000)+'k FCFA</div>'
       + '<div style="background:#0a150a;border-radius:8px;padding:7px 12px;font-size:12px;color:#88aa88">'+_semRestFond+' sem. restantes</div>'
       + (_dpjG !== null && _dpjG > (CYCLE.peseeFreq||30) ? '<div style="background:#2e1a0a;border-radius:8px;padding:7px 12px;font-size:12px;color:#ff9800">⚖️ Pesée overdue ('+_dpjG+' j)</div>' : '')
@@ -9119,7 +9120,7 @@ function viewGuide(){
     view += '<div style="background:#0a1a0a;border:1px solid #2a4a2a;border-radius:12px;padding:14px;margin-bottom:14px">'
       + '<div style="font-size:11px;color:#88aa88;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;font-weight:700">📍 Contrôle qualité données</div>'
       + '<div style="display:flex;flex-wrap:wrap;gap:8px">'
-      + '<div style="background:#0a150a;border-radius:8px;padding:7px 12px;font-size:12px;color:'+(MOCK.gmq>=(CYCLE.gmqCible||1)?'#4caf50':MOCK.gmq>=(CYCLE.gmqWarn||0.8)?'#ff9800':'#f44336')+'">GMQ '+MOCK.gmq+' kg/j</div>'
+      + '<div style="background:#0a150a;border-radius:8px;padding:7px 12px;font-size:12px;color:'+(MOCK.gmq>=(CYCLE.gmqCible||1)?'#4caf50':MOCK.gmq>0?'#ff9800':'#88aa88')+'">GMQ '+(MOCK.gmq>0?MOCK.gmq:'—')+' kg/j</div>'
       + (_dernBilanRga ? '<div style="background:#0a150a;border-radius:8px;padding:7px 12px;font-size:12px;color:#88aa88">Bilan : '+_dernBilanRga+'</div>'
          : '<div style="background:#2e1010;border-radius:8px;padding:7px 12px;font-size:12px;color:#f44336">Aucun bilan reçu</div>')
       + (_dpjG !== null && _dpjG > (CYCLE.peseeFreq||30) ? '<div style="background:#2e1a0a;border-radius:8px;padding:7px 12px;font-size:12px;color:#ff9800">⚖️ Pesée overdue ('+_dpjG+' j)</div>' : '')
