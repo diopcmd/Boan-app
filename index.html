@@ -8239,7 +8239,9 @@ function viewMarche(){
     var cycleMois = (S.simMois !== undefined && S.simMois !== null) ? S.simMois : (CYCLE.dureeMois || 8);
 
     // ── État — valeurs par défaut réalistes marché sénégalais ──
-    var nb      = S.sn  !== null && S.sn  !== undefined ? S.sn  : (CYCLE.nbBetes||4);
+    // nb : priorité S.sn (saisi manuellement) → MOCK.betes (actuel = initial − décédées − vendues) → CYCLE.nbBetes
+    var _nbActifSim = MOCK.betes || CYCLE.nbBetes || 4;
+    var nb      = S.sn  !== null && S.sn  !== undefined ? S.sn  : _nbActifSim;
     var sp      = S.sp  !== null && S.sp  !== undefined ? S.sp  : (CYCLE.poidsDepart ? Math.round(CYCLE.poidsDepart*1.5) : 420); // poids vente ≈ 1.5× départ
     var _lastLiveMoy = (function(){ var _e=_livePrixMax(); return _e?_e.moy:0; })();
     var px      = S.spx !== null && S.spx !== undefined ? S.spx : (_lastLiveMoy || CYCLE.objectifPrix || 2000);
@@ -8358,6 +8360,14 @@ function viewMarche(){
     }
 
     view = _depRealBanner
+
+    // Badge bêtes vendues (si applicable)
+    + (LIVE.sold && LIVE.sold.length
+      ? '<div style="background:#1a2e1a;border:1px solid #2d6a2d;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#88aa88;display:flex;justify-content:space-between;align-items:center">'
+        + '<span>🐄 Bêtes restantes à vendre</span>'
+        + '<span style="font-weight:700;color:#C8A06A">'+_nbActifSim+' <span style="font-weight:400;color:#7a9a7a">('+LIVE.sold.length+' déjà vendues)</span></span>'
+        + '</div>'
+      : '')
 
     // ── Durée cycle simulée — stepper ──
     + '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;margin-bottom:10px;background:#1a2e1a;border-radius:10px;border:1px solid #2a4a2a">'
