@@ -2108,7 +2108,12 @@ function _rebuildAcheteurList() {
 }
 function _autoFillTel(nomVal) {
   var match = _getAcheteurs().filter(function(a){ return a.nom === nomVal; })[0];
-  if (match && match.tel && !S.fv.tel) { S.fv.tel = match.tel; r(); }
+  if (match && match.tel && !S.fv.tel) {
+    S.fv.tel = match.tel;
+    // Mettre à jour le champ tel directement sans r() (évite perte de focus sur input acheteur)
+    var telEl = document.querySelector('input[type="tel"]');
+    if (telEl) telEl.value = match.tel;
+  }
 }
 
 function _submitActual(type) {
@@ -2249,8 +2254,12 @@ function _submitActual(type) {
             _saveAcheteur(f.acheteur, f.tel||'');
             // Rebuild la datalist pour exclure la bête vendue
             rebuildBeteList();
-            // Écrire la nouvelle tréso dans KPI_Mensuels
-            return kpiAppend([td,'VENTE_'+f.id,'1','','','','',MOCK.treso,'','','Vente '+f.id+' '+fmt(_vTotal)+' FCFA']);
+            // Écrire la nouvelle tréso dans KPI_Mensuels (non-critique — échec ignoré)
+            return kpiAppend([td,'VENTE_'+f.id,'1','','','','',MOCK.treso,'','','Vente '+f.id+' '+fmt(_vTotal)+' FCFA'])
+              .then(function(kpiRes){
+                if(!kpiRes.ok) console.warn('[vente] kpiAppend non-critique ignoré',kpiRes.err);
+                return {ok:true};
+              });
           }
           return res;
         });
@@ -7454,36 +7463,36 @@ function viewLiv(){
     var _vCash  = _vList.filter(function(v){ return v.mode==='CASH'; }).reduce(function(s,v){ return s+v.total; }, 0);
     var _vMM    = _vList.filter(function(v){ return v.mode==='MOBILE_MONEY'; }).reduce(function(s,v){ return s+v.total; }, 0);
     var _vCred  = _vList.filter(function(v){ return v.mode==='CREDIT'; }).reduce(function(s,v){ return s+v.total; }, 0);
-    view = '<div class="card" style="margin-bottom:12px">'
+    view = (_vList.length === 0
+      ? '<div class="card" style="text-align:center;color:#88aa88;padding:30px">Aucune vente enregistrée ce cycle.</div>'
+      : '<div class="card" style="margin-bottom:12px">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
       +'<div><div style="font-size:18px;font-weight:700;color:#4caf50">'+fmt(_vTotal)+' <span style="font-size:12px;color:#88aa88">FCFA</span></div>'
-      +'<div style="font-size:11px;color:#7a9a7a">'+_vList.length+' bête'+('>1'?'s':'')+' vendue'+('>1'?'s':'')+' ce cycle</div></div>'
+      +'<div style="font-size:11px;color:#7a9a7a">'+_vList.length+' bête'+(_vList.length>1?'s':'')+' vendue'+(_vList.length>1?'s':'')+' ce cycle</div></div>'
       +'<div style="text-align:right;font-size:11px;color:#88aa88">'
       +(_vCash?'Cash : <strong>'+fmt(_vCash)+'</strong><br>':'')
       +(_vMM?'Mobile : <strong>'+fmt(_vMM)+'</strong><br>':'')
       +(_vCred?'Crédit : <strong style="color:#ff9800">'+fmt(_vCred)+'</strong>':'')
       +'</div></div>'
       +'</div>'
-      +(_vList.length === 0
-        ? '<div class="card" style="text-align:center;color:#88aa88;padding:30px">Aucune vente enregistrée ce cycle.</div>'
-        : '<div class="card" style="padding:0;overflow:hidden">'
-          +'<table class="tw" style="font-size:12px">'
-          +'<thead><tr><th>Date</th><th>Bête</th><th>Race</th><th>Poids</th><th>Prix/kg</th><th>Total</th><th>Acheteur</th><th>Mode</th><th>Contexte</th></tr></thead>'
-          +'<tbody>'
-          +_vList.slice().reverse().map(function(v){
-            return '<tr>'
-              +'<td>'+v.date+'</td>'
-              +'<td style="color:#C8A06A;font-weight:700">'+v.id+'</td>'
-              +'<td>'+v.race+'</td>'
-              +'<td style="text-align:right">'+v.poids+' kg</td>'
-              +'<td style="text-align:right">'+fmt(v.prixKg)+'</td>'
-              +'<td style="text-align:right;color:#4caf50;font-weight:700">'+fmt(v.total)+'</td>'
-              +'<td>'+_escHtml(v.acheteur)+(v.tel?'<div style="font-size:10px;color:#7a9a7a">'+_escHtml(v.tel)+'</div>':'')+'</td>'
-              +'<td>'+(_modeLabel[v.mode]||v.mode)+'</td>'
-              +'<td>'+(_ctxLabel[v.ctx]||v.ctx)+'</td>'
-              +'</tr>';
-          }).join('')
-          +'</tbody></table></div>'
+      +'<div class="card" style="padding:0;overflow:hidden">'
+        +'<table class="tw" style="font-size:12px">'
+        +'<thead><tr><th>Date</th><th>Bête</th><th>Race</th><th>Poids</th><th>Prix/kg</th><th>Total</th><th>Acheteur</th><th>Mode</th><th>Contexte</th></tr></thead>'
+        +'<tbody>'
+        +_vList.slice().reverse().map(function(v){
+          return '<tr>'
+            +'<td>'+v.date+'</td>'
+            +'<td style="color:#C8A06A;font-weight:700">'+v.id+'</td>'
+            +'<td>'+v.race+'</td>'
+            +'<td style="text-align:right">'+v.poids+' kg</td>'
+            +'<td style="text-align:right">'+fmt(v.prixKg)+'</td>'
+            +'<td style="text-align:right;color:#4caf50;font-weight:700">'+fmt(v.total)+'</td>'
+            +'<td>'+_escHtml(v.acheteur)+(v.tel?'<div style="font-size:10px;color:#7a9a7a">'+_escHtml(v.tel)+'</div>':'')+'</td>'
+            +'<td>'+(_modeLabel[v.mode]||v.mode)+'</td>'
+            +'<td>'+(_ctxLabel[v.ctx]||v.ctx)+'</td>'
+            +'</tr>';
+        }).join('')
+        +'</tbody></table></div>'
       );
   } else if(S.sub==='gonogo'){
     var ggVeto  = !!(CYCLE.veterinaire && CYCLE.veterinaire.trim());
@@ -8773,6 +8782,8 @@ function viewMarche(){
   } else if(S.sub==='vente'){
     // ── Vente de bête(s) ──
     _rebuildAcheteurList();
+    // Pré-remplir prixKg avec l'objectif si vide (cohérence state/affichage)
+    if (!S.fv.prixKg && CYCLE.objectifPrix) S.fv.prixKg = String(CYCLE.objectifPrix);
     var fv = S.fv;
     var _tdV = fv.date || todayISO();
     // Bêtes actives (non décédées, non vendues)
@@ -8830,7 +8841,7 @@ function viewMarche(){
           +'<div class="fg"><label>Poids vente (kg)</label>'
           +'<input type="number" inputmode="decimal" placeholder="ex: 385" value="'+(fv.poids||'')+'" oninput="S.fv.poids=this.value;r()"></div>'
           +'<div class="fg"><label>Prix/kg (FCFA)</label>'
-          +'<input type="number" inputmode="decimal" placeholder="ex: 2000" value="'+(fv.prixKg||(_vPxLive?String(_vPxLive):''))+'" oninput="S.fv.prixKg=this.value;r()"></div>'
+          +'<input type="number" inputmode="decimal" placeholder="ex: '+(CYCLE.objectifPrix||2000)+'" value="'+(fv.prixKg||'')+'" oninput="S.fv.prixKg=this.value;r()"></div>'
           +'</div>'
           +(_vTotLive ? '<div style="background:#1a3a1a;border-radius:8px;padding:12px 14px;margin-bottom:13px;display:flex;justify-content:space-between;align-items:center">'
             +'<span style="font-size:12px;color:#88aa88">Prix total</span>'
@@ -9021,7 +9032,9 @@ function viewGuide(){
       ['✅','Lire le Go/No-Go','Livrables > Go/No-Go — tous les feux verts requis.'],
       ['💹','Comparer marché vs objectif','Marché > Prix foirail — cours actuel vs objectifPrix.'],
       ['🧮','Simuler la marge finale','Marché > Simulateur — ajuster le prix de vente visé.'],
-      ['📜','Archiver le cycle','Saisie > Clôturer — snapshot automatique dans Cycles.'],
+      ['�','Enregistrer la vente','Marché > 💚 Vente — sélectionner la bête, saisir le prix/kg et l\'acheteur.'],
+      ['💰','Contrôler les ventes','Livrables > 💰 Ventes — historique complet, récap Cash/Mobile/Crédit.'],
+      ['�📜','Archiver le cycle','Saisie > Clôturer — snapshot automatique dans Cycles.'],
     ]);
     view += _card('⚙️','Réglages — quand les réviser',[
       ['📦','Prix aliment','Chaque semaine si le marché bouge. Livrables > Objectifs > Marché.'],
@@ -9054,7 +9067,8 @@ function viewGuide(){
     ]);
     view += _card('📆','Contrôle mensuel',[
       ['🧮','Préparer rapport mensuel aliments','Marché > Prix aliments > bouton Rapport mensuel.'],
-      ['📜','Comparer avec cycle précédent','Livrables > Cycles — historique archivé.'],
+      ['�','Audit des ventes du cycle','Livrables > 💰 Ventes — vérifier dates, prix/kg, acheteurs, modes de paiement.'],
+      ['�📜','Comparer avec cycle précédent','Livrables > Cycles — historique archivé.'],
       ['💰','Coût de revient vs objectif','Livrables > KPI — colonne Coût / kg gain vs coutRevientMax.'],
     ]);
     view += _card('🏁','Préparer une recommandation de vente',[
@@ -9104,6 +9118,12 @@ function viewGuide(){
       ['📈','Croiser avec le signal poids','Dashboard — GMQ en plateau ou décroissant depuis 2 pesées = signal vente.'],
       ['🧮','Simuler la marge','Marché > Simulateur — essayer prix bas / moyen / haut. Partager le résultat.'],
       ['📤','Envoyer le rapport','Marché > Simulateur > bouton Partager.'],
+    ]);
+    view += _card('💚','Enregistrer la vente directement',[
+      ['1️⃣','Aller dans Marché > 💚 Vente','Sélectionner la bête à vendre (poids pré-rempli depuis la dernière pesée).'],
+      ['2️⃣','Saisir le prix/kg négocié','Le total s\'affiche automatiquement en or.'],
+      ['3️⃣','Renseigner l\'acheteur','Nom, téléphone (mémorisé pour la prochaine vente), mode de paiement, contexte (Tabaski, Direct…).'],
+      ['✅','Confirmer — la bête est retirée du troupeau','Elle disparaît de tous les formulaires. La tréso est créditée immédiatement.'],
     ]);
     view += _card('🏁','Signaux pour déclencher l\'alerte vente',[
       ['⚖️','Poids moyen ≥ poids cible','Bêtes prêtes biologiquement. Voir Dashboard > Pesées.'],
