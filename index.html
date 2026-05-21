@@ -603,7 +603,7 @@ function rebuildBeteList() {
   var beteIds = (CYCLE.betes&&CYCLE.betes.length
     ? CYCLE.betes.map(function(b){return b.id;})
     : (LIVE.beteIds||[]))
-    .filter(function(id){ return (LIVE.deceased||[]).indexOf(id) === -1; });
+    .filter(function(id){ return (LIVE.deceased||[]).indexOf(id) === -1 && (LIVE.sold||[]).indexOf(id) === -1; });
   var dl = document.getElementById('bete-dl-global');
   if(!dl){ dl=document.createElement('datalist'); dl.id='bete-dl-global'; document.body.appendChild(dl); }
   dl.innerHTML = beteIds.map(function(id){ return '<option value="'+id+'">'; }).join('');
@@ -1012,8 +1012,8 @@ var MODAL = { open:false, step:1, data:{} };
 // Confirm dialog
 var CONFIRM = { open:false, msg:'', cb:null };
 
-function showConfirm(msg, cb) { CONFIRM = {open:true, msg:msg, cb:cb}; r(); }
-function doConfirm(ok) { var cb=CONFIRM.cb; CONFIRM={open:false,msg:'',cb:null}; r(); if(ok&&cb) cb(); }
+function showConfirm(msg, cb, variant) { CONFIRM = {open:true, msg:msg, cb:cb, variant:variant||''}; r(); }
+function doConfirm(ok) { var cb=CONFIRM.cb; CONFIRM={open:false,msg:'',cb:null,variant:''}; r(); if(ok&&cb) cb(); }
 
 var SB = { open:false, tab:'today', closing:false, _freqDone:false };
 
@@ -1086,7 +1086,8 @@ var S = {
   _cycleExpanded: {},
   selectedBete: null,
   _donePesee:[], _doneSante:[], _doneInc:[],
-  _sopSyncDone: false
+  _sopSyncDone: false,
+  fv:{date:'',id:'',race:'',poids:'',prixKg:'',acheteur:'',tel:'',mode:'CASH',ctx:'DIRECT',notes:''}  // formulaire vente
 };
 
 function fmt(n) { return new Intl.NumberFormat('fr-FR').format(Math.round(n)); }
@@ -1432,7 +1433,7 @@ function loadLiveData() {
             // Nouveau cycle détecté par un acteur non-fondateur (ou fondateur après sync)
             HISTORY = []; lsSet('history', []);
             lsSet('last_fiche', null); // effacer le marqueur fiche du jour
-            LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = []; LIVE.deceased = [];
+            LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = []; LIVE.deceased = []; LIVE.sold = []; LIVE.ventes = [];
             lsSet('deceased', []); lsSet('deceased_debut', CYCLE.dateDebut);
             lsSet('alimPrix', []);
             CYCLE._lastFicheDate=''; CYCLE._lastSopDate=''; CYCLE._lastStockDate='';
@@ -1494,7 +1495,7 @@ function loadLiveData() {
               if (key === 'cycleDebut' && val && val.length && val !== CYCLE.dateDebut) {
                 HISTORY = []; lsSet('history', []);
                 lsSet('last_fiche', null);
-                LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = []; LIVE.deceased = [];
+                LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = []; LIVE.deceased = []; LIVE.sold = []; LIVE.ventes = [];
                 lsSet('deceased', []); lsSet('deceased_debut', CYCLE.dateDebut);
                 lsSet('alimPrix', []);
                 CYCLE._lastFicheDate=''; CYCLE._lastSopDate=''; CYCLE._lastStockDate='';
@@ -1522,11 +1523,13 @@ function loadLiveData() {
       sidDataSource  ? readSheet(sidDataSource,  'Stock_Nourriture!A4:F200') : Promise.resolve(null),
       sidFondateur   ? readSheet(sidFondateur,   'KPI_Mensuels!A4:K50')      : Promise.resolve(null),
       sidDataSource  ? readSheet(sidDataSource,  'Sante_Mortalite!A4:G200')  : Promise.resolve(null),
+      sidDataSource  ? readSheet(sidDataSource,  'Ventes_Betes!A4:K200')     : Promise.resolve(null),
     ]).then(function(results) {
       var rowsPesees = results[0];
       var rowsStock  = results[1];
       var rowsKpi    = results[2];
       var rowsSante  = results[3];
+      var rowsVentes = results[4];
 
       // Sante_Mortalite → MOCK.betes + SPARK.betes (filtré par début de cycle)
       if (rowsSante && rowsSante.length) {
@@ -1547,6 +1550,34 @@ function loadLiveData() {
             sparkBetes.push(actives);
           });
           if (sparkBetes.length > 0) SPARK.betes = sparkBetes;
+        }
+      }
+
+      // Ventes_Betes → LIVE.sold + LIVE.ventes + correction MOCK.betes + MOCK.treso
+      if (rowsVentes && rowsVentes.length) {
+        var ventesCycle = rowsVentes.filter(function(r){ return r[0] && apresDebut(r[0]); });
+        LIVE.ventes = ventesCycle.map(function(r){
+          return {
+            date:   r[0]||'',
+            id:     (r[1]||'').toString().trim(),
+            race:   r[2]||'',
+            poids:  parseFloat(r[3])||0,
+            prixKg: parseFloat(r[4])||0,
+            total:  parseFloat(r[5])||0,
+            acheteur: r[6]||'',
+            tel:    r[7]||'',
+            mode:   r[8]||'CASH',
+            ctx:    r[9]||'DIRECT',
+            notes:  r[10]||''
+          };
+        });
+        LIVE.sold = LIVE.ventes.map(function(v){ return v.id; }).filter(Boolean);
+        // Décrémenter MOCK.betes du nombre de bêtes vendues
+        MOCK.betes = Math.max(0, MOCK.betes - LIVE.sold.length);
+        // Créditer la trésorerie si elle n'est pas déjà lue depuis KPI_Mensuels
+        if (MOCK.tresoSource !== 'kpi') {
+          var _ventesTotalV1 = LIVE.ventes.reduce(function(s,v){ return s+(v.total||0); }, 0);
+          if (_ventesTotalV1 > 0) MOCK.treso = Math.max(0, MOCK.treso + _ventesTotalV1);
         }
       }
 
@@ -1582,7 +1613,7 @@ function loadLiveData() {
         }
         _rawPv1.forEach(function(p){ if(p.id) _idsV1[p.id]=true; });
         LIVE.beteIds = Object.keys(_idsV1).sort().filter(function(id){
-          return (LIVE.deceased||[]).indexOf(id) === -1;
+          return (LIVE.deceased||[]).indexOf(id) === -1 && (LIVE.sold||[]).indexOf(id) === -1;
         });
         LIVE.loaded = true;
       }
@@ -2043,7 +2074,41 @@ function doSubmit(type) {
     return;
   }
 
+  // Vente : confirmation positive avec récapitulatif
+  if (type==='vente') {
+    var _fvC=S.fv;
+    var _pvC=parseFloat(_fvC.poids)||0, _pxC=parseFloat(_fvC.prixKg)||0;
+    var _totC=Math.round(_pvC*_pxC);
+    if(!_fvC.id||!_pvC||!_pxC||!_fvC.acheteur){ _submitActual('vente'); return; } // validation dans _submitActual
+    var _modeLabel={'CASH':'Cash','MOBILE_MONEY':'Mobile Money','CREDIT':'Crédit'};
+    var _ctxLabel={'TABASKI':'Tabaski','GAMOU':'Gamou','MAGAL':'Magal Touba','KORETE':'Korëté','NOEL':'Noël','DIRECT':'Direct','AUTRE':'Autre'};
+    showConfirm(
+      '💚 VENTE — '+_fvC.id+' ('+_pvC+' kg) × '+fmt(_pxC)+' FCFA/kg\n= '+fmt(_totC)+' FCFA\nAcheteur : '+_fvC.acheteur+' · '+(_modeLabel[_fvC.mode]||_fvC.mode)+' · '+(_ctxLabel[_fvC.ctx]||_fvC.ctx),
+      function(){ _submitActual('vente'); },
+      'positive'
+    );
+    return;
+  }
+
   _submitActual(type);
+}
+
+// ── Carnet d'acheteurs (localStorage, max 20) ──
+function _getAcheteurs() { return lsGet('acheteurs_cache') || []; }
+function _saveAcheteur(nom, tel) {
+  if (!nom) return;
+  var list = _getAcheteurs().filter(function(a){ return a.tel !== tel; }); // dédoublonnage par tel
+  list.unshift({nom: nom, tel: tel||''});
+  lsSet('acheteurs_cache', list.slice(0, 20));
+}
+function _rebuildAcheteurList() {
+  var dl = document.getElementById('dl-acheteurs');
+  if (!dl) { dl = document.createElement('datalist'); dl.id = 'dl-acheteurs'; document.body.appendChild(dl); }
+  dl.innerHTML = _getAcheteurs().map(function(a){ return '<option value="'+_escHtml(a.nom)+'">'; }).join('');
+}
+function _autoFillTel(nomVal) {
+  var match = _getAcheteurs().filter(function(a){ return a.nom === nomVal; })[0];
+  if (match && match.tel && !S.fv.tel) { S.fv.tel = match.tel; r(); }
 }
 
 function _submitActual(type) {
@@ -2157,6 +2222,39 @@ function _submitActual(type) {
     else {
       p=writeAll([SID.fondateur,SID.commerciale,SID.rga],'Suivi_Aliments!A:C',[tda,fa.type,prixAlim]);
     }
+  } else if(type==='vente'){
+    var f=S.fv; var td=isoToFr(f.date);
+    var _vPoids=parseFloat(f.poids)||0, _vPxKg=parseFloat(f.prixKg)||0;
+    var _vTotal=Math.round(_vPoids*_vPxKg);
+    if(!f.id){ p=Promise.resolve({ok:false,err:'Sélectionner une bête'}); }
+    else if(!_vPoids){ p=Promise.resolve({ok:false,err:'Saisir le poids (kg)'}); }
+    else if(!_vPxKg){ p=Promise.resolve({ok:false,err:'Saisir le prix/kg (FCFA)'}); }
+    else if(!f.acheteur){ p=Promise.resolve({ok:false,err:'Saisir le nom de l\'acheteur'}); }
+    else {
+      // Trouver la race depuis CYCLE.betes si non renseignée
+      var _vRace = f.race || (function(){
+        var _b = (CYCLE.betes||[]).filter(function(b){ return b.id===f.id; })[0];
+        return _b ? (_b.race||'') : '';
+      })();
+      var _vRow = [td, f.id, _vRace, _vPoids, _vPxKg, _vTotal, f.acheteur, f.tel||'', f.mode||'CASH', f.ctx||'DIRECT', f.notes||''];
+      p = writeAll([SID.commerciale, SID.fondateur], 'Ventes_Betes!A:K', _vRow)
+        .then(function(res){
+          if(res.ok){
+            // Mise à jour optimiste en mémoire
+            LIVE.ventes.push({date:td, id:f.id, race:_vRace, poids:_vPoids, prixKg:_vPxKg, total:_vTotal, acheteur:f.acheteur, tel:f.tel||'', mode:f.mode||'CASH', ctx:f.ctx||'DIRECT', notes:f.notes||''});
+            if(LIVE.sold.indexOf(f.id)===-1) LIVE.sold.push(f.id);
+            MOCK.betes = Math.max(0, MOCK.betes-1);
+            MOCK.treso += _vTotal;
+            // Mémoriser l'acheteur en localStorage
+            _saveAcheteur(f.acheteur, f.tel||'');
+            // Rebuild la datalist pour exclure la bête vendue
+            rebuildBeteList();
+            // Écrire la nouvelle tréso dans KPI_Mensuels
+            return kpiAppend([td,'VENTE_'+f.id,'1','','','','',MOCK.treso,'','','Vente '+f.id+' '+fmt(_vTotal)+' FCFA']);
+          }
+          return res;
+        });
+    }
   } else {
     p=Promise.resolve({ok:false,err:'Type inconnu'});
   }
@@ -2215,11 +2313,12 @@ function _submitActual(type) {
       if(type==='marche')S.fm={date:td,foi:S.fm.foi||'Thiès',foiCustom:S.fm.foiCustom||'',bas:'',moy:'',haut:''}
       if(type==='alim')  S.falim={date:td,type:S.falim.type||'',prix:''};
       if(type==='alim')  setTimeout(loadAlimPrix, 400);
+      if(type==='vente') { S.fv={date:todayISO(),id:'',race:'',poids:'',prixKg:'',acheteur:'',tel:'',mode:'CASH',ctx:'DIRECT',notes:''}; S.sub='vente'; }
       // Tracker bêtes pesées uniquement — exclusion dropdown jusqu'à ce que toutes soient pesées
       // (santé + incidents : pas d'exclusion — on peut saisir plusieurs fois la même bête)
       if (_beteIdSubmit && type==='pesee') {
         var _allBeteIds = CYCLE.betes && CYCLE.betes.length
-          ? CYCLE.betes.filter(function(b){return (LIVE.deceased||[]).indexOf(b.id)===-1;}).map(function(b){return b.id;})
+          ? CYCLE.betes.filter(function(b){return (LIVE.deceased||[]).indexOf(b.id)===-1&&(LIVE.sold||[]).indexOf(b.id)===-1;}).map(function(b){return b.id;})
           : LIVE.beteIds && LIVE.beteIds.length ? LIVE.beteIds
           : (function(){var n=CYCLE.nbBetes||MOCK.betes||4;var _fb=[];for(var i=1;i<=n;i++)_fb.push('B'+('0'+i).slice(-2));return _fb;})();
         if (S._donePesee.indexOf(_beteIdSubmit)===-1) S._donePesee.push(_beteIdSubmit);
@@ -2394,6 +2493,8 @@ var LIVE = {
   pesees:    [],
   beteIds:   [],
   deceased:  (function(){ var _d=lsGet('deceased')||[]; if(!_d.length) return _d; var _dd=lsGet('deceased_debut'); if(_dd && CYCLE.dateDebut && _dd!==CYCLE.dateDebut) return []; return _d; })(),  // IDs des bêtes décédées ce cycle (invalidé si cycle changé)
+  sold:      [],   // IDs des bêtes vendues ce cycle
+  ventes:    [],   // [{date, id, race, poids, prixKg, total, acheteur, tel, mode, ctx, notes}]
   alimPrix:  lsGet('alimPrix') || [],  // [{date, type, prix}] depuis Suivi_Aliments (persisté)
   prix:      [],  // [{date, foi, bas, moy, haut}] depuis Suivi_Marche
   incidents: [],  // { date, id, type, grav, desc, act, clos } — chargées depuis Vague 2
@@ -2498,7 +2599,7 @@ function loadPesees() {
     }
     LIVE.pesees.forEach(function(p){ if(p.id) ids[p.id] = true; });
     LIVE.beteIds = Object.keys(ids).sort().filter(function(id){
-      return (LIVE.deceased||[]).indexOf(id) === -1;
+      return (LIVE.deceased||[]).indexOf(id) === -1 && (LIVE.sold||[]).indexOf(id) === -1;
     });
     LIVE.loaded = true;
     r();
@@ -2763,13 +2864,14 @@ function pageResetPwd(){
 
 
 function pageConfirm(){
+  var _isPos = CONFIRM.variant === 'positive';
   return '<div class="confirm-box">'
     +'<div class="confirm-inner">'
-    +'<div style="font-size:28px;margin-bottom:12px">⚠️</div>'
+    +'<div style="font-size:28px;margin-bottom:12px">'+(_isPos?'💚':'⚠️')+'</div>'
     +'<div style="font-size:15px;font-weight:600;margin-bottom:8px;line-height:1.4">'+CONFIRM.msg+'</div>'
     +'<div style="display:flex;gap:10px;margin-top:18px">'
     +'<button class="btn-sec" onclick="doConfirm(false)" style="flex:1">Annuler</button>'
-    +'<button onclick="doConfirm(true)" style="flex:1;background:#8a3a00">Confirmer</button>'
+    +'<button onclick="doConfirm(true)" style="flex:1;background:'+(_isPos?'#1a5c1a':'#8a3a00')+'">Confirmer</button>'
     +'</div></div></div>';
 }
 
@@ -3090,9 +3192,9 @@ function confirmResetWithPwd() {
 // Helper : champ ID bête avec autocomplete robuste
 function beteSelect(val, stateKey, extra) {
   // Sources d'IDs : CYCLE.betes > LIVE.beteIds > fallback B01..BNN
-  // LIVE.beteIds est déjà filtré des décès par loadPesees()
+  // LIVE.beteIds est déjà filtré des décès et ventes par loadPesees()
   var beteIds = CYCLE.betes&&CYCLE.betes.length
-    ? CYCLE.betes.filter(function(b){ return (LIVE.deceased||[]).indexOf(b.id)===-1; }).map(function(b){return b.id;})
+    ? CYCLE.betes.filter(function(b){ return (LIVE.deceased||[]).indexOf(b.id)===-1&&(LIVE.sold||[]).indexOf(b.id)===-1; }).map(function(b){return b.id;})
     : LIVE.beteIds&&LIVE.beteIds.length
       ? LIVE.beteIds
       : (function(){
@@ -3144,9 +3246,9 @@ function beteSelect(val, stateKey, extra) {
 }
 
 function beteDropdown(val, stateKey, extra, excludeIds) {
-  // LIVE.beteIds est déjà filtré des décès par loadPesees()
+  // LIVE.beteIds est déjà filtré des décès et ventes par loadPesees()
   var beteIds = CYCLE.betes && CYCLE.betes.length
-    ? CYCLE.betes.filter(function(b){ return (LIVE.deceased||[]).indexOf(b.id)===-1; }).map(function(b){ return b.id; })
+    ? CYCLE.betes.filter(function(b){ return (LIVE.deceased||[]).indexOf(b.id)===-1&&(LIVE.sold||[]).indexOf(b.id)===-1; }).map(function(b){ return b.id; })
     : LIVE.beteIds && LIVE.beteIds.length
       ? LIVE.beteIds
       : (function(){
@@ -4463,6 +4565,8 @@ function saveCycle(){
   LIVE.pesees    = [];
   LIVE.beteIds   = [];
   LIVE.deceased  = [];
+  LIVE.sold      = [];
+  LIVE.ventes    = [];
   lsSet('deceased', []); lsSet('deceased_debut', CYCLE.dateDebut);
   lsSet('alimPrix', []); LIVE.alimPrix = [];
   LIVE.incidents = [];
@@ -4967,7 +5071,9 @@ function buildSidebar(){
   // ── GÉRANT TERRAIN ──
   if(u==='gerant'){
     // Score santé : GMQ (50pts) + Stock (30pts) + Bêtes actives (20pts) − malus incidents urgents
-    var _mort = CYCLE.nbBetes>0 ? Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100) : 0;
+    // _mort = décès seuls (les vendues ne sont PAS de la mortalité)
+    var _decedees = (LIVE.deceased||[]).length;
+    var _mort = (CYCLE.nbBetes||4)>0 ? Math.round(_decedees/(CYCLE.nbBetes||4)*100) : 0;
     var _tmMax = CYCLE.tauxMortMax||3;
     var _scoreBetes = _mort===0 ? 20 : _mort<=_tmMax ? 12 : _mort<=_tmMax*2 ? 5 : 0;
     // Malus incidents ouverts : -8 pts par incident gravité 3, -4 pts par gravité 2
@@ -5830,7 +5936,8 @@ function viewDash(){
   })()
     +(function(){
       if (S.user==='gerant') {
-        var _mort2=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;
+        var _deces2=(LIVE.deceased||[]).length;
+        var _mort2=(CYCLE.nbBetes||4)>0?Math.round(_deces2/(CYCLE.nbBetes||4)*100):0;
         var _tmK=CYCLE.tauxMortMax||3;
         var _sB=_mort2===0?20:_mort2<=_tmK?12:_mort2<=_tmK*2?5:0;
         var _incO=(LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';});
@@ -6431,7 +6538,7 @@ function viewSaisie(){
     var _pdJour  = _pdDeb ? Math.floor((_pdToday - _pdDeb) / 86400000) : null;
     // Liste des bêtes actives pour le suivi SOP par bête (même logique que beteDropdown)
     var _sopBeteIds = CYCLE.betes && CYCLE.betes.length
-      ? CYCLE.betes.filter(function(b){ return (LIVE.deceased||[]).indexOf(b.id)===-1; }).map(function(b){ return b.id; })
+      ? CYCLE.betes.filter(function(b){ return (LIVE.deceased||[]).indexOf(b.id)===-1&&(LIVE.sold||[]).indexOf(b.id)===-1; }).map(function(b){ return b.id; })
       : LIVE.beteIds && LIVE.beteIds.length
         ? LIVE.beteIds
         : (function(){
@@ -6626,9 +6733,9 @@ function _syncSopProtocol() {
   var _ndPd   = _nowDakar();
   var _pdToday = new Date(_ndPd.year, _ndPd.month-1, _ndPd.day);
 
-  // Bêtes actives (décès exclus)
+  // Bêtes actives (décès et ventes exclus)
   var _beteIds = CYCLE.betes && CYCLE.betes.length
-    ? CYCLE.betes.filter(function(b){ return (LIVE.deceased||[]).indexOf(b.id)===-1; }).map(function(b){ return b.id; })
+    ? CYCLE.betes.filter(function(b){ return (LIVE.deceased||[]).indexOf(b.id)===-1&&(LIVE.sold||[]).indexOf(b.id)===-1; }).map(function(b){ return b.id; })
     : LIVE.beteIds && LIVE.beteIds.length
       ? LIVE.beteIds
       : (function(){ var _n=CYCLE.nbBetes||MOCK.betes||4,_ids=[]; for(var _i=1;_i<=_n;_i++) _ids.push('B'+('0'+_i).slice(-2)); return _ids; })();
@@ -6779,9 +6886,9 @@ function _sopInlineSave(idx, tous){
   }
   var d = S._sopInlineData || {};
   var td = today();
-  // Liste des bêtes actives (décès exclus)
+  // Liste des bêtes actives (décès et ventes exclus)
   var _allBetes = CYCLE.betes && CYCLE.betes.length
-    ? CYCLE.betes.filter(function(b){ return (LIVE.deceased||[]).indexOf(b.id)===-1; }).map(function(b){ return b.id; })
+    ? CYCLE.betes.filter(function(b){ return (LIVE.deceased||[]).indexOf(b.id)===-1&&(LIVE.sold||[]).indexOf(b.id)===-1; }).map(function(b){ return b.id; })
     : LIVE.beteIds && LIVE.beteIds.length
       ? LIVE.beteIds
       : (function(){
@@ -6867,7 +6974,7 @@ function saveObjectifs(){
 function viewLiv(){
   var _canObj=(S.user==='fondateur'||S.user==='rga');
   var subs=[['treso','Trésorerie'],['kpi','KPI'],['betes','Bêtes'],['incidents','Incidents']];
-  if(_canObj) subs.push(['objectifs','Objectifs'],['sopvet','📅 SOP Véto'],['cycles','📜 Cycles']);
+  if(_canObj) subs.push(['ventes','💰 Ventes'],['objectifs','Objectifs'],['sopvet','📅 SOP Véto'],['cycles','📜 Cycles']);
   subs.push(['gonogo','Go/No-Go']);
   var stabs=subs.map(function(s){return'<div class="stab '+(S.sub===s[0]?'on':'')+'" onclick="chSub(\''+s[0]+'\')">'+s[1]+'</div>';}).join('');
   var view='';
@@ -7338,6 +7445,46 @@ function viewLiv(){
           +'</div>';
       }
     }
+  } else if(S.sub==='ventes'){
+    // ── Tableau des ventes du cycle ──
+    var _vList = LIVE.ventes || [];
+    var _modeLabel={'CASH':'Cash','MOBILE_MONEY':'Mobile Money','CREDIT':'Crédit'};
+    var _ctxLabel={'TABASKI':'Tabaski','GAMOU':'Gamou','MAGAL':'Magal','KORETE':'Korëté','NOEL':'Noël','DIRECT':'Direct','AUTRE':'Autre'};
+    var _vTotal = _vList.reduce(function(s,v){ return s+v.total; }, 0);
+    var _vCash  = _vList.filter(function(v){ return v.mode==='CASH'; }).reduce(function(s,v){ return s+v.total; }, 0);
+    var _vMM    = _vList.filter(function(v){ return v.mode==='MOBILE_MONEY'; }).reduce(function(s,v){ return s+v.total; }, 0);
+    var _vCred  = _vList.filter(function(v){ return v.mode==='CREDIT'; }).reduce(function(s,v){ return s+v.total; }, 0);
+    view = '<div class="card" style="margin-bottom:12px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+      +'<div><div style="font-size:18px;font-weight:700;color:#4caf50">'+fmt(_vTotal)+' <span style="font-size:12px;color:#88aa88">FCFA</span></div>'
+      +'<div style="font-size:11px;color:#7a9a7a">'+_vList.length+' bête'+('>1'?'s':'')+' vendue'+('>1'?'s':'')+' ce cycle</div></div>'
+      +'<div style="text-align:right;font-size:11px;color:#88aa88">'
+      +(_vCash?'Cash : <strong>'+fmt(_vCash)+'</strong><br>':'')
+      +(_vMM?'Mobile : <strong>'+fmt(_vMM)+'</strong><br>':'')
+      +(_vCred?'Crédit : <strong style="color:#ff9800">'+fmt(_vCred)+'</strong>':'')
+      +'</div></div>'
+      +'</div>'
+      +(_vList.length === 0
+        ? '<div class="card" style="text-align:center;color:#88aa88;padding:30px">Aucune vente enregistrée ce cycle.</div>'
+        : '<div class="card" style="padding:0;overflow:hidden">'
+          +'<table class="tw" style="font-size:12px">'
+          +'<thead><tr><th>Date</th><th>Bête</th><th>Race</th><th>Poids</th><th>Prix/kg</th><th>Total</th><th>Acheteur</th><th>Mode</th><th>Contexte</th></tr></thead>'
+          +'<tbody>'
+          +_vList.slice().reverse().map(function(v){
+            return '<tr>'
+              +'<td>'+v.date+'</td>'
+              +'<td style="color:#C8A06A;font-weight:700">'+v.id+'</td>'
+              +'<td>'+v.race+'</td>'
+              +'<td style="text-align:right">'+v.poids+' kg</td>'
+              +'<td style="text-align:right">'+fmt(v.prixKg)+'</td>'
+              +'<td style="text-align:right;color:#4caf50;font-weight:700">'+fmt(v.total)+'</td>'
+              +'<td>'+_escHtml(v.acheteur)+(v.tel?'<div style="font-size:10px;color:#7a9a7a">'+_escHtml(v.tel)+'</div>':'')+'</td>'
+              +'<td>'+(_modeLabel[v.mode]||v.mode)+'</td>'
+              +'<td>'+(_ctxLabel[v.ctx]||v.ctx)+'</td>'
+              +'</tr>';
+          }).join('')
+          +'</tbody></table></div>'
+      );
   } else if(S.sub==='gonogo'){
     var ggVeto  = !!(CYCLE.veterinaire && CYCLE.veterinaire.trim());
     var ggAssur = !!(CYCLE.numCnaas && CYCLE.numCnaas.trim());
@@ -7788,6 +7935,7 @@ function viewMarche(){
   var _u = S.user;
   var subs=[['prix','Prix foirail']];
   if(_u==='fondateur'||_u==='commerciale'||_u==='rga') subs.push(['alim','Prix aliments']);
+  if(_u==='commerciale'||_u==='fondateur') subs.push(['vente','💚 Vente']);
   subs.push(['sim','Simulateur'],['reco','Recommandations']);
   if(_u==='commerciale'||_u==='fondateur'||_u==='rga') subs.push(['comm','Fiche comm.']);
   var stabs=subs.map(function(s){return'<div class="stab '+(S.sub===s[0]?'on':'')+'" onclick="chSub(\''+s[0]+'\')">'+s[1]+'</div>';}).join('');
@@ -8621,6 +8769,102 @@ function viewMarche(){
       +(S.msg?'<div class="msg '+(S.msg.startsWith('ok')?'ok':'err')+'">'+S.msg.slice(3)+'</div>':'')
       +'<button class="btn'+(S.sending?' disabled':'')+'" onclick="if(!S.sending)doSubmit(\'alim\')"'+(S.sending?' disabled':'')+'>'
       +(S.sending?'Enregistrement...':'💾 Enregistrer le prix')+'</button>'
+      +'</div>';
+  } else if(S.sub==='vente'){
+    // ── Vente de bête(s) ──
+    _rebuildAcheteurList();
+    var fv = S.fv;
+    var _tdV = fv.date || todayISO();
+    // Bêtes actives (non décédées, non vendues)
+    var _bActV = (CYCLE.betes && CYCLE.betes.length
+      ? CYCLE.betes.filter(function(b){ return (LIVE.deceased||[]).indexOf(b.id)===-1&&(LIVE.sold||[]).indexOf(b.id)===-1; })
+      : (LIVE.beteIds||[]).filter(function(id){ return (LIVE.deceased||[]).indexOf(id)===-1&&(LIVE.sold||[]).indexOf(id)===-1; }).map(function(id){ return {id:id,race:''}; }));
+    // Calculer total en temps réel
+    var _vPdsLive = parseFloat(fv.poids)||0;
+    var _vPxLive  = parseFloat(fv.prixKg)||(CYCLE.objectifPrix||2000);
+    var _vTotLive = _vPdsLive && _vPxLive ? Math.round(_vPdsLive * _vPxLive) : 0;
+    // Trouver dernier poids connu de la bête sélectionnée
+    var _dernPoids = (function(){
+      if (!fv.id) return null;
+      var _pp = (LIVE.pesees||[]).filter(function(p){ return p.id===fv.id; });
+      return _pp.length ? _pp[_pp.length-1] : null;
+    })();
+    var _poidsInfo = _dernPoids
+      ? '<div style="font-size:11px;color:#88aa88;margin-top:4px">Dernière pesée : <strong>'+_dernPoids.poids+' kg</strong> le '+_dernPoids.date+'</div>'
+      : (fv.id ? '<div style="font-size:11px;color:#ff9800;margin-top:4px">⚠️ Aucune pesée enregistrée — saisir le poids estimé</div>' : '');
+
+    // ── Historique des ventes du cycle ──
+    var _histVentes = LIVE.ventes && LIVE.ventes.length
+      ? '<div class="card" style="margin-bottom:12px">'
+        +'<div style="font-size:11px;color:#7a9a7a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;padding-left:8px;border-left:3px solid #C8A06A">💰 Ventes ce cycle — '+(LIVE.ventes.length)+' bête'+(LIVE.ventes.length>1?'s':'')+' · '+fmt(LIVE.ventes.reduce(function(s,v){return s+v.total;},0))+' FCFA</div>'
+        +LIVE.ventes.slice(-5).reverse().map(function(v){
+          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #0f1a0f;font-size:13px">'
+            +'<div><span style="color:#C8A06A;font-weight:700">'+v.id+'</span> <span style="color:#88aa88;font-size:11px">'+v.race+'</span>'
+            +'<div style="font-size:11px;color:#7a9a7a">'+v.acheteur+' · '+v.date+'</div></div>'
+            +'<div style="text-align:right"><div style="color:#4caf50;font-weight:700">'+fmt(v.total)+'</div>'
+            +'<div style="font-size:10px;color:#88aa88">'+v.poids+'kg × '+fmt(v.prixKg)+'</div></div>'
+            +'</div>';
+        }).join('')
+        +'</div>'
+      : '';
+
+    view = _histVentes
+      +'<div class="card">'
+      +'<div style="font-size:13px;color:#88aa88;margin-bottom:14px;display:flex;align-items:center;gap:8px"><span style="font-size:18px">💚</span> Enregistrer une vente</div>'
+      +(_bActV.length === 0
+        ? '<div style="text-align:center;padding:20px;color:#88aa88"><div style="font-size:32px;margin-bottom:8px">🎉</div><div>Toutes les bêtes du troupeau ont été vendues ou sont décédées.</div></div>'
+        : '<div class="fg"><label>Date de vente</label>'
+          +'<input type="date" value="'+_tdV+'" oninput="S.fv.date=this.value"></div>'
+          +'<div class="fg"><label>Bête à vendre</label>'
+          +'<select onchange="(function(el){S.fv.id=el.value;var _b=(CYCLE.betes||[]).filter(function(b){return b.id===el.value;})[0];if(_b)S.fv.race=_b.race||\'\';var _pp=(LIVE.pesees||[]).filter(function(p){return p.id===el.value;});if(_pp.length&&!S.fv.poids)S.fv.poids=String(_pp[_pp.length-1].poids||\'\'||0);r();})(this)">'
+          +'<option value="">— Choisir une bête —</option>'
+          +_bActV.map(function(b){
+            var _bid=typeof b==='string'?b:b.id;
+            var _brc=typeof b==='string'?'':b.race||'';
+            return '<option value="'+_bid+'"'+(fv.id===_bid?' selected':'')+'>'+_bid+(_brc?' ('+_brc+')':'')+'</option>';
+          }).join('')
+          +'</select>'
+          +_poidsInfo
+          +'</div>'
+          +'<div class="frow">'
+          +'<div class="fg"><label>Poids vente (kg)</label>'
+          +'<input type="number" inputmode="decimal" placeholder="ex: 385" value="'+(fv.poids||'')+'" oninput="S.fv.poids=this.value;r()"></div>'
+          +'<div class="fg"><label>Prix/kg (FCFA)</label>'
+          +'<input type="number" inputmode="decimal" placeholder="ex: 2000" value="'+(fv.prixKg||(_vPxLive?String(_vPxLive):''))+'" oninput="S.fv.prixKg=this.value;r()"></div>'
+          +'</div>'
+          +(_vTotLive ? '<div style="background:#1a3a1a;border-radius:8px;padding:12px 14px;margin-bottom:13px;display:flex;justify-content:space-between;align-items:center">'
+            +'<span style="font-size:12px;color:#88aa88">Prix total</span>'
+            +'<span style="font-size:22px;font-weight:700;color:#C8A06A">'+fmt(_vTotLive)+' <span style="font-size:13px">FCFA</span></span>'
+            +'</div>' : '')
+          +'<div class="fg"><label>Nom acheteur</label>'
+          +'<input type="search" list="dl-acheteurs" autocomplete="off" placeholder="ex: Mamadou Diallo" value="'+(fv.acheteur||'')+'" oninput="S.fv.acheteur=this.value;_autoFillTel(this.value)">'
+          +'<datalist id="dl-acheteurs"></datalist></div>'
+          +'<div class="fg"><label>Téléphone</label>'
+          +'<input type="tel" placeholder="ex: +221 77 123 45 67" value="'+(fv.tel||'')+'" oninput="S.fv.tel=this.value"></div>'
+          +'<div class="frow">'
+          +'<div class="fg"><label>Mode de paiement</label>'
+          +'<select onchange="S.fv.mode=this.value">'
+          +'<option value="CASH"'+(fv.mode==='CASH'?' selected':'')+'>Cash</option>'
+          +'<option value="MOBILE_MONEY"'+(fv.mode==='MOBILE_MONEY'?' selected':'')+'>Mobile Money</option>'
+          +'<option value="CREDIT"'+(fv.mode==='CREDIT'?' selected':'')+'>Crédit</option>'
+          +'</select></div>'
+          +'<div class="fg"><label>Contexte</label>'
+          +'<select onchange="S.fv.ctx=this.value">'
+          +'<option value="TABASKI"'+(fv.ctx==='TABASKI'?' selected':'')+'>Tabaski</option>'
+          +'<option value="GAMOU"'+(fv.ctx==='GAMOU'?' selected':'')+'>Gamou</option>'
+          +'<option value="MAGAL"'+(fv.ctx==='MAGAL'?' selected':'')+'>Magal Touba</option>'
+          +'<option value="KORETE"'+(fv.ctx==='KORETE'?' selected':'')+'>Korëté</option>'
+          +'<option value="NOEL"'+(fv.ctx==='NOEL'?' selected':'')+'>Noël / Jour de l\'an</option>'
+          +'<option value="DIRECT"'+((!fv.ctx||fv.ctx==='DIRECT')?' selected':'')+'>Direct</option>'
+          +'<option value="AUTRE"'+(fv.ctx==='AUTRE'?' selected':'')+'>Autre</option>'
+          +'</select></div>'
+          +'</div>'
+          +'<div class="fg"><label>Notes (optionnel)</label>'
+          +'<input type="text" placeholder="ex: Poids confirmé bascule" value="'+(fv.notes||'')+'" oninput="S.fv.notes=this.value"></div>'
+          +(S.msg?'<div class="msg '+(S.msg.startsWith('ok')?'ok':S.msg.startsWith('load')?'load':'err')+'">'+S.msg.slice(3)+'</div>':'')
+          +'<button class="btn'+(S.sending?' disabled':'')+'" onclick="if(!S.sending)doSubmit(\'vente\')"'+(S.sending?' disabled':'')+'>'
+          +(S.sending?'Enregistrement...':'💚 Confirmer la vente')+'</button>'
+      )
       +'</div>';
   } else if(S.sub==='comm'){
     // ── Fiche commerciale — lecture seule ──
