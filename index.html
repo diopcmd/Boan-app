@@ -1573,6 +1573,7 @@ function loadLiveData() {
           };
         });
         LIVE.sold = LIVE.ventes.map(function(v){ return v.id; }).filter(Boolean);
+        lsSet('sold', LIVE.sold); lsSet('sold_debut', CYCLE.dateDebut); // persistance cache
         // Décrémenter MOCK.betes du nombre de bêtes vendues
         MOCK.betes = Math.max(0, MOCK.betes - LIVE.sold.length);
         // Créditer la trésorerie si elle n'est pas déjà lue depuis KPI_Mensuels
@@ -2265,6 +2266,7 @@ function _submitActual(type) {
             // Mise à jour optimiste en mémoire
             LIVE.ventes.push({date:td, id:f.id, race:_vRace, poids:_vPoids, prixKg:_vPxKg, total:_vTotal, acheteur:f.acheteur, tel:f.tel||'', mode:f.mode||'CASH', ctx:f.ctx||'DIRECT', notes:f.notes||''});
             if(LIVE.sold.indexOf(f.id)===-1) LIVE.sold.push(f.id);
+            lsSet('sold', LIVE.sold); lsSet('sold_debut', CYCLE.dateDebut); // persistance immédiate
             MOCK.betes = Math.max(0, MOCK.betes-1);
             MOCK.treso += _vTotal;
             // Mémoriser l'acheteur en localStorage
@@ -2519,7 +2521,7 @@ var LIVE = {
   pesees:    [],
   beteIds:   [],
   deceased:  (function(){ var _d=lsGet('deceased')||[]; if(!_d.length) return _d; var _dd=lsGet('deceased_debut'); if(_dd && CYCLE.dateDebut && _dd!==CYCLE.dateDebut) return []; return _d; })(),  // IDs des bêtes décédées ce cycle (invalidé si cycle changé)
-  sold:      [],   // IDs des bêtes vendues ce cycle
+  sold:      (function(){ var _s=lsGet('sold')||[]; if(!_s.length) return _s; var _sd=lsGet('sold_debut'); if(_sd&&CYCLE.dateDebut&&_sd!==CYCLE.dateDebut) return []; return _s; })(),  // IDs vendues (persisté)
   ventes:    [],   // [{date, id, race, poids, prixKg, total, acheteur, tel, mode, ctx, notes}]
   alimPrix:  lsGet('alimPrix') || [],  // [{date, type, prix}] depuis Suivi_Aliments (persisté)
   prix:      [],  // [{date, foi, bas, moy, haut}] depuis Suivi_Marche
@@ -2527,6 +2529,13 @@ var LIVE = {
   loaded:    false,
   source:    'cache'  // 'live' | 'cache' | 'loading'
 };
+// Seed MOCK.betes depuis cache localStorage — soustraire décès ET ventes connus avant sync Sheets
+(function(){
+  var _dec = LIVE.deceased.length;
+  var _sol = LIVE.sold.length;
+  if (_dec || _sol) MOCK.betes = Math.max(0, (CYCLE.nbBetes||MOCK.betes) - _dec - _sol);
+})();
+
 // Calcule le GMQ réel par bête (modifie raw[] en place).
 // Fallback : si col F (gain) est vide dans Sheets, déduit le gain depuis les poids mesurés.
 function _applyGmqToPesees(raw) {
@@ -7099,8 +7108,11 @@ function viewLiv(){
         var _nb  = CYCLE.nbBetes || 4;
         var _je  = _joursDepuisDebut();
         var _pveau = _sc.sveau !== undefined ? _sc.sveau : Math.round((CYCLE.capital||1450000)/(_nb||4));
-        // _depReal : déduit depuis MOCK.treso (KPI réel OU estimation sim — les deux sont fiables maintenant)
-        var _depReal = CYCLE.capital > 0 && MOCK.treso < CYCLE.capital * 0.98 ? (CYCLE.capital - MOCK.treso) : null;
+        // Recettes ventes : inclure dans le calcul des dépenses réelles
+        var _ventesTotal = (LIVE.ventes||[]).reduce(function(s,v){ return s+(v.total||0); }, 0);
+        var _baseCapital = (CYCLE.capital||0) + _ventesTotal; // capital + revenus ventes
+        // _depReal : (capital + ventes) − solde actuel = dépenses réelles
+        var _depReal = CYCLE.capital > 0 && MOCK.treso < _baseCapital * 0.98 ? (_baseCapital - MOCK.treso) : null;
         var _dep = _depReal !== null ? _depReal : _sd.dep;
         // Burn rate : exclure one-shot (bêtes + transport) pour refléter les charges quotidiennes réelles
         var _depRecurr = _depReal !== null ? Math.max(0, _depReal - _sd.veau - _sd.trans) : (_sd.dep - _sd.veau - _sd.trans);
@@ -7120,6 +7132,15 @@ function viewLiv(){
           +'<td style="text-align:right;color:#4caf50;font-weight:700">+'+fmt(CYCLE.capital)+'</td><td></td></tr>');
         rows.push(fRow(CYCLE.dateDebut||'—', 'Achat '+_nb+' bêtes ('+fmt(_pveau)+'/tête)', _nb*_pveau, '⚡'));
         if (_sd.trans > 0) rows.push(fRow('one-shot', 'Transport (foirail ↔ ferme + vente)', _sd.trans, '⚡'));
+        // ── Lignes de ventes (revenus) ──
+        if (LIVE.ventes && LIVE.ventes.length) {
+          LIVE.ventes.forEach(function(v){
+            rows.push('<tr><td style="font-size:10px;color:#88aa88;white-space:nowrap">'+v.date+'</td>'
+              +'<td>💰 Vente '+v.id+(v.poids?' — '+v.poids+'kg × '+fmt(v.prixKg)+' FCFA/kg':'')+'<br><span style="font-size:10px;color:#88aa88">'+v.acheteur+(v.mode&&v.mode!=='CASH'?' ('+v.mode+')':'')+'</span></td>'
+              +'<td style="text-align:right;color:#4caf50;font-weight:600;white-space:nowrap">+'+fmt(v.total)+'</td>'
+              +'<td style="text-align:right;font-size:10px;color:#4caf50">🟢</td></tr>');
+          });
+        }
         var _santeLines = HISTORY.filter(function(h){ return h.type==='sante' && parseFloat(h.cout)>0; })
           .slice().sort(function(a,b){
             var pa=a.date.split('/'), pb=b.date.split('/');
@@ -7141,6 +7162,9 @@ function viewLiv(){
           +(MOCK.tresoSource==='kpi'?' <span style="font-size:9px;color:#4caf50">● KPI</span>':MOCK.tresoSource==='sim'?' <span style="font-size:9px;color:#ff9800">⚡ sim.</span>':' <span style="font-size:9px;color:#ff9800">⚠️ brut</span>')+'</td></tr>');
         return '<div style="padding:12px 14px;background:#142714;border-radius:10px;border:1px solid #2a4a2a;margin-bottom:12px">'
           +'<div style="font-size:11px;color:#88aa88;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Résumé à date</div>'
+          +(_ventesTotal>0?'<div style="display:flex;justify-content:space-between;margin-bottom:5px">'
+          +'<span style="font-size:12px;color:#88aa88">Recettes ventes ('+LIVE.ventes.length+' bête'+(LIVE.ventes.length>1?'s':'')+')</span>'
+          +'<span style="font-weight:700;color:#4caf50">+'+fmt(_ventesTotal)+' FCFA 🟢</span></div>':'')
           +'<div style="display:flex;justify-content:space-between;margin-bottom:5px">'
           +'<span style="font-size:12px;color:#88aa88">Dépenses cumulées</span>'
           +'<span style="font-weight:700;color:#f44336">−'+fmt(_dep)+' FCFA'+(_depReal!==null?' 🟢':' ⚡')+'</span></div>'
