@@ -1560,7 +1560,7 @@ function loadLiveData() {
           var gmq = Math.round((moy/_peseeFreqV1)*100)/100;
           if (gmq > 0 && gmq < 5) {
             MOCK.gmq = gmq;
-            SPARK.gmq = gains.slice(-7).map(function(g){ return Math.round((g/7)*100)/100; });
+            SPARK.gmq = gains.slice(-7).map(function(g){ return Math.round((g/_peseeFreqV1)*100)/100; });
           }
         }
         // Construire LIVE.pesees avec GMQ réel par bête (disponible dès Vague 1)
@@ -2132,7 +2132,7 @@ function _submitActual(type) {
     .then(function(res){if(res.ok)return kpiAppend([td,'','','','','',f.poids,'','','','']);return res;});
   } else if(type==='sante'){
     var f=S.fsa; var td=isoToFr(f.date);
-    p=writeAll([SID.gerant,SID.fondateur,SID.rga],'Sante_Mortalite!A:I',[td,f.id,f.sym,f.tra,f.cout,f.res,f.dec,f.bcs||'',f.muq||''])
+    p=writeAll([SID.gerant,SID.fondateur],'Sante_Mortalite!A:I',[td,f.id,f.sym,f.tra,f.cout,f.res,f.dec,f.bcs||'',f.muq||''])
     .then(function(res){if(res.ok&&f.dec==='OUI')return kpiAppend([td,'DECES','','','','','','',1,'','APPELER FONDATEUR']);return res;});
   } else if(type==='bilan'){
     var f=S.fb;
@@ -2470,14 +2470,21 @@ function loadPesees() {
 
     LIVE.pesees = raw;
 
-    // Override MOCK.gmq avec la moyenne réelle (intervalles réels inter-pesées par bête)
-    // loadLiveData divise toujours les gains par 7 — loadPesees calcule l'intervalle exact
-    var _allGmq = raw.map(function(p){ return p.gmq||0; }).filter(function(g){ return g > 0; });
+    // Override MOCK.gmq avec la moyenne réelle du cycle courant uniquement
+    // (filtrer par dateDebut pour exclure les cycles précédents)
+    var _lpcDebut = CYCLE.dateDebut ? parseISO(CYCLE.dateDebut) : null;
+    var rawCycle = _lpcDebut ? raw.filter(function(p){
+      var _dp = String(p.date).split('/');
+      if (_dp.length !== 3) return false;
+      var _dv = new Date(_dp[2], _dp[1]-1, _dp[0]);
+      return _dv >= _lpcDebut;
+    }) : raw;
+    var _allGmq = rawCycle.map(function(p){ return p.gmq||0; }).filter(function(g){ return g > 0; });
     if (_allGmq.length) {
       var _gmqReel = Math.round(_allGmq.reduce(function(s,g){ return s+g; }, 0) / _allGmq.length * 100) / 100;
       if (_gmqReel > 0 && _gmqReel < 5) {
         MOCK.gmq = _gmqReel;
-        SPARK.gmq = raw.slice(-7).map(function(p){ return p.gmq||0; });
+        SPARK.gmq = rawCycle.slice(-7).map(function(p){ return p.gmq||0; });
       }
     }
 
@@ -4967,7 +4974,7 @@ function buildSidebar(){
     var _incOuverts = (LIVE.incidents||[]).filter(function(i){ return i.clos !== 'OUI'; });
     var _malusInc = _incOuverts.reduce(function(s,i){ return s + (i.grav==='3'?8:i.grav==='2'?4:2); }, 0);
     var sante = Math.round(
-      Math.min(50, (MOCK.gmq/(CYCLE.gmqCible||1.1))*50) +
+      Math.min(50, (MOCK.gmq/(CYCLE.gmqCible||1))*50) +
       (MOCK.stock>=6?30:MOCK.stock>=4?15:MOCK.stock>0?5:0) +
       _scoreBetes
     );
@@ -5828,7 +5835,7 @@ function viewDash(){
         var _sB=_mort2===0?20:_mort2<=_tmK?12:_mort2<=_tmK*2?5:0;
         var _incO=(LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';});
         var _mlus=_incO.reduce(function(s,i){return s+(i.grav==='3'?8:i.grav==='2'?4:2);},0);
-        var _sc=Math.min(100,Math.max(0,Math.round(Math.min(50,(MOCK.gmq/(CYCLE.gmqCible||1.1))*50)+(MOCK.stock>=6?30:MOCK.stock>=4?15:MOCK.stock>0?5:0)+_sB)-_mlus));
+        var _sc=Math.min(100,Math.max(0,Math.round(Math.min(50,(MOCK.gmq/(CYCLE.gmqCible||1))*50)+(MOCK.stock>=6?30:MOCK.stock>=4?15:MOCK.stock>0?5:0)+_sB)-_mlus));
         var _scCol=_sc>=70?'#4caf50':_sc>=40?'#ff9800':'#f44336';
         var _scBg=_sc>=70?'kcard-ok':_sc>=40?'kcard-warn':'kcard-crit';
         return '<div class="kcard '+_scBg+'">'
