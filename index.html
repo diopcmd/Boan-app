@@ -1944,7 +1944,8 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   // fix: mettre à jour MOCK.betes depuis santés (décès) — Vague 2
   // Vague 1 le fait aussi mais seulement s'il y a des lignes santé non vides
   var _decesV2 = (santes||[]).filter(function(r){ return apresDebut(r[0]) && r[6] && r[6].toString().toUpperCase()==='OUI'; }).length;
-  var _betesV2 = Math.max(0, (CYCLE.nbBetes||MOCK.betes) - _decesV2);
+  // Soustraire aussi les bêtes vendues (LIVE.sold rempli par le bloc Ventes_Betes en Vague 1)
+  var _betesV2 = Math.max(0, (CYCLE.nbBetes||MOCK.betes) - _decesV2 - (LIVE.sold||[]).length);
   if (!isNaN(_betesV2) && _betesV2 >= 0) MOCK.betes = _betesV2;
 
   // 7. Mettre à jour MOCK.incidents — incidents de la semaine courante (lun→dim, fuseau Dakar)
@@ -3361,7 +3362,7 @@ function buildAIContext() {
   var sem = calcSemaine();
   var totalSem = Math.round((CYCLE.dureeMois||8)*4.33);
   var mort = CYCLE.nbBetes > 0
-    ? Math.round(((CYCLE.nbBetes||4) - MOCK.betes) / (CYCLE.nbBetes||4) * 100)
+    ? Math.round((LIVE.deceased||[]).length / (CYCLE.nbBetes||4) * 100)
     : 0;
   var _gmqLiveAI = MOCK.gmq; // valeur canonique (loadPesees filtre gmq>0)
   var _incOuvertsAI = (LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';});
@@ -3425,9 +3426,11 @@ function buildAIContext() {
   var _chargesSim = _chargesSimParts.length ? _chargesSimParts.join(', ') : 'Non renseignées';
 
   // Score santé troupeau (même logique que la kcard dashboard)
-  var _scGmq   = Math.min(50, Math.round((_gmqLiveAI / (CYCLE.gmqCible||1)) * 50));
+  var _scGmq   = _gmqLiveAI > 0 ? Math.min(50, Math.round((_gmqLiveAI / (CYCLE.gmqCible||1)) * 50)) : 25; // neutre si pas de pesée
   var _scStk   = (function(){ var _s = MOCK.stock > 0 ? MOCK.stock : calcStockLocal(); return _s>=6?30:_s>=4?20:_s>=2?10:0; })();
-  var _scBetes = (CYCLE.nbBetes||0) > 0 ? Math.round((MOCK.betes / CYCLE.nbBetes) * 20) : 20;
+  // _scBetes basé sur la mortalité réelle (deceased) — pas sur les bêtes vendues
+  var _decAI   = (LIVE.deceased||[]).length;
+  var _scBetes = (CYCLE.nbBetes||0) > 0 ? Math.round(((CYCLE.nbBetes - _decAI) / CYCLE.nbBetes) * 20) : 20;
   var _scMalus = _incOuvertsAI.reduce(function(t,i){ return t + (i.grav==='3'?8:i.grav==='2'?4:2); }, 0);
   var _scoreSante = Math.max(0, _scGmq + _scStk + _scBetes - _scMalus);
 
@@ -3471,7 +3474,8 @@ function buildAIContext() {
     '=== TROUPEAU ===',
     'Bêtes actives: ' + MOCK.betes + ' / ' + (CYCLE.nbBetes||4),
     'Race: ' + (CYCLE.race||'Non définie'),
-    'Mortalité cycle: ' + mort + '% (max acceptable: ' + (CYCLE.tauxMortMax||3) + '%)',
+    'Mortalité cycle: ' + mort + '% (' + (LIVE.deceased||[]).length + ' décès / max acceptable: ' + (CYCLE.tauxMortMax||3) + '%)'
+      + ((LIVE.sold||[]).length ? ' — ' + LIVE.sold.length + ' bête(s) vendue(s)' : ''),
     'Poids départ moyen: ' + (CYCLE.poidsDepart||270) + ' kg',
     'Poids cible fin de cycle: ' + (CYCLE.poidsCible||400) + ' kg/bête',
     'Poids vente minimum: ' + (CYCLE.poidsVenteMin||340) + ' kg/bête',
@@ -4504,7 +4508,8 @@ function saveCycle(){
     dateFin:     todayISO(),
     nbBetes:     CYCLE.nbBetes    || 4,
     nbBetesFin:  MOCK.betes       || CYCLE.nbBetes || 4,
-    deces:       Math.max(0, (CYCLE.nbBetes||4) - (MOCK.betes||CYCLE.nbBetes||4)),
+    deces:       (LIVE.deceased||[]).length,  // décès réels uniquement (pas les vendues)
+    ventes:      (LIVE.sold||[]).length,       // bêtes vendues ce cycle
     poidsDepart: CYCLE.poidsDepart|| 0,
     poidsFin:    (LIVE.pesees && LIVE.pesees.length)
                    ? Math.round(LIVE.pesees.reduce(function(s,p){return s+(p.poids||0);},0)/LIVE.pesees.length)
@@ -4807,7 +4812,7 @@ function exportPDF() {
     doc.setDrawColor(200,160,106); doc.setLineWidth(0.4);
     doc.line(14, 42, 196, 42);
     var kpis = [
-      ['Bêtes actives', MOCK.betes+' / '+(CYCLE.nbBetes||4)+' têtes', (function(){var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;return mort+'% mortalité'+(mort===0?' ✓':' ⚠');}())],
+      ['Bêtes actives', MOCK.betes+' / '+(CYCLE.nbBetes||4)+' têtes', (function(){var mort=CYCLE.nbBetes>0?Math.round((LIVE.deceased||[]).length/(CYCLE.nbBetes||4)*100):0;return mort+'% mortalité'+(mort===0?' ✓':' ⚠');}())],
       ['GMQ moyen', (function(){return MOCK.gmq;})()+' kg/j', 'Cible \u2265 '+(CYCLE.gmqCible||1)+' kg/j'],
       ['Stock aliments', (MOCK.stock>0?MOCK.stock:calcStockLocal())+' semaines', (MOCK.stock>0?MOCK.stock:calcStockLocal())>=6?'Suffisant ✓':'Attention ⚠'],
       ['Trésorerie', fmt(MOCK.treso)+' FCFA', MOCK.treso>=600000?'Seuil OK':'Surveiller']
@@ -5200,7 +5205,7 @@ function buildSidebar(){
           })();
           var _tdInc  = today();
           var incNb   = (LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';}).length;
-          var mort    = Math.max(0,(CYCLE.nbBetes||0)-MOCK.betes);
+          var mort    = (LIVE.deceased||[]).length; // décès uniquement, pas les vendues
           return '<div class=\"sb-card\">'
             +'<div class=\"sb-section-title\">Calendrier des saisies</div>'
             // Fiche : 1/jour
@@ -5290,7 +5295,7 @@ function buildSidebar(){
         +'<div class="sb-section-title">Fiches cette semaine</div>'
         +daysHtml+'</div>'
         +'<div class="sb-card">'
-        +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val '+(((MOCK.gmq))>=(CYCLE.gmqCible||1)?'kval-ok':'kval-warn')+'">'+((MOCK.gmq))+' kg/j'+(LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?' <span style="font-size:10px;color:#4caf50">🟢 live</span>':'')+'</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">GMQ semaine</span><span class="sb-val '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'kval-ok':MOCK.gmq>0?'kval-warn':'kval-warn')+'">'+( MOCK.gmq>0 ? MOCK.gmq : '—')+' kg/j'+(LIVE.loaded&&LIVE.pesees&&LIVE.pesees.length?' <span style="font-size:10px;color:#4caf50">🟢 live</span>':'')+'</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Objectif</span><span style="font-size:12px;color:'+_calSub+'">&ge; '+(CYCLE.gmqCible||1)+' kg/j</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Incidents</span><span class="sb-val '+(HISTORY.filter(function(h){var d=new Date(_monday.getTime());var end=new Date(_monday.getTime()+6*86400000);var p=h.date.split('/');if(p.length!==3)return false;var hd=new Date(p[2],p[1]-1,p[0]);return h.type==='inc'&&hd>=d&&hd<=end;}).length>0?'kval-warn':'kval-ok')+'">'+(HISTORY.filter(function(h){var d=new Date(_monday.getTime());var end=new Date(_monday.getTime()+6*86400000);var p=h.date.split('/');if(p.length!==3)return false;var hd=new Date(p[2],p[1]-1,p[0]);return h.type==='inc'&&hd>=d&&hd<=end;}).length)+' cette sem.</span></div>'
         +(function(){
@@ -5368,7 +5373,7 @@ function buildSidebar(){
       body='<div class="sb-card">'
         +'<div class="sb-row"><span class="sb-lbl">Score santé troupeau</span><span class="sb-val" style="color:'+santeCol+'">'+sante+'/100</span></div>'
         +(function(){
-          var mort=CYCLE.nbBetes>0?Math.round(((CYCLE.nbBetes||4)-MOCK.betes)/(CYCLE.nbBetes||4)*100):0;
+          var mort=CYCLE.nbBetes>0?Math.round((LIVE.deceased||[]).length/(CYCLE.nbBetes||4)*100):0;
           var cl=mort===0?'kval-ok':mort<=(CYCLE.tauxMortMax||3)?'kval-warn':'kval-crit';
           return '<div class="sb-row"><span class="sb-lbl">Mortalité cycle</span><span class="sb-val '+cl+'">'+mort+'%</span></div>';
         })()
@@ -5385,7 +5390,7 @@ function buildSidebar(){
       body='<div class="sb-card">'
         +'<div class="sb-row"><span class="sb-lbl">Trésorerie</span><span class="sb-val '+(MOCK.treso>=Math.max(600000,(CYCLE.alerteSeuilTreso||100000)*3)?'kval-ok':MOCK.treso>(CYCLE.alerteSeuilTreso||100000)?'kval-warn':'kval-crit')+'">'+Math.round(MOCK.treso/1000)+'k FCFA</span></div>'
         +'<div class="sb-row"><span class="sb-lbl">Bêtes actives</span><span class="sb-val '+(MOCK.betes>=(CYCLE.nbBetes||4)?'kval-ok':MOCK.betes>0?'kval-warn':'kval-crit')+'">'+MOCK.betes+' / '+(CYCLE.nbBetes||4)+'</span></div>'
-        +'<div class="sb-row"><span class="sb-lbl">GMQ</span><span class="sb-val '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'kval-ok':MOCK.gmq>=(CYCLE.gmqWarn||0.8)?'kval-warn':'kval-crit')+'">'+MOCK.gmq+' kg/j</span></div>'
+        +'<div class="sb-row"><span class="sb-lbl">GMQ</span><span class="sb-val '+(MOCK.gmq>=(CYCLE.gmqCible||1)?'kval-ok':MOCK.gmq>0?'kval-warn':'kval-warn')+'">'+(MOCK.gmq>0?MOCK.gmq:'—')+' kg/j</span></div>'
         +(function(){
           var td2=today();
           // fOk : vérifie HISTORY (Vague 2) OU Config_App.lastFicheDate (step1, instantané)
@@ -5394,7 +5399,7 @@ function buildSidebar(){
           var bilOk2 = bilanDejaFaitCetteSemaine();
           var _stkSb2  = MOCK.stock>0?MOCK.stock:calcStockLocal();
           var incNb2   = (LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';}).length;
-          var mort2    = Math.max(0,(CYCLE.nbBetes||0)-MOCK.betes);
+          var mort2    = (LIVE.deceased||[]).length; // décès uniquement, pas les vendues
           return ''
             +'<div class="sb-section-title">Saisies gérant</div>'
             +'<div class="sb-row" onclick=\'chTab(\'saisie\');chSub(\'fiche\');closeSB()\' style="cursor:pointer">'
