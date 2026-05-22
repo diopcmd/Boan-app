@@ -4038,7 +4038,7 @@ function exportKpiPDF(){
   y += 12;
 
   var kpis = [
-    ['Bêtes actives', MOCK.betes+' / '+(CYCLE.nbBetes||4), MOCK.betes>=(CYCLE.nbBetes||4)],
+    ['Bêtes actives', MOCK.betes+' / '+(CYCLE.nbBetes||4)+((LIVE.sold||[]).length>0?' ('+LIVE.sold.length+' vendue'+(LIVE.sold.length>1?'s':'')+')'  :''), MOCK.betes>=(CYCLE.nbBetes||4)-(LIVE.sold||[]).length],
     [_gmqLabel(), gmqL+' kg/j', gmqL>=(CYCLE.gmqCible||1)],
     ['Stock aliments', MOCK.stock+' semaines', MOCK.stock>=6],
     ['Trésorerie', Math.round(MOCK.treso/1000)+'k FCFA', MOCK.treso>=600000],
@@ -4162,6 +4162,7 @@ function partagerRapportJourWhatsApp(){
   var santes     = aujourdHui.filter(function(h){ return h.type==='sante'; });
   var pesees     = HISTORY.filter(function(h){ return h.type==='pesee' && h.date===_td; });
   var stocks     = aujourdHui.filter(function(h){ return h.type==='stock'; });
+  var ventesAujourdhui = (LIVE.ventes||[]).filter(function(v){ return v.date === _td; });
 
   var lines = [
     '🐄 *BOANR — Rapport du jour*',
@@ -4194,6 +4195,15 @@ function partagerRapportJourWhatsApp(){
     santes.forEach(function(s){ lines.push('• '+s.label); });
   }
 
+  if (ventesAujourdhui.length > 0) {
+    lines.push('─────────────────────');
+    lines.push('*💪 Ventes du jour ('+ventesAujourdhui.length+') :*');
+    ventesAujourdhui.forEach(function(v){
+      var _vtotStr = v.poids ? v.poids+'kg × '+fmt(v.prixKg)+' FCFA/kg' : '';
+      lines.push('• '+v.id+' — '+fmt(v.total)+' FCFA'+(_vtotStr?' ('+_vtotStr+')':'')+' — '+v.acheteur);
+    });
+  }
+
   lines.push('─────────────────────');
   lines.push('_Généré par BOANR_');
 
@@ -4221,6 +4231,13 @@ function partagerKpiWhatsApp(){
     '💰 Trésorerie : *'+Math.round(MOCK.treso/1000)+'k FCFA*'+(MOCK.treso>=600000?' ✅':' 🔴'),
     '─────────────────────',
   ];
+
+  // Ventes réalisées ce cycle
+  if ((LIVE.ventes||[]).length > 0) {
+    var _vtotKPI = (LIVE.ventes||[]).reduce(function(s,v){return s+(v.total||0);},0);
+    var _nvKPI   = (LIVE.ventes||[]).length;
+    lines.push('💚 Ventes réalisées : *'+_nvKPI+' bête'+(_nvKPI>1?'s':'')+' — '+Math.round(_vtotKPI/1000)+'k FCFA* ✅');
+  }
 
   // Ajouter synthèse stock
   var ajouts={}, consos={};
@@ -7202,6 +7219,8 @@ function viewLiv(){
     var objBetes   = CYCLE.nbBetes || 4;
     var actStock   = MOCK.stock;
     var actBetes   = MOCK.betes;
+    var _ventesCA  = (LIVE.ventes||[]).reduce(function(s,v){return s+(v.total||0);},0);
+    var _nVentes   = (LIVE.ventes||[]).length;
     var semCourante = calcSemaine();
     var totalSemCycle = Math.round((CYCLE.dureeMois||8)*4.33);
     var gmqLive = MOCK.gmq; // valeur canonique (loadPesees filtre gmq>0)
@@ -7210,7 +7229,7 @@ function viewLiv(){
     var poidsObjActuel = Math.round((CYCLE.poidsDepart||270) + objGMQ*semCourante*7);
     var joursRestants = Math.max(0,(totalSemCycle-semCourante)*7);
     var poidsFinalProj = Math.round(poidsProj + gmqLive*joursRestants);
-    var caProj    = objBetes * poidsFinalProj * objPoids;
+    var caProj    = _ventesCA + actBetes * poidsFinalProj * objPoids;
     var caObj     = objBetes * Math.round((CYCLE.poidsDepart||270) + objGMQ*totalSemCycle*7) * objPoids;
 
     function kpiBar(lbl, act, obj, unit, hib) {
@@ -7259,13 +7278,17 @@ function viewLiv(){
       +'<span style="font-size:12px;color:#88aa88">Poids final projeté</span>'
       +'<span style="font-size:14px;font-weight:700;color:#C8A06A">~'+poidsFinalProj+' kg/bête</span>'
       +'</div>'
+      +(_nVentes>0?'<div style="display:flex;justify-content:space-between;margin-bottom:8px">'
+        +'<span style="font-size:12px;color:#88aa88">Ventes réalisées ('+_nVentes+' bête'+(_nVentes>1?'s':'')+')</span>'
+        +'<span style="font-size:13px;font-weight:700;color:#4caf50">+'+fmt(_ventesCA)+' FCFA</span>'
+        +'</div>':'')
       +'<div style="display:flex;justify-content:space-between;margin-bottom:8px">'
-      +'<span style="font-size:12px;color:#88aa88">CA projeté</span>'
+      +'<span style="font-size:12px;color:#88aa88">CA projeté total</span>'
       +'<span style="font-size:14px;font-weight:700;color:'+(caProj>=caObj?'#4caf50':'#ff9800')+'">'+fmt(caProj)+' FCFA</span>'
       +'</div>'
       +(LIVE.prix && LIVE.prix.length ? (function(){
         var _lp = _livePrixMax() || LIVE.prix[LIVE.prix.length-1];
-        var _caLive = objBetes * poidsFinalProj * _lp.moy;
+        var _caLive = _ventesCA + actBetes * poidsFinalProj * _lp.moy;
         return '<div style="display:flex;justify-content:space-between;margin-bottom:8px">'
           +'<span style="font-size:12px;color:#88aa88">CA au prix marché ('+_lp.foi+')</span>'
           +'<span style="font-size:13px;font-weight:700;color:'+(_caLive>=caObj?'#4caf50':'#ff9800')+'">'+fmt(Math.round(_caLive))+'</span>'
@@ -7280,9 +7303,10 @@ function viewLiv(){
         +'<span style="font-size:13px;font-weight:700;color:#C8A06A">'+fmt(Math.round(MOCK.treso/joursRestants))+' FCFA/j</span>'
         +'</div>' : '')
       +(function(){
-        // Coût de revient estimé : (capital - treso restante) / (nbBetes * gain total estimé)
-        var _depTotale = Math.max(0,(CYCLE.capital||1450000)-Math.max(0,MOCK.treso));
-        var _gainTotal = (poidsFinalProj - (CYCLE.poidsDepart||270)) * objBetes;
+        // Coût de revient estimé : (capital + ventes − tréso restante) / gain total estimé
+        var _depTotale = Math.max(0,(CYCLE.capital||1450000)+_ventesCA-Math.max(0,MOCK.treso));
+        var _gainVentes = (LIVE.ventes||[]).reduce(function(s,v){return s+Math.max(0,(v.poids||0)-(CYCLE.poidsDepart||270));},0);
+        var _gainTotal = _gainVentes + (poidsFinalProj-(CYCLE.poidsDepart||270))*actBetes;
         var _coutRevEst = _gainTotal>0 ? Math.round(_depTotale/_gainTotal) : null;
         var _crMax = CYCLE.coutRevientMax||1100;
         var _margeEst = caProj - (CYCLE.capital||1450000);
