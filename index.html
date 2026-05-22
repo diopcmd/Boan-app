@@ -1500,6 +1500,7 @@ function loadLiveData() {
                 lsSet('last_fiche', null);
                 LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = []; LIVE.deceased = []; LIVE.sold = []; LIVE.ventes = [];
                 lsSet('deceased', []); lsSet('deceased_debut', CYCLE.dateDebut);
+                lsSet('sold', []); lsSet('sold_debut', CYCLE.dateDebut);
                 lsSet('alimPrix', []);
                 CYCLE._lastFicheDate=''; CYCLE._lastSopDate=''; CYCLE._lastStockDate='';
                 CYCLE._lastPeseeDate=''; CYCLE._lastIncDate=''; CYCLE._lastSanteDate='';
@@ -1521,12 +1522,14 @@ function loadLiveData() {
     // Le gérant écrit dans les deux sheets via writeAll, donc les données
     // sont toujours disponibles dans au moins l'un des deux.
     var sidDataSource = sidGerant || sidFondateur;
+    // Ventes_Betes : écrites dans commerciale + fondateur (pas gérant) — lire depuis fondateur en priorité
+    var sidVentes = sidFondateur || SID.commerciale || sidDataSource;
     return Promise.all([
       sidDataSource  ? readSheet(sidDataSource,  'Pesees!A4:G200')           : Promise.resolve(null),
       sidDataSource  ? readSheet(sidDataSource,  'Stock_Nourriture!A4:F200') : Promise.resolve(null),
       sidFondateur   ? readSheet(sidFondateur,   'KPI_Mensuels!A4:K50')      : Promise.resolve(null),
       sidDataSource  ? readSheet(sidDataSource,  'Sante_Mortalite!A4:G200')  : Promise.resolve(null),
-      sidDataSource  ? readSheet(sidDataSource,  'Ventes_Betes!A4:K200')     : Promise.resolve(null),
+      sidVentes      ? readSheet(sidVentes,       'Ventes_Betes!A4:K200')     : Promise.resolve(null),
     ]).then(function(results) {
       var rowsPesees = results[0];
       var rowsStock  = results[1];
