@@ -1426,7 +1426,8 @@ function loadLiveData() {
           Object.assign(CYCLE, updates);
           // fix: synchroniser MOCK depuis CYCLE immédiatement après lecture Config_Cycle
           // (avant Vague 2 — évite MOCK.betes=4 si aucune saisie santé ce cycle)
-          MOCK.betes = CYCLE.nbBetes || MOCK.betes;
+          // Soustraire décès ET ventes déjà connus (cache localStorage)
+          MOCK.betes = Math.max(0, (CYCLE.nbBetes||MOCK.betes) - (LIVE.deceased||[]).length - (LIVE.sold||[]).length);
           if (CYCLE.capital && MOCK.treso === 680000) MOCK.treso = CYCLE.capital;
           // Toujours persister après sync Sheets — fix: sans ça le cache vide ne se repeuple jamais
           lsSet('cycle', CYCLE);
@@ -1436,6 +1437,7 @@ function loadLiveData() {
             lsSet('last_fiche', null); // effacer le marqueur fiche du jour
             LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = []; LIVE.deceased = []; LIVE.sold = []; LIVE.ventes = [];
             lsSet('deceased', []); lsSet('deceased_debut', CYCLE.dateDebut);
+            lsSet('sold', []); lsSet('sold_debut', CYCLE.dateDebut);
             lsSet('alimPrix', []);
             CYCLE._lastFicheDate=''; CYCLE._lastSopDate=''; CYCLE._lastStockDate='';
             CYCLE._lastPeseeDate=''; CYCLE._lastIncDate=''; CYCLE._lastSanteDate='';
