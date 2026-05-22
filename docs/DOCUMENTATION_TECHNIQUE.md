@@ -1,7 +1,7 @@
 ﻿# DOCUMENTATION TECHNIQUE — BOAN App
 
 Référence développeur pour l'application de gestion d'élevage **BOAN**.  
-**Commit HEAD** : `0a96562` — ~9 030 lignes — 22 Avril 2026
+**Commit HEAD** : `2100d30` — ~9 600 lignes — 22 Mai 2026
 
 ---
 
@@ -31,6 +31,8 @@ Référence développeur pour l'application de gestion d'élevage **BOAN**.
 | `HISTORY` | `addHistory()`, `buildHistoryFromSheets()`, `saveCycle()` | Tous les anti-doublons (`ficheDejaSoumise`, `bilanDejaFaitCetteSemaine`, `joursSince`) — **trié desc** |
 | `LIVE.pesees` | `loadPesees()` | GMQ live dashboard, section Bêtes, SOP véto pesée |
 | `LIVE.deceased` | `loadLiveData()` Vague 1, `saveCycle()` | `beteSelect()`, `beteDropdown()`, `loadPesees()` |
+| `LIVE.sold` | `loadLiveData()` Vague 1 (Ventes_Betes) | `beteSelect()`, `beteDropdown()`, `MOCK.betes` — persisté localStorage `boanr_sold` |
+| `LIVE.ventes` | `loadLiveData()` Vague 1 (Ventes_Betes) | `viewLiv sub=ventes`, trésorerie, IA — **non persisté**, reconstruit depuis Sheets à chaque reload |
 | `LIVE._histCycles` | `viewLiv sub=cycles`, `saveCycle()` | Accordéon cycles — `null`=non chargé, `'loading'`=en cours, `[]`=vide, `[...]`=données |
 | `S._clotureData` | `pageClotureCycle()` oninput, `confirmResetWithPwd()` | Données manuelles de clôture (recetteVente, BCS, etc.) — effacé par `saveCycle()` et bouton Annuler |
 | `S._cycleExpanded` | `viewLiv sub=cycles` onclick | État accordéon `{idx: bool}` — reset sur Rafraîchir |
@@ -116,6 +118,7 @@ doLogin()
                           │   Stock_Nourriture!A4:F200 → MOCK.stock, STOCK_MVTS, SPARK.stk
                           │   KPI_Mensuels!A4:K50      → MOCK.treso, SPARK.treso
                           │   Sante_Mortalite!A4:G200  → MOCK.betes, LIVE.deceased, SPARK.betes
+                          │   Ventes_Betes!A4:K200      → LIVE.ventes, LIVE.sold (source: sidVentes)
                           │   → LIVE.source = 'live'
                           │   → r()  ← 1er rendu avec données réelles
                           │
@@ -136,7 +139,8 @@ doLogin()
 ```
 
 > **Source des données par onglet** : `sidDataSource = SID.gerant || SID.fondateur`  
-> Le gérant écrit via `writeAll([SID.gerant, SID.fondateur])` → données toujours dans les deux sheets.
+> Le gérant écrit via `writeAll([SID.gerant, SID.fondateur])` → données toujours dans les deux sheets.  
+> **Exception `Ventes_Betes`** : écrit par la commerciale via `writeAll([SID.commerciale, SID.fondateur])` — lu depuis `sidVentes = SID.fondateur || SID.commerciale` (jamais depuis SID.gerant qui n'a pas cet onglet).
 
 ### Pièges Google Sheets API — gotchas critiques
 
@@ -228,7 +232,7 @@ window.addEventListener('online', function(){ ONLINE=true; r(); setTimeout(flush
 | Couche | Technologie | Détails |
 |---|---|---|
 | Frontend | Vanilla JS ES5 | `var` uniquement — pas de const/let/arrow functions |
-| SPA | Single `index.html` | HTML + CSS + JS inline, ~7 804 lignes |
+| SPA | Single `index.html` | HTML + CSS + JS inline, ~9 600 lignes |
 | Hosting | Vercel | Déploiement automatique depuis GitHub `main` |
 | Backend | Vercel Serverless Functions | `/api/*.js` — Node.js |
 | Base de données | Google Sheets API v4 | 4 spreadsheets (une par rôle) |
@@ -305,7 +309,7 @@ var USERS = {
 ```javascript
 var MOCK = {
   betes: 4,            // seedé depuis CYCLE.nbBetes localStorage au démarrage
-  gmq:  1.1,           // remplacé par calcul réel dès que pesées présentes (MOCK.gmq = source canonique)
+  gmq:  0,             // 0 = aucune pesée (affiche —) ; remplacé par calcul réel dès que pesées présentes
   stock: 6,            // recalculé depuis STOCK_MVTS localStorage
   treso: 680000,       // seedé depuis CYCLE.capital localStorage au démarrage
   sem:  1,             // calculé depuis CYCLE.dateDebut
@@ -314,6 +318,7 @@ var MOCK = {
 };
 // Règle : toutes les formules inline (dashboard, KPI, PDF, guides) utilisent MOCK.gmq comme
 // source canonique — NE PAS recalculer le GMQ directement depuis LIVE.pesees dans les vues.
+// MOCK.gmq = 0 s'affiche « — » (badge gris) — NE PAS remettre 1.1 comme valeur par défaut.
 ```
 
 **Seed au démarrage** (après `var CYCLE = lsGet('cycle') || {...}`) :
@@ -786,10 +791,10 @@ renderTab(tab)
 
 ## 12. Index des numéros de ligne — `index.html`
 
-> Référence rapide pour naviguer dans le fichier (~8 600 lignes). Vérifier après chaque commit car les lignes peuvent décaler.
-> **Dernière mise à jour : commit `f7a962b` (20 avril 2026)**
+> Référence rapide pour naviguer dans le fichier (~9 600 lignes). Vérifier après chaque commit car les lignes peuvent décaler.
+> **Dernière mise à jour : commit `2100d30` (22 mai 2026)**
 
-> ⚠️ Les numéros de ligne ci-dessous sont approximatifs — ils ont légèrement décalé suite aux commits de la session Avril 2026 (+200 lignes environ). Utiliser la recherche de texte pour localiser avec précision.
+> ⚠️ Les numéros de ligne ci-dessous sont approximatifs. Utiliser la recherche de texte pour localiser avec précision.
 
 ### Variables globales
 
@@ -943,7 +948,16 @@ renderTab(tab)
 | 4 | `joursSince()` | `new Date(local)` pour les deux termes — incohérent avec le standard `Date.UTC` | `new Date(Date.UTC(...))` pour les deux |
 | 5 | `_joursDepuisDebut()` fallback | `return Math.max(1, calcSemaine() * 7)` retourne 7 quand `!CYCLE.dateDebut` | `return 1` |
 
-### Passe 4 — Session Avril 2026 (commits `ff578e2` → `f7a962b`)
+### Passe 5 — Session Mai 2026 (commits `4b41bad` → `2100d30`)
+
+| # | Commit | Bug | Fix |
+|---|---|---|---|
+| 1 | `4b41bad` | Feature vente bêtes manquante | Ajout formulaire saisie vente (Dashboard), écriture `Ventes_Betes!A:K` dans `SID.commerciale + SID.fondateur`, livrable `sub=ventes`, bloc LIVE.ventes / LIVE.sold, seedage localStorage sold |
+| 2 | `e677d5c` | `LIVE.sold` non persisté au redémarrage — `MOCK.betes` ignorait les ventes au seed | `lsSet('sold', LIVE.sold)` + `lsSet('sold_debut', CYCLE.dateDebut)` ; seed block soustrait `_sol` comme `_dec` |
+| 3 | `6b3fde7` | Après lecture `Config_Cycle`, `MOCK.betes = CYCLE.nbBetes` écrasait la soustraction des décès/ventes | Remplacé par `Math.max(0, nbBetes - deceased.length - sold.length)` |
+| 4 | `2100d30` | `Ventes_Betes` lu depuis `sidDataSource = sidGerant \|\| sidFondateur` — or la feuille gérant n'a pas cet onglet | Fix : `sidVentes = sidFondateur \|\| SID.commerciale` (source correcte pour les ventes) |
+| 5 | `2100d30` | Wipe cycle (détection `cycleDebut` dans Config_App) n'effacait pas `sold` / `sold_debut` localStorage | Ajout `lsSet('sold', [])` + `lsSet('sold_debut', CYCLE.dateDebut)` dans le bloc wipe |
+| 6 | `2100d30` | `_depReal` (contexte IA + simulateur) = `capital - MOCK.treso` — négatif quand treso > capital suite aux ventes | Fix : `_baseCapital = capital + ventesTotal` ; `_depReal = _baseCapital - MOCK.treso` |
 
 | # | Commit | Bug | Fix |
 |---|---|---|---|

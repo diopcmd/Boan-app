@@ -3426,7 +3426,10 @@ function buildAIContext() {
     .map(function(h){ return h.date + ': ' + h.label; }).join(' | ') || 'Aucun';
 
   // Finances — dépenses réalisées vs prorata
-  var _depReal = (CYCLE.capital||0) - MOCK.treso;
+  // _baseCapital = capital initial + revenus ventes (evite un _depReal négatif si treso > capital)
+  var _ventesAI = (LIVE.ventes||[]).reduce(function(s,v){ return s+(v.total||0); }, 0);
+  var _baseCapitalAI = (CYCLE.capital||0) + _ventesAI;
+  var _depReal = _baseCapitalAI - MOCK.treso;
   var _depRatio = totalSem > 0 ? Math.round(sem / totalSem * 100) : 0;
   var _depProrataTarget = Math.round((CYCLE.capital||0) * sem / totalSem);
 
@@ -8375,8 +8378,10 @@ function viewMarche(){
     }
     function sign(v) { return v >= 0 ? '+' : ''; }
 
-    var _depReal = (CYCLE.capital > 0 && MOCK.treso < (CYCLE.capital||0) * 0.98)
-      ? Math.round((CYCLE.capital||0) - MOCK.treso) : null;
+    var _simVentesTotal = (LIVE.ventes||[]).reduce(function(s,v){ return s+(v.total||0); }, 0);
+    var _simBase = (CYCLE.capital||0) + _simVentesTotal; // inclure revenus ventes dans la base
+    var _depReal = (CYCLE.capital > 0 && MOCK.treso < _simBase * 0.98)
+      ? Math.round(_simBase - MOCK.treso) : null;
     var _depSimP = _depReal !== null ? _calcDepSim() : null;
     var _depRealBanner = '';
     if (_depReal !== null && _depSimP !== null) {

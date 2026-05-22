@@ -5,7 +5,7 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
 
 **Production** → https://boan-app-9u5e.vercel.app  
 **Stack** : Vanilla JS ES5 · Vercel Serverless · Google Sheets API v4  
-**État** : commit `0a96562` — ~9 030 lignes — Avril 2026
+**État** : commit `2100d30` — ~9 600 lignes — Mai 2026
 
 ---
 
@@ -16,7 +16,7 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
 | Fondateur / Direction | `fondateur` | Dashboard · Saisie · Livrables · Marché · Guide | Lecture/écriture total, configuration, clôture cycle |
 | Gérant terrain | `gerant` | Dashboard · Saisie · Guide | Saisies quotidiennes terrain |
 | RGA | `rga` | Dashboard · Livrables · Marché · Guide | Analyse, contrôle, recommandations |
-| Commerciale | `commerciale` | Dashboard · Marché · Guide | Veille prix foirail et aliments |
+| Commerciale | `commerciale` | Dashboard · Marché · Guide | Veille prix foirail et aliments, **saisie des ventes de bêtes** |
 
 ---
 
@@ -91,7 +91,7 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
 
 ```
 Boan-app/
-├── index.html              SPA complète (HTML + CSS + JS inline, ~8 200 lignes)
+├── index.html              SPA complète (HTML + CSS + JS inline, ~9 600 lignes)
 ├── vercel.json             Rewrites SPA (exclut /api/ et /manifest.json)
 ├── manifest.json           Web App Manifest (PWA — icône, nom, display:standalone)
 ├── sw.js                   Service Worker (cache offline)
@@ -127,7 +127,7 @@ Boan-app/
 |---|---|---|
 | `Config_Cycle` A1:S1 | Fondateur | dateDebut, nbBetes, poidsDepart, race, ration, capital, objectifPrix, budgetSante, vétérinaire, foirail, commission, contactUrgence, peseeFreq, betes(JSON), stockLines(JSON), dureeMois, simCharges(JSON), prixAlim, **numCycle** |
 | `Config_App` A:B | Fondateur | Clé-valeur : gmqCible, gmqWarn, poidsCible, poidsVenteMin, tauxMortMax, coutRevientMax, margeParBeteMin, alerteSeuilTreso, mixSon, mixTourteau, prixAlim, objectifPrix, _mktUpdated, sopProtocol(JSON), **sopResetAt**, dureeMois, cycleDebut, **numCnaas**, **numCycle** |
-| `Historique_Cycles` A:O | Fondateur | Début, Fin, Durée, Race, Foirail, NbBêtesDépart, NbBêtesFin, Décès, PoidsDépart, PoidsFin, GMQ, Capital, TrésoFin, Marge/tête, **N° cycle** *(à créer manuellement)* |
+| `Historique_Cycles` A:AB | Fondateur | Début, Fin, Durée, Race, Foirail, NbBêtesDép/Fin, Décès, PoidsDép/Fin, GMQ, Capital, CoûtAlim, RecetteVente, BénéficeNet, Bénéf/tête, ROI, Coût/kg Gain, PrixKgVif, Saison, FournisseurRégion, BCS, Pathologies, Vaccins, PrixVenteMoyen, **N° cycle** (**28 colonnes**) |
 | `Fiche_Quotidienne` | Gérant + Fondateur | Saisies journalières |
 | `SOP_Check` | Gérant + Fondateur | Checklist SOP quotidienne |
 | `Pesees` | Gérant + Fondateur | Pesées individuelles par bête |
@@ -136,6 +136,7 @@ Boan-app/
 | `Sante_Mortalite` | Gérant + Fondateur | Soins + décès (col G = OUI → bête décédée) |
 | `Hebdomadaire` | Gérant + Fondateur | Bilans hebdomadaires |
 | `KPI_Mensuels` | Fondateur | Trésorerie réelle mensuelle (col H) |
+| `Ventes_Betes` A:K | Commerciale + Fondateur | Ventes de bêtes (Date, ID, Race, Poids, Prix/kg, Total, Acheteur, Tel, Mode, Ctx, Notes) — créé automatiquement |
 | `Suivi_Marche` | Commerciale + Fondateur | Prix foirail (Date, Foirail, Bas, Moy, Haut) |
 | `Suivi_Aliments` | Fondateur + RGA + Commerciale | Prix aliments (Date, Type, Prix/kg) |
 
@@ -199,6 +200,8 @@ git push origin main
 | `85d7e9f` | fix: cohérence dashboard KPI vs sidebar — tréso seuil dynamique, score santé gmqCible, cycle N° |
 | `75f1f1e` | feat: guide retour dashboard, fix C003 deceased cycle, SOP véto valider gérant, formules PDF |
 | `176d369` | docs: mise à jour avril 2026 — commit dd5c3c7, 7436 lignes |
+| `2100d30` | fix: Ventes_Betes lu depuis sidFondateur (fallback SID.commerciale) + wipe cycle efface sold_debut + _depReal corrigé (inclut revenus ventes) |
+| `4b41bad` | feat: vente bêtes — formulaire Dashboard, Ventes_Betes Sheets, LIVE.ventes/sold, sub=ventes Livrables |
 | `dd5c3c7` | fix: MOCK.betes seed depuis localStorage au démarrage + guides MAJ |
 | `14468d4` | feat: onglet Guide par rôle + 4 guides HTML imprimables en PDF |
 | `7db6560` | feat: Objectifs — card Marché & Ration (prixAlim + objectifPrix + mix ration lié + badge date) |

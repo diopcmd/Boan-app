@@ -63,7 +63,8 @@
   <div class="row"><div class="ico">📊</div><div><div class="label">Vous alimentez les décisions de vente</div><div class="desc">Vos relevés foirail sont la matière première des projections de marge. Un relevé approximatif = une mauvaise décision.</div></div></div>
   <div class="row"><div class="ico">🌽</div><div><div class="label">Vous alimentez le calcul du coût réel</div><div class="desc">Vos prix aliments permettent à l'app d'utiliser la consommation réelle (kg × prix/kg) au lieu d'estimations. Plus précis = meilleure gestion.</div></div></div>
   <div class="row"><div class="ico">🧮</div><div><div class="label">Vous construisez les recommandations</div><div class="desc">Via le Simulateur, vous proposez une fenêtre de vente chiffrée à la Direction.</div></div></div>
-  <div class="row"><div class="ico">👁️</div><div><div class="label">Vous voyez — Dashboard et Marché</div><div class="desc">Lecture des KPI + saisie des relevés. Vous n'avez pas accès à la Saisie terrain ni aux Livrables admin.</div></div></div>
+  <div class="row"><div class="ico">�</div><div><div class="label">Vous enregistrez les ventes de bêtes</div><div class="desc">Quand une bête est vendue, c'est vous qui saisissez la transaction dans Dashboard > Ventes. La bête est automatiquement retirée du troupeau actif.</div></div></div>
+  <div class="row"><div class="ico">👁️</div><div><div class="label">Vos accès — Dashboard et Marché</div><div class="desc">Lecture des KPI + saisie des relevés de prix + enregistrement des ventes. Vous n'avez pas accès à la Saisie terrain (fiche, pesée, stock) ni aux Livrables admin.</div></div></div>
 </div>
 
 <!-- ═══ CADENCE DES RELEVÉS ═══ -->
@@ -79,6 +80,31 @@
     <div class="cadence-label">Prix aliments (son + tourteau)</div>
     <div class="cadence-detail">À chaque modification de prix fournisseur, même sans attendre la semaine.</div>
   </div>
+</div>
+
+<!-- ═══ ENREGISTRER UNE VENTE ═══ -->
+<h2>🐄 Enregistrer la vente d'une bête — Essentiel</h2>
+<div class="info-box">
+  <div class="info-title">⚠️ À faire immédiatement après chaque vente</div>
+  <div class="info-row">La saisie retire la bête du troupeau actif, met à jour la trésorerie et alimente les statistiques de cycle. Ne pas attendre plus de 24h.</div>
+</div>
+<div class="card">
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div><div class="label">Dashboard > onglet Ventes (sous-onglet)</div><div class="desc">Depuis le Dashboard, trouver la section Ventes ou utiliser le bouton de saisie vente si disponible.</div></div></div>
+    <div class="step"><div class="step-num">2</div><div><div class="label">Sélectionner la bête vendue</div><div class="desc">Choisir l'ID de la bête dans la liste des bêtes actives (ex : B01, C1-001). Les bêtes déjà décédées ou vendues ne s'affichent pas.</div></div></div>
+    <div class="step"><div class="step-num">3</div><div><div class="label">Saisir le poids et le prix/kg</div><div class="desc">Poids réel à la vente (kg). Prix par kg poids vif (FCFA/kg). Le total est calculé automatiquement.</div></div></div>
+    <div class="step"><div class="step-num">4</div><div><div class="label">Renseigner l'acheteur</div><div class="desc">Nom de l'acheteur (obligatoire). Téléphone (optionnel — utile en cas de litige). L'app mémorise les acheteurs précédents pour saisie rapide.</div></div></div>
+    <div class="step"><div class="step-num">5</div><div><div class="label">Mode de paiement + contexte</div><div class="desc"><strong>Mode :</strong> Cash / Mobile Money / Crédit. <strong>Contexte :</strong> Tabaski, Gamou, Direct, etc. Impact sur les statistiques de cycle.</div></div></div>
+    <div class="step"><div class="step-num">6</div><div><div class="label">Valider</div><div class="desc">La bête disparaît immédiatement de la liste des bêtes actives. Le Dashboard affiche le nouveau nombre de bêtes. La trésorerie est créditée du montant de vente.</div></div></div>
+  </div>
+</div>
+<div class="info-box">
+  <div class="info-title">📋 Ce que cette saisie produit automatiquement</div>
+  <div class="info-row">• Mise à jour du nombre de bêtes actives sur le Dashboard de tous les acteurs</div>
+  <div class="info-row">• Crédit de la trésorerie cycle du montant de vente</div>
+  <div class="info-row">• Archivage dans <strong>Ventes_Betes</strong> (feuille commerciale + fondateur) — traçabilité complète</div>
+  <div class="info-row">• Alimentation des statistiques : Livrables > Ventes (fondateur/RGA)</div>
+  <div class="info-row">• Calcul du prix moyen de vente par kg sur le cycle</div>
 </div>
 
 <!-- ═══ COMMENT SAISIR UN RELEVÉ FOIRAIL ═══ -->
