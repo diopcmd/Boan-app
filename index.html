@@ -1588,6 +1588,12 @@ function loadLiveData() {
         }
       }
 
+      // Réconciliation MOCK.betes : si rowsVentes null (réseau KO) et LIVE.sold local non vide
+      // → Sante_Mortalite a écrit nbBetes-deces sans soustraire les ventes déjà connues en cache
+      if (!rowsVentes && (LIVE.sold||[]).length > 0) {
+        MOCK.betes = Math.max(0, MOCK.betes - LIVE.sold.length);
+      }
+
       // Pesées → MOCK.gmq + SPARK.gmq + LIVE.pesees (mis à jour à chaque refresh)
       if (rowsPesees && rowsPesees.length) {
         var peseesCycle = rowsPesees.filter(function(r){ return r[0] && apresDebut(r[0]); });
@@ -2233,7 +2239,7 @@ function _submitActual(type) {
     p=writeAll([SID.gerant,SID.fondateur,SID.rga],'Hebdomadaire!A:H',['Semaine '+f.sem,f.nb,f.nou,f.stk,f.inc,f.poi,al,f.msg])
     .then(function(res){if(res.ok)return kpiHebdoAppend(['S'+f.sem,f.nb,f.stk,'','',f.inc,'',f.nou,'',al]);return res;});
   } else if(type==='marche'){
-    var f=S.fm; var td=isoToFr(f.date);
+    var f=S.fm; var td=isoToFr(f.date||todayISO());
     var foirail = (f.foi==='Autre' && f.foiCustom) ? f.foiCustom : f.foi;
     var bas=parseFloat(f.bas)||0, moy=parseFloat(f.moy)||0, haut=parseFloat(f.haut)||0;
     if(!moy && !bas) { p=Promise.resolve({ok:false,err:'Saisir au moins le prix moyen ou bas'}); }
@@ -2243,7 +2249,7 @@ function _submitActual(type) {
       p=writeAll([SID.commerciale,SID.fondateur],'Suivi_Marche!A:E',[td,foirail,bas||'',moy||'',haut||'']);
     }
   } else if(type==='alim'){
-    var fa=S.falim; var tda=isoToFr(fa.date);
+    var fa=S.falim; var tda=isoToFr(fa.date||todayISO());
     var prixAlim=parseFloat(fa.prix)||0;
     if(!fa.type){ p=Promise.resolve({ok:false,err:'Sélectionner un type d\'aliment'}); }
     else if(!prixAlim){ p=Promise.resolve({ok:false,err:'Saisir le prix en FCFA/kg'}); }
@@ -2251,7 +2257,7 @@ function _submitActual(type) {
       p=writeAll([SID.fondateur,SID.commerciale,SID.rga],'Suivi_Aliments!A:C',[tda,fa.type,prixAlim]);
     }
   } else if(type==='vente'){
-    var f=S.fv; var td=isoToFr(f.date);
+    var f=S.fv; var td=isoToFr(f.date||todayISO());
     var _vPoids=parseFloat(f.poids)||0, _vPxKg=parseFloat(f.prixKg)||0;
     var _vTotal=Math.round(_vPoids*_vPxKg);
     if(!f.id){ p=Promise.resolve({ok:false,err:'Sélectionner une bête'}); }
@@ -7144,7 +7150,7 @@ function viewLiv(){
         if (LIVE.ventes && LIVE.ventes.length) {
           LIVE.ventes.forEach(function(v){
             rows.push('<tr><td style="font-size:10px;color:#88aa88;white-space:nowrap">'+v.date+'</td>'
-              +'<td>💰 Vente '+v.id+(v.poids?' — '+v.poids+'kg × '+fmt(v.prixKg)+' FCFA/kg':'')+'<br><span style="font-size:10px;color:#88aa88">'+v.acheteur+(v.mode&&v.mode!=='CASH'?' ('+v.mode+')':'')+'</span></td>'
+              +'<td>💰 Vente '+v.id+(v.poids?' — '+v.poids+'kg × '+fmt(v.prixKg)+' FCFA/kg':'')+'<br><span style="font-size:10px;color:#88aa88">'+_escHtml(v.acheteur)+(v.mode&&v.mode!=='CASH'?' ('+v.mode+')':'')+'</span></td>'
               +'<td style="text-align:right;color:#4caf50;font-weight:600;white-space:nowrap">+'+fmt(v.total)+'</td>'
               +'<td style="text-align:right;font-size:10px;color:#4caf50">🟢</td></tr>');
           });
@@ -8912,7 +8918,7 @@ function viewMarche(){
         +LIVE.ventes.slice(-5).reverse().map(function(v){
           return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #0f1a0f;font-size:13px">'
             +'<div><span style="color:#C8A06A;font-weight:700">'+v.id+'</span> <span style="color:#88aa88;font-size:11px">'+v.race+'</span>'
-            +'<div style="font-size:11px;color:#7a9a7a">'+v.acheteur+' · '+v.date+'</div></div>'
+            +'<div style="font-size:11px;color:#7a9a7a">'+_escHtml(v.acheteur)+' · '+v.date+'</div></div>'
             +'<div style="text-align:right"><div style="color:#4caf50;font-weight:700">'+fmt(v.total)+'</div>'
             +'<div style="font-size:10px;color:#88aa88">'+v.poids+'kg × '+fmt(v.prixKg)+'</div></div>'
             +'</div>';
@@ -8949,10 +8955,10 @@ function viewMarche(){
           +'<span style="font-size:22px;font-weight:700;color:#C8A06A"><span id="fv-total-num">'+(_vTotLive?fmt(_vTotLive):'—')+'</span> <span style="font-size:13px">FCFA</span></span>'
           +'</div>'
           +'<div class="fg"><label>Nom acheteur</label>'
-          +'<input type="search" list="dl-acheteurs" autocomplete="off" placeholder="ex: Mamadou Diallo" value="'+(fv.acheteur||'')+'" oninput="S.fv.acheteur=this.value;_autoFillTel(this.value)">'
+          +'<input type="search" list="dl-acheteurs" autocomplete="off" placeholder="ex: Mamadou Diallo" value="'+_escHtml(fv.acheteur||'')+'" oninput="S.fv.acheteur=this.value;_autoFillTel(this.value)">'
           +'<datalist id="dl-acheteurs"></datalist></div>'
           +'<div class="fg"><label>Téléphone</label>'
-          +'<input type="tel" placeholder="ex: +221 77 123 45 67" value="'+(fv.tel||'')+'" oninput="S.fv.tel=this.value"></div>'
+          +'<input type="tel" placeholder="ex: +221 77 123 45 67" value="'+_escHtml(fv.tel||'')+'" oninput="S.fv.tel=this.value"></div>'
           +'<div class="frow">'
           +'<div class="fg"><label>Mode de paiement</label>'
           +'<select onchange="S.fv.mode=this.value">'
@@ -8972,7 +8978,7 @@ function viewMarche(){
           +'</select></div>'
           +'</div>'
           +'<div class="fg"><label>Notes (optionnel)</label>'
-          +'<input type="text" placeholder="ex: Poids confirmé bascule" value="'+(fv.notes||'')+'" oninput="S.fv.notes=this.value"></div>'
+          +'<input type="text" placeholder="ex: Poids confirmé bascule" value="'+_escHtml(fv.notes||'')+'" oninput="S.fv.notes=this.value"></div>'
           +(S.msg?'<div class="msg '+(S.msg.startsWith('ok')?'ok':S.msg.startsWith('load')?'load':'err')+'">'+S.msg.slice(3)+'</div>':'')
           +'<button class="btn'+(S.sending?' disabled':'')+'" onclick="if(!S.sending)doSubmit(\'vente\')"'+(S.sending?' disabled':'')+'>'
           +(S.sending?'Enregistrement...':'💚 Confirmer la vente')+'</button>'
