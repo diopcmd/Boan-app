@@ -3116,8 +3116,9 @@ function pageModal(){
     body='<div class="fg"><label>Foirail principal</label><select onchange="MODAL.data.foirail=this.value"><option'+((!MODAL.data.foirail||MODAL.data.foirail==='Thiès')?' selected':'')+'>Thiès</option><option'+(MODAL.data.foirail==='Tivaouane'?' selected':'')+'>Tivaouane</option><option'+(MODAL.data.foirail==='Diourbel'?' selected':'')+'>Diourbel</option></select></div>'
       +'<div class="fg"><label>Commission Commerciale (%)</label><input type="number" inputmode="decimal" value="'+(MODAL.data.commission||2)+'" oninput="MODAL.data.commission=isNaN(parseFloat(this.value))?MODAL.data.commission:parseFloat(this.value)"></div>';
   } else if(MODAL.step===4){
-    // Étape 4 — Registre des bêtes
+    // Étape 4 — Registre des bêtes (redesign : boutons tap race, bulk, stepper)
     if (!MODAL.data.betes) MODAL.data.betes = [];
+    if (!MODAL.data._addN) MODAL.data._addN = 1;
     // Générer les bêtes si le nb est défini et que la liste est vide
     if (MODAL.data.betes.length === 0 && MODAL.data.nbBetes) {
       for (var bi=0; bi<(MODAL.data.nbBetes||4); bi++) {
@@ -3132,30 +3133,76 @@ function pageModal(){
         });
       }
     }
-    var RACES_STD = ['Djakoré','Gobra','Autre'];
-    body = '<div style="font-size:12px;color:#88aa88;margin-bottom:10px">Chaque bête a un identifiant unique. Modifiez si nécessaire.</div>'
+    var _defPoids = MODAL.data.poidsDepart || 270;
+    var _addN = MODAL.data._addN || 1;
+    body = '<div style="font-size:12px;color:#88aa88;margin-bottom:10px">Appuyez sur la race de chaque bête. IDs générés automatiquement.</div>'
+      // ── Barre d'outils rapides ──
+      +'<div style="background:#0f2a0f;border-radius:10px;padding:10px 12px;margin-bottom:12px">'
+      +'<div style="font-size:11px;color:#88aa88;margin-bottom:6px">Appliquer à toutes :</div>'
+      +'<div style="display:flex;gap:6px;margin-bottom:10px">'
+      +'<button type="button" onclick="_setBulkRace(\'Djakoré\')" style="flex:1;padding:8px 4px;border-radius:8px;border:none;background:#1a4a1a;color:#4caf50;font-weight:700;font-size:13px;cursor:pointer">Tout Djakoré</button>'
+      +'<button type="button" onclick="_setBulkRace(\'Gobra\')" style="flex:1;padding:8px 4px;border-radius:8px;border:none;background:#1a2a4a;color:#5ab4ff;font-weight:700;font-size:13px;cursor:pointer">Tout Gobra</button>'
+      +'<button type="button" onclick="_setBulkRace(\'Autre\')" style="flex:1;padding:8px 4px;border-radius:8px;border:none;background:#2a2a1a;color:#C8A06A;font-weight:700;font-size:13px;cursor:pointer">Tout Autre…</button>'
+      +'</div>'
+      +(MODAL.data._bulkRaceAutreOpen
+        ?'<div class="fg" style="margin-bottom:8px"><label>Race pour toutes les bêtes</label>'
+          +'<input placeholder="ex: Zébu Maure" value="'+_escHtml(MODAL.data._bulkRaceLabel||'')+'" '
+          +'oninput="MODAL.data._bulkRaceLabel=this.value" '
+          +'onblur="_applyBulkRaceLabel()" '
+          +'onkeydown="if(event.key===\'Enter\'){_applyBulkRaceLabel();event.preventDefault();}"></div>'
+        :''
+      )
+      +'<div style="display:flex;align-items:center;gap:8px">'
+      +'<div style="font-size:12px;color:#88aa88;white-space:nowrap">Poids défaut :</div>'
+      +'<input type="number" inputmode="decimal" value="'+_defPoids+'" '
+      +'style="width:72px;padding:6px 8px;border-radius:6px;border:1px solid #2d6a2d;background:#1a2e1a;color:#fff;font-size:13px;text-align:center" '
+      +'oninput="MODAL.data.poidsDepart=parseFloat(this.value)||MODAL.data.poidsDepart">'
+      +'<button type="button" onclick="_resetAllPoids()" style="padding:6px 10px;border-radius:6px;border:1px solid #2d6a2d;background:#1a2e1a;color:#88aa88;font-size:12px;cursor:pointer">Réinitialiser tous →</button>'
+      +'</div>'
+      +'</div>'
+      // ── Liste des bêtes ──
       + MODAL.data.betes.map(function(b,i){
-          var isAutre = RACES_STD.indexOf(b.race)===-1 || b.race==='Autre';
-          return '<div style="background:#1a2e1a;border-radius:8px;padding:10px;margin-bottom:8px;position:relative">'
-            // Bouton supprimer
-            +'<button onclick="MODAL.data.betes.splice('+i+',1);r()" type="button" '
-            +'style="position:absolute;top:8px;right:8px;background:#7a1a1a;color:#fff;border:none;border-radius:6px;'
-            +'padding:2px 8px;font-size:12px;cursor:pointer;font-weight:700">✕ Supprimer</button>'
-            +'<div class="frow" style="padding-right:90px">'
-            +'<div class="fg"><label>ID</label><input value="'+b.id+'" style="font-weight:700;font-size:14px" oninput="MODAL.data.betes['+i+'].id=this.value"></div>'
-            +'<div class="fg"><label>Poids entrée (kg)</label><input type="number" inputmode="decimal" value="'+b.poidsEntree+'" oninput="var _v=parseFloat(this.value);if(!isNaN(_v))MODAL.data.betes['+i+'].poidsEntree=_v"></div>'
+          var _isDja = b.race === 'Djakoré';
+          var _isGob = b.race === 'Gobra';
+          var _isAut = !_isDja && !_isGob;
+          return '<div style="background:#1a2e1a;border-radius:8px;padding:10px;margin-bottom:6px">'
+            +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">'
+            +'<span style="font-size:12px;font-weight:700;color:#C8A06A;white-space:nowrap;min-width:76px">'+_escHtml(b.id)+'</span>'
+            +'<button type="button" onclick="MODAL.data.betes['+i+'].race=\'Djakoré\';r()" '
+            +'style="flex:1;padding:7px 2px;border-radius:6px;border:2px solid '+(_isDja?'#4caf50':'#1a3a1a')+';'
+            +'background:'+(_isDja?'#1a4a1a':'#0f2a0f')+';color:'+(_isDja?'#4caf50':'#88aa88')+';font-size:12px;cursor:pointer;font-weight:'+(_isDja?'700':'400')+'">Djakoré</button>'
+            +'<button type="button" onclick="MODAL.data.betes['+i+'].race=\'Gobra\';r()" '
+            +'style="flex:1;padding:7px 2px;border-radius:6px;border:2px solid '+(_isGob?'#5ab4ff':'#1a2a3a')+';'
+            +'background:'+(_isGob?'#1a2a4a':'#0f1a2a')+';color:'+(_isGob?'#5ab4ff':'#88aa88')+';font-size:12px;cursor:pointer;font-weight:'+(_isGob?'700':'400')+'">Gobra</button>'
+            +'<button type="button" onclick="MODAL.data.betes['+i+'].race=\'Autre\';r()" '
+            +'style="flex:1;padding:7px 2px;border-radius:6px;border:2px solid '+(_isAut?'#C8A06A':'#2a2a1a')+';'
+            +'background:'+(_isAut?'#2a2010':'#1a1a0a')+';color:'+(_isAut?'#C8A06A':'#88aa88')+';font-size:12px;cursor:pointer;font-weight:'+(_isAut?'700':'400')+'">Autre</button>'
+            +'<input type="number" inputmode="decimal" value="'+b.poidsEntree+'" '
+            +'style="width:58px;padding:6px 4px;border-radius:6px;border:1px solid #2d4a2d;background:#0f2a0f;color:#fff;font-size:13px;text-align:center" '
+            +'oninput="var _v=parseFloat(this.value);if(!isNaN(_v))MODAL.data.betes['+i+'].poidsEntree=_v">'
+            +'<span style="font-size:11px;color:#556855;flex-shrink:0">kg</span>'
             +'</div>'
-            +'<div class="frow">'
-            +'<div class="fg"><label>Race</label><select onchange="MODAL.data.betes['+i+'].race=this.value;r()">'
-            +'<option'+(b.race==='Djakoré'?' selected':'')+'>Djakoré</option>'
-            +'<option'+(b.race==='Gobra'?' selected':'')+'>Gobra</option>'
-            +'<option'+((b.race==='Autre'||isAutre)?' selected':'')+'>Autre</option>'
-            +'</select></div>'
-            +(isAutre?'<div class="fg"><label>Préciser la race</label><input placeholder="ex: Zébu..." value="'+(b.raceCustom||(b.race!=='Autre'?b.race:''))+'\'" onchange="MODAL.data.betes['+i+'].raceCustom=this.value"></div>':'')
-            +'</div>'
+            +(_isAut
+              ?'<input placeholder="ex: Zébu Maure" value="'+_escHtml(b.raceCustom||'')+'" '
+                +'style="width:100%;box-sizing:border-box;padding:6px 10px;border-radius:6px;border:1px solid #2a2a0a;background:#1a1a0a;color:#fff;font-size:13px" '
+                +'onchange="MODAL.data.betes['+i+'].raceCustom=this.value">'
+              :''
+            )
             +'</div>';
         }).join('')
-      +'<button onclick="addBeteModal()" class="btn-sec" style="margin-top:8px">+ Ajouter une bête</button>'
+      // ── Ajouter / Supprimer groupés ──
+      +'<div style="display:flex;gap:6px;margin-top:8px;align-items:center">'
+      +'<button type="button" onclick="if(MODAL.data._addN>1){MODAL.data._addN--;r();}" style="width:36px;height:36px;border-radius:8px;border:1px solid #2d6a2d;background:#1a2e1a;color:#fff;font-size:20px;cursor:pointer;flex-shrink:0;line-height:1;padding:0">−</button>'
+      +'<span style="min-width:24px;text-align:center;color:#fff;font-weight:700;font-size:15px">'+_addN+'</span>'
+      +'<button type="button" onclick="MODAL.data._addN=(MODAL.data._addN||1)+1;r()" style="width:36px;height:36px;border-radius:8px;border:1px solid #2d6a2d;background:#1a2e1a;color:#fff;font-size:20px;cursor:pointer;flex-shrink:0;line-height:1;padding:0">+</button>'
+      +'<button type="button" onclick="addBeteModal(MODAL.data._addN)" class="btn-sec" style="flex:1">+ Ajouter '+_addN+' bête'+(_addN>1?'s':'')+'</button>'
+      +'</div>'
+      +(MODAL.data.betes.length>0
+        ?'<button type="button" onclick="_removeLastBetes(MODAL.data._addN||1)" '
+          +'style="width:100%;margin-top:6px;padding:8px;border-radius:8px;border:1px solid #4a1a1a;background:#2a0a0a;color:#ff7070;font-size:13px;cursor:pointer">'
+          +'− Supprimer les '+_addN+' dernière'+(_addN>1?'s':'')+'</button>'
+        :''
+      )
       +'<div class="al al-g" style="margin-top:10px">✅ '+MODAL.data.betes.length+' bête(s) enregistrée(s) — modifiable après démarrage</div>';
   }
 
@@ -4415,21 +4462,52 @@ function addModalStock(){
   setTimeout(function(){ var inp=document.querySelector('.modal-overlay input[oninput*="_msi"]'); if(inp) inp.focus(); }, 30);
 }
 
-function addBeteModal(){
+function addBeteModal(count){
   if (!MODAL.data.betes) MODAL.data.betes = [];
-  var last = MODAL.data.betes.length;
-  var num = last + 1;
-  // Préfixe cycle depuis CYCLE ou numéro 1 par défaut
-  var cycleNum = 'C'+(CYCLE.numCycle||1);
-  // Génère ID jusqu'à 9999 avec bon padding
-  var id = cycleNum + '-' + (num < 10 ? '00'+num : num < 100 ? '0'+num : ''+num);
-  MODAL.data.betes.push({
-    id: id,
-    race: MODAL.data.race || 'Djakoré',
-    raceCustom: '',
-    poidsEntree: MODAL.data.poidsDepart || 270,
-    dateIntro: MODAL.data.dateDebut || todayISO()
-  });
+  count = (typeof count === 'number' && count > 0) ? count : 1;
+  var cycleNum = 'C'+(MODAL.data.numCycle||CYCLE.numCycle||1);
+  for (var _bi=0; _bi<count; _bi++) {
+    var num = MODAL.data.betes.length + 1;
+    var id = cycleNum + '-' + (num < 10 ? '00'+num : num < 100 ? '0'+num : ''+num);
+    MODAL.data.betes.push({
+      id: id,
+      race: MODAL.data.race || 'Djakoré',
+      raceCustom: '',
+      poidsEntree: MODAL.data.poidsDepart || 270,
+      dateIntro: MODAL.data.dateDebut || todayISO()
+    });
+  }
+  r();
+}
+
+function _setBulkRace(race) {
+  if (race === 'Autre') {
+    MODAL.data._bulkRaceAutreOpen = !MODAL.data._bulkRaceAutreOpen;
+    if (!MODAL.data._bulkRaceLabel) MODAL.data._bulkRaceLabel = '';
+    r(); return;
+  }
+  MODAL.data._bulkRaceAutreOpen = false;
+  (MODAL.data.betes||[]).forEach(function(b){ b.race = race; b.raceCustom = ''; });
+  r();
+}
+
+function _applyBulkRaceLabel() {
+  var label = (MODAL.data._bulkRaceLabel || '').trim();
+  if (!label) return;
+  (MODAL.data.betes||[]).forEach(function(b){ b.race = 'Autre'; b.raceCustom = label; });
+}
+
+function _removeLastBetes(n) {
+  n = (typeof n === 'number' && n > 0) ? n : 1;
+  if (MODAL.data.betes && MODAL.data.betes.length > 0) {
+    MODAL.data.betes.splice(Math.max(0, MODAL.data.betes.length - n), n);
+    r();
+  }
+}
+
+function _resetAllPoids() {
+  var def = MODAL.data.poidsDepart || 270;
+  (MODAL.data.betes||[]).forEach(function(b){ b.poidsEntree = def; });
   r();
 }
 
