@@ -8398,9 +8398,14 @@ function viewMarche(){
     if (S.strans  === undefined && _sc0.strans  !== undefined) S.strans  = _sc0.strans;
     if (S.seau    === undefined && _sc0.seau    !== undefined) S.seau    = _sc0.seau;
     if (S.smdo    === undefined && _sc0.smdo    !== undefined) S.smdo    = _sc0.smdo;
-    if (S.sassur  === undefined && _sc0.sassur  !== undefined) S.sassur  = _sc0.sassur;
-    if (S.simpPct === undefined && _sc0.simpPct !== undefined) S.simpPct = _sc0.simpPct;
-    if (S.simpFix === undefined && _sc0.simpFix !== undefined) S.simpFix = _sc0.simpFix;
+    if (S.sassur   === undefined && _sc0.sassur   !== undefined) S.sassur   = _sc0.sassur;
+    if (S.smat     === undefined && _sc0.smat     !== undefined) S.smat     = _sc0.smat;
+    if (S.sterrain === undefined && _sc0.sterrain !== undefined) S.sterrain = _sc0.sterrain;
+    if (S.sprospect=== undefined && _sc0.sprospect!== undefined) S.sprospect= _sc0.sprospect;
+    if (S.sfoirail === undefined && _sc0.sfoirail !== undefined) S.sfoirail = _sc0.sfoirail;
+    if (S.sgestion === undefined && _sc0.sgestion !== undefined) S.sgestion = _sc0.sgestion;
+    if (S.simpPct  === undefined && _sc0.simpPct  !== undefined) S.simpPct  = _sc0.simpPct;
+    if (S.simpFix  === undefined && _sc0.simpFix  !== undefined) S.simpFix  = _sc0.simpFix;
     if (!S.simpMode && _sc0.simpMode) S.simpMode = _sc0.simpMode;
     // Persistance des variables nullables (sn/sp/spx/simMois) — restaurées depuis simCharges
     if (S.sn  === null && _sc0.sn  !== undefined) S.sn  = _sc0.sn;
@@ -8424,6 +8429,11 @@ function viewMarche(){
     var cmdo    = S.smdo     !== undefined ? S.smdo     : 0;      // main d'œuvre gérant FCFA/mois
     var ctrans  = S.strans   !== undefined ? S.strans   : 0;      // transport FCFA (one-shot)
     var cassur  = S.sassur   !== undefined ? S.sassur   : 0;      // assurance CNAAS FCFA (one-shot)
+    var cmat     = S.smat     !== undefined ? S.smat     : 0;     // matériels démarrage (one-shot)
+    var cterrain = S.sterrain !== undefined ? S.sterrain : 0;     // terrain FCFA/mois
+    var cprospect= S.sprospect!== undefined ? S.sprospect: 0;     // prospection FCFA (forfait)
+    var cfoirail = S.sfoirail !== undefined ? S.sfoirail : 0;     // droits foirail (one-shot)
+    var cgestion = S.sgestion !== undefined ? S.sgestion : 0;     // frais gestion/applis FCFA/mois
     var simpMode = S.simpMode || 'pct';
     var simpPct  = S.simpPct  !== undefined ? S.simpPct  : 5;
     var simpFix  = S.simpFix  !== undefined ? S.simpFix  : 100000;
@@ -8437,11 +8447,18 @@ function viewMarche(){
     var cSec    = csec * cycleMois;
     var cEau    = ceau * cycleMois;                   // eau mensuelle × durée cycle
     var cMdo    = cmdo * cycleMois;                   // MdO mensuelle × durée cycle
-    var cBase   = cVeau + cAlim + cVet + cSec + cEau + cMdo;
-    var cImprev = simpMode === 'pct' ? Math.round(cBase * simpPct / 100) : simpFix;
+    var cTerrain = cterrain * cycleMois;              // terrain mensuel × durée cycle
+    var cGestion = cgestion * cycleMois;              // gestion mensuel × durée cycle
+    var cBase   = cVeau + cAlim + cVet + cSec + cEau + cMdo + cTerrain + cGestion;
+    // Imprévus plafonnés à 10% — règle contrat (accord écrit requis au-delà)
+    var _simpPctCapped = Math.min(simpPct, 10);
+    var cImprev = simpMode === 'pct' ? Math.round(cBase * _simpPctCapped / 100) : simpFix;
     var cTrans  = ctrans;
     var cAssur  = cassur;
-    var cTotal  = cBase + cImprev + cTrans + cAssur;
+    var cMat    = cmat;
+    var cProspect = cprospect;
+    var cFoirail = cfoirail;
+    var cTotal  = cBase + cImprev + cTrans + cAssur + cMat + cProspect + cFoirail;
     var ben     = ca - cTotal;
     var commVal = Math.round(ca * comm / 100);
     var benNet  = ben - commVal;
@@ -8547,7 +8564,7 @@ function viewMarche(){
     +   '<div><div style="font-size:11px;color:#88aa88">\u23f1 Dur\u00e9e simul\u00e9e</div>'
     +   '<div style="font-size:10px;color:#445540;margin-top:2px">R\u00e9el\u00a0: ' + (CYCLE.dureeMois||8) + '\u00a0m</div></div>'
     +   '<div style="display:flex;align-items:center;gap:8px">'
-    +     '<button onclick="event.stopPropagation();S.simMois=null;S.sn=null;S.sp=null;S.spx=null;S.sveau=undefined;S.salim=undefined;S.svet=undefined;S.ssec=undefined;S.seau=undefined;S.smdo=undefined;S.sassur=undefined;S.strans=undefined;S.simpMode=undefined;S.simpPct=undefined;S.simpFix=undefined;r()" style="font-size:11px;padding:5px 10px;border-radius:7px;background:#0a150a;border:1px solid #2a4a2a;color:#88aa88;cursor:pointer">↺ Reset</button>'
+    +     '<button onclick="event.stopPropagation();S.simMois=null;S.sn=null;S.sp=null;S.spx=null;S.sveau=undefined;S.salim=undefined;S.svet=undefined;S.ssec=undefined;S.seau=undefined;S.smdo=undefined;S.sassur=undefined;S.strans=undefined;S.smat=undefined;S.sterrain=undefined;S.sprospect=undefined;S.sfoirail=undefined;S.sgestion=undefined;S.simpMode=undefined;S.simpPct=undefined;S.simpFix=undefined;r()" style="font-size:11px;padding:5px 10px;border-radius:7px;background:#0a150a;border:1px solid #2a4a2a;color:#88aa88;cursor:pointer">↺ Reset</button>'
     +     '<div style="display:flex;align-items:center">'
     +       '<button onclick="event.stopPropagation();S.simMois=Math.max(1,(S.simMois!==undefined?S.simMois:' + cycleMois + ')-1);r()" style="width:34px;height:34px;font-size:20px;border-radius:8px 0 0 8px;background:#0a150a;border:1px solid #2a4a2a;border-right:none;color:#C8A06A;cursor:pointer">&#8722;</button>'
     +       '<div style="min-width:50px;height:34px;display:flex;align-items:center;justify-content:center;background:#0a150a;border-top:1px solid #2a4a2a;border-bottom:1px solid #2a4a2a;font-size:17px;font-weight:800;color:#eee">' + cycleMois + '\u00a0m</div>'
@@ -8618,15 +8635,32 @@ function viewMarche(){
     +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Cotisation unique — si 0 : non souscrite ou incluse dans imprévus</div>'
     + '</div>'
 
+
+    // -- Bloc couts one-shot complementaires --
+    + '<div class="card">'
+    +   '<div class="stitle">💰 Coûts one-shot complémentaires</div>'
+    +   simField('Matériels / équipements démarrage', 'smat', cmat, 0, 5000000, 10000, 'FCFA', false)
+    +   simField('Droits foirail (achat + vente)', 'sfoirail', cfoirail, 0, 200000, 1000, 'FCFA', false)
+    +   simField('Prospection / info marché (forfait)', 'sprospect', cprospect, 0, 500000, 5000, 'FCFA', false)
+    + '</div>'
+
+    // -- Bloc charges fixes mensuelles --
+    + '<div class="card">'
+    +   '<div class="stitle">🏡 Charges fixes mensuelles</div>'
+    +   simField('Loyer terrain / parc / mois', 'sterrain', cterrain, 0, 500000, 5000, 'FCFA/m', false)
+    +   simField('Gestion / applis / téléphone / mois', 'sgestion', cgestion, 0, 200000, 1000, 'FCFA/m', false)
+    +   '<div style="font-size:11px;color:#88aa88;margin-top:-4px">× ' + cycleMois + ' m → <strong style="color:#eee">' + fmt(cTerrain + cGestion) + ' FCFA</strong></div>'
+    + '</div>'
     // ── Bloc Imprévus ──
     + '<div class="card">'
-    +   '<div class="stitle">⚡ Imprévus</div>'
+    +   '<div class="stitle">⚡ Imprévus documentés</div>'
+    +   '<div style="background:#1a1500;border:1px solid #4a3a00;border-radius:8px;padding:6px 10px;font-size:10px;color:#ff9800;margin-bottom:10px">📋 Plafond 10% max — accord écrit requis au-delà</div>'
     +   '<div style="display:flex;gap:8px;margin-bottom:12px">'
-    +     '<button onclick="S.simpMode=\'pct\';r()" style="flex:1;padding:8px;font-size:12px;border-radius:8px;border:1px solid ' + (simpMode==='pct'?'#2d6a2d':'#2a4a2a') + ';background:' + (simpMode==='pct'?'#2d6a2d':'transparent') + ';color:#eee">% du coût hors achat</button>'
+    +     '<button onclick="S.simpMode=\'pct\';r()" style="flex:1;padding:8px;font-size:12px;border-radius:8px;border:1px solid ' + (simpMode==='pct'?'#2d6a2d':'#2a4a2a') + ';background:' + (simpMode==='pct'?'#2d6a2d':'transparent') + ';color:#eee">% max 10%</button>'
     +     '<button onclick="S.simpMode=\'fixe\';r()" style="flex:1;padding:8px;font-size:12px;border-radius:8px;border:1px solid ' + (simpMode==='fixe'?'#2d6a2d':'#2a4a2a') + ';background:' + (simpMode==='fixe'?'#2d6a2d':'transparent') + ';color:#eee">Montant fixe</button>'
     +   '</div>'
     +   (simpMode === 'pct'
-      ? simField('Pourcentage imprévus', 'simpPct', simpPct, 0, 25, 1, '% du coût total', false)
+      ? simField('Pourcentage imprévus (plafonné 10%)', 'simpPct', _simpPctCapped, 0, 10, 1, '% du coût total', false)
       : simField('Montant imprévus',     'simpFix', simpFix, 0, 5000000, 10000, 'FCFA', false))
     +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">→ <strong style="color:#eee">' + fmt(cImprev) + ' FCFA</strong></div>'
     + '</div>'
@@ -8642,9 +8676,14 @@ function viewMarche(){
     +   simRow('− Sécurité (' + cycleMois + 'm)',   fmt(cSec)  + ' FCFA', '#ff9090')
     +   (cEau > 0 ? simRow('− Eau (' + cycleMois + 'm)',      fmt(cEau)  + ' FCFA', '#ff9090') : '')
     +   (cMdo > 0 ? simRow('− Main d\'œuvre (' + cycleMois + 'm)', fmt(cMdo) + ' FCFA', '#ff9090') : '')
+    +   (cTerrain > 0 ? simRow('− Terrain (' + cycleMois + 'm)', fmt(cTerrain) + ' FCFA', '#ff9090') : '')
+    +   (cGestion > 0 ? simRow('− Gestion/applis (' + cycleMois + 'm)', fmt(cGestion) + ' FCFA', '#ff9090') : '')
     +   (cTrans > 0 ? simRow('− Transport',              fmt(cTrans) + ' FCFA', '#ff9090') : '')
     +   (cAssur > 0 ? simRow('− Assurance CNAAS',        fmt(cAssur) + ' FCFA', '#ff9090') : '')
-    +   simRow('− Imprévus',                  fmt(cImprev)+ ' FCFA', '#ff9800')
+    +   (cMat > 0 ? simRow('− Matériels démarrage',      fmt(cMat)   + ' FCFA', '#ff9090') : '')
+    +   (cProspect > 0 ? simRow('− Prospection clients', fmt(cProspect) + ' FCFA', '#ff9090') : '')
+    +   (cFoirail > 0 ? simRow('− Droits foirail',       fmt(cFoirail) + ' FCFA', '#ff9090') : '')
+    +   simRow('− Imprévus (≤10%)',            fmt(cImprev)+ ' FCFA', '#ff9800')
     +   '<div style="height:1px;background:#2a4a2a;margin:6px 0"></div>'
     +   simRow('Total charges',               fmt(cTotal) + ' FCFA', '#ff6060')
     +   '<div style="height:1px;background:#2a4a2a;margin:6px 0"></div>'
