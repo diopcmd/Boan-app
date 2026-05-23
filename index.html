@@ -2868,7 +2868,9 @@ function pageResetPwd(){
   var gg = CYCLE.gonogo||{};
   var c1 = !!(CYCLE.veterinaire&&CYCLE.veterinaire.trim());
   var c2 = !!(CYCLE.numCnaas&&CYCLE.numCnaas.trim());
-  var c3 = (LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';}).length===0;
+  var _incOuverts = (LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';}).length;
+  // Si aucun cycle en cours, il ne peut pas y avoir d'incidents — c3 passe automatiquement
+  var c3 = !CYCLE.initialized || _incOuverts === 0;
   var c4 = !!gg.cash; var c5=!!gg.betes; var c6=!!gg.contrats; var c7=!!gg.infra; var c8=!!gg.securite;
   var score = [c1,c2,c3,c4,c5,c6,c7,c8].filter(Boolean).length;
   function cRow(label, ok, detail) {
@@ -2879,7 +2881,7 @@ function pageResetPwd(){
   var condHtml = ''
     +cRow('Vétérinaire', c1, c1 ? ('ok '+CYCLE.veterinaire) : 'Non renseigné')
     +cRow('Assurance CNAAS', c2, c2 ? ('Réf. '+CYCLE.numCnaas) : 'Non confirmée')
-    +cRow('Aucun incident ouvert', c3, c3 ? 'ok aucun' : 'Incidents en cours')
+    +cRow('Incidents cycle actuel', c3, c3 ? 'ok — aucun ouvert' : _incOuverts+' ouvert(s) — à fermer')
     +cRow('Trésorerie suffisante', c4, c4 ? 'Valide' : 'Non valide')
     +cRow('Bêtes disponibles', c5, c5 ? 'Valide' : 'Non valide')
     +cRow('Contrats vente', c6, c6 ? 'Valide' : 'Non valide')
