@@ -784,7 +784,7 @@ function stockSyntheseHtml(compact) {
 }
 
 function addHistory(type, label, meta) {
-  var icons = {fiche:'📋', sop:'✅', stock:'🌾', inc:'⚠️', pesee:'⚖️', sante:'💊', bilan:'📊', marche:'📈'};
+  var icons = {fiche:'📋', sop:'✅', stock:'🌾', inc:'⚠️', pesee:'⚖️', sante:'💊', bilan:'📊', marche:'📈', cycle:'🔄'};
   var entry = {type:type, label:label, icon:icons[type]||'📝', date:today(), time:(function(){var n=_nowDakar();return (n.hour<10?'0':'')+n.hour+':'+(n.minute<10?'0':'')+n.minute;})()};
   if(meta) Object.assign(entry, meta); // stocker _id, _typeInc, _sym pour anti-doublons
   HISTORY.unshift(entry);
@@ -1444,6 +1444,8 @@ function loadLiveData() {
             CYCLE._lastBilanSem=''; MOCK.incidents=0; MOCK.stock=0;
             STOCK_MVTS=[]; saveMvts();
             lsSet('cycle', CYCLE); // re-save avec les champs vidés
+            // [fix] Injecter l'entrée "Cycle démarré" dans l'historique local après la réinitialisation
+            addHistory('cycle', 'Cycle '+(CYCLE.numCycle||1)+' démarré — '+(CYCLE.nbBetes||0)+' bête(s)', {numCycle: CYCLE.numCycle||1});
           }
         }
 
@@ -1506,6 +1508,8 @@ function loadLiveData() {
                 CYCLE._lastPeseeDate=''; CYCLE._lastIncDate=''; CYCLE._lastSanteDate='';
                 CYCLE._lastBilanSem=''; MOCK.incidents=0; MOCK.stock=0;
                 STOCK_MVTS=[]; saveMvts();
+                // [fix] Injecter l'entrée "Cycle démarré" après wipe Config_App
+                addHistory('cycle', 'Cycle '+(CYCLE.numCycle||1)+' démarré — '+(CYCLE.nbBetes||0)+' bête(s)', {numCycle: CYCLE.numCycle||1});
               }
             } catch(e) {}
           });
@@ -3046,7 +3050,12 @@ function _ouvrirModalInit() {
   MODAL.open = true;
   MODAL.step = 1;
   MODAL.data = Object.assign({}, CYCLE);
-  if (!MODAL.data.dateDebut) MODAL.data.dateDebut = todayISO();
+  // Toujours remettre la date à aujourd'hui pour le nouveau cycle
+  MODAL.data.dateDebut = todayISO();
+  // Auto-incrémenter le numéro de cycle
+  MODAL.data.numCycle = (CYCLE.numCycle || 1) + (CYCLE.initialized ? 1 : 0);
+  // Réinitialiser la liste des bêtes pour qu'elle soit régénérée selon le nouveau nb
+  MODAL.data.betes = [];
   closeSB();
   r();
 }
@@ -4622,6 +4631,8 @@ function saveCycle(){
   // ── Reset complet de l'état local (synchrone) ──
   HISTORY = [];
   lsSet('history', []);
+  // Ajouter une entrée dans l'historique pour le démarrage du nouveau cycle
+  addHistory('cycle', 'Cycle '+( CYCLE.numCycle||1)+' démarré — '+(CYCLE.nbBetes||0)+' bête(s)', {numCycle: CYCLE.numCycle||1});
   lsSet('last_fiche', null); // effacer le marqueur localStorage de fiche du jour
   // Vider les dates du cycle précédent (sinon elles polluent Config_App + joursSince)
   CYCLE._lastFicheDate  = '';
@@ -4638,6 +4649,7 @@ function saveCycle(){
   LIVE.sold      = [];
   LIVE.ventes    = [];
   lsSet('deceased', []); lsSet('deceased_debut', CYCLE.dateDebut);
+  lsSet('sold', []); lsSet('sold_debut', CYCLE.dateDebut); // [fix] sold manquait — persistait entre cycles
   lsSet('alimPrix', []); LIVE.alimPrix = [];
   LIVE.incidents = [];
   LIVE.loaded    = false;
@@ -4727,6 +4739,12 @@ function saveCycle(){
         clearPromises.push(fetch(url, {method:'POST', headers:{Authorization:'Bearer '+tk, 'Content-Type':'application/json'}}));
       });
     }
+    // [fix] Vider Ventes_Betes dans fondateur + commerciale (ventes cycle précédent)
+    [SID.fondateur, SID.commerciale].filter(Boolean).forEach(function(sid) {
+      var _vEnc = encodeURIComponent('Ventes_Betes') + '!A4:Z500';
+      var _vUrl = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+_vEnc+':clear';
+      clearPromises.push(fetch(_vUrl, {method:'POST', headers:{Authorization:'Bearer '+tk, 'Content-Type':'application/json'}}));
+    });
     Promise.all(clearPromises).then(function() {
       // 3. Écrire les stocks initiaux (stockLines) dans Stock_Nourriture gerant + fondateur
       // IMPORTANT : écriture en batch (1 seul PUT par sheet) pour éviter la race condition
