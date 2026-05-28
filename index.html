@@ -6778,11 +6778,8 @@ function viewSaisie(){
             }
           }
         });
-        // Sante SOP : 1 bête traitée = étape validée (le livrable couvre tout le troupeau)
-        // Pesée SOP : toutes les bêtes doivent être pesées
-        _fait = evt.type === 'sante'
-          ? _betesDonePd.length >= 1
-          : (_sopBeteIds.length > 0 && _betesDonePd.length >= _sopBeteIds.length);
+        // Sante SOP et Pesée : toutes les bêtes doivent être traitées pour valider l'étape
+        _fait = _sopBeteIds.length > 0 && _betesDonePd.length >= _sopBeteIds.length;
       }
       var _nbBetesDone = _betesDonePd.length;
       var _nbBetesTotal = _sopBeteIds.length || 1;
@@ -6791,9 +6788,7 @@ function viewSaisie(){
       var _bg, _bdr, _col, _badge;
       if(_fait){
         _bg='#0f2a0f'; _bdr='#2d6a2d'; _col='#4caf50';
-        _badge = evt.type==='sante' && _nbBetesDone < _nbBetesTotal
-          ? '✅ '+_nbBetesDone+'/'+_nbBetesTotal+' traitée(s)'
-          : '✅ '+_nbBetesTotal+'/'+_nbBetesTotal+' traitées';
+        _badge = '✅ '+_nbBetesTotal+'/'+_nbBetesTotal+' traitées';
       } else if(_nbBetesDone > 0){
         _bg='#1a2a10'; _bdr='#4a7a1a'; _col='#aadd44';
         _badge = '🔄 '+_nbBetesDone+'/'+_nbBetesTotal+' traitées';
