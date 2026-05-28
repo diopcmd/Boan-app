@@ -2321,6 +2321,7 @@ function _submitActual(type) {
       var _meta = {};
       if(type==='inc')   _meta = {_id: S.fin.id, _typeInc: S.fin.type};
       if(type==='sante') _meta = {_id: S.fsa.id, _sym: S.fsa.sym};
+      if(type==='pesee' && S._sopCtx) _meta.sopLabel = S._sopCtx.label; // ancre pesée SOP au protocole
       if(type==='bilan') _meta._sem = String(calcSemaine()); // pour bilanDejaFaitCetteSemaine() via h._sem
       // Capturer ID bête avant reset formulaire (pour tracker les bêtes déjà traitées)
       var _beteIdSubmit = type==='pesee' ? S.fp.id : type==='sante' ? S.fsa.id : type==='inc' ? S.fin.id : '';
@@ -6768,8 +6769,8 @@ function viewSaisie(){
           var _p = h.date.split('/'); if(_p.length !== 3) return;
           var _hd = new Date(_p[2], _p[1]-1, _p[0]);
           // Entrées avec sopLabel explicite = liées définitivement à cette étape (quelle que soit la date)
-          // Entrées sans sopLabel = heuristique par proximité ±3j seulement
-          var _inWindow = (h.sopLabel === evt.label) || (Math.abs(_hd - _td) <= 3*86400000);
+          // Entrées sans sopLabel = heuristique par proximité ±7j (cohérent avec garde 7j avant date prévue)
+          var _inWindow = (h.sopLabel === evt.label) || (Math.abs(_hd - _td) <= 7*86400000);
           if(_inWindow){
             if(h.id === '__tous__'){
               _betesDonePd = _sopBeteIds.slice();
@@ -7962,11 +7963,11 @@ function viewLiv(){
         else{var _d2=_td2,_ds=('0'+_d2.getDate()).slice(-2)+'/'+('0'+(_d2.getMonth()+1)).slice(-2)+'/'+_d2.getFullYear();_s='📅 '+_ds;_sc='#88aa88';_sb='#0a150a';_sbd='#1a2e1a';}
         return '<div style="background:'+_sb+';border:1px solid '+_sbd+';border-radius:8px;padding:10px 12px;margin-bottom:8px"><div style="display:flex;align-items:center;gap:10px"><div style="font-size:20px;width:32px;text-align:center;flex-shrink:0">'+evt.ico+'</div><div style="flex:1"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px"><div style="font-size:13px;color:#ccc;font-weight:700">J+'+evt.j+' — '+evt.label+'</div><div style="font-size:11px;font-weight:700;color:'+_sc+'">'+_s+'</div></div><div style="font-size:10px;color:#7a9a7a;margin-top:2px">'+evt.note+'</div></div></div></div>';
       }).join('');
-      var _cd = _cp.filter(function(e){ if(!_cb)return false; var _td3=new Date(_cb.getTime()); _td3.setDate(_td3.getDate()+e.j); return HISTORY.some(function(h){ if(h.type!==e.type)return false; var _p=h.date.split('/'); if(_p.length!==3)return false; return Math.abs(new Date(_p[2],_p[1]-1,_p[0])-_td3)<=3*86400000; }); }).length;
+      var _cd = _cp.filter(function(e){ if(!_cb)return false; var _td3=new Date(_cb.getTime()); _td3.setDate(_td3.getDate()+e.j); return HISTORY.some(function(h){ if(h.type!==e.type)return false; if(!_sopEntryAfterReset(h))return false; var _p=h.date.split('/'); if(_p.length!==3)return false; return (h.sopLabel===e.label)||(Math.abs(new Date(_p[2],_p[1]-1,_p[0])-_td3)<=7*86400000); }); }).length;
       return '<div class="stitle">📅 Calendrier SOP vétérinaire</div>'
         +(!_cb ? '<div style="background:#2e1500;border:1px solid #8a4400;border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:#ff9800">⚠️ Cycle non démarré — saisissez une date de début dans les paramètres.</div>'
           : '<div style="background:#0f1f0f;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11px;color:#7a9a7a">Début cycle</div><div style="font-size:13px;color:#C8A06A;font-weight:700">'+isoToFr(CYCLE.dateDebut)+'</div></div><div style="text-align:right"><div style="font-size:11px;color:#7a9a7a">Complétés</div><div style="font-size:20px;font-weight:800;color:'+(_cd>=_cp.length?'#4caf50':'#C8A06A')+'">' +_cd+' / '+_cp.length+'</div></div></div>')
-        +'<div style="font-size:10px;color:#7a9a7a;margin-bottom:10px">Une saisie Santé ou Pesée dans ±3j de la date théorique est comptée comme réalisée.</div>'
+        +'<div style="font-size:10px;color:#7a9a7a;margin-bottom:10px">Une saisie Santé ou Pesée dans ±7j de la date théorique est comptée comme réalisée.</div>'
         +_cc;
     })() + (view ? '<div class="sep"></div>' + view : '');
   } else if(S.sub==='cycles'){
