@@ -1,7 +1,7 @@
 ﻿# DOCUMENTATION TECHNIQUE — BOAN App
 
 Référence développeur pour l'application de gestion d'élevage **BOAN**.  
-**Commit HEAD** : `2100d30` — ~9 600 lignes — 22 Mai 2026
+**Commit HEAD** : `6a4d8d6` — ~9 800 lignes — 28 Mai 2026
 
 ---
 
@@ -519,13 +519,13 @@ Valide le formulaire inline d'un acte Santé SOP avec suivi **par bête** :
 | `tous=true` | Bouton "🐄 Toutes les bêtes restantes" | Crée une entrée par bête restante — ferme le form |
 | `tous=false` | Bouton "✅ 1 bête" | Crée une entrée pour la bête sélectionnée — form reste ouvert si d'autres restent |
 
-**Champ `sopLabel`** (commit 61fc2c0) : chaque entrée créée par `_sopInlineSave` porte `sopLabel: evt.label`. La détection `_fait` l'utilise pour isoler les étapes de même type proches dans le temps :
+**Champ `sopLabel`** (commit 61fc2c0, affiné `6a4d8d6`) : chaque entrée créée par `_sopInlineSave` porte `sopLabel: evt.label`. La détection `_fait` l'utilise pour isoler les étapes de même type proches dans le temps. **Depuis `6a4d8d6`**, la fenêtre de matching est hybride :
 ```javascript
-// Avant fix : Vitamine AD3E (J+1) et Déparasitage (J+7) — écart 6j < fenêtre ±7j
-//   => une validation en déclenchait une autre
-// Après fix : si h.sopLabel existe && h.sopLabel !== evt.label => ignoré
-if(h.sopLabel !== undefined && h.sopLabel !== null && h.sopLabel !== evt.label) return;
-// Entrées manuelles santé (sans sopLabel) : comportement inchangé (date-based)
+// Entrées avec sopLabel : matching exact sur le label (insensible à la date)
+// Entrées sans sopLabel (saisies manuelles santé) : fenêtre ±7j autour de la date planifiée
+var _inWindow = (h.sopLabel === evt.label) || (Math.abs(_hd - _td) <= 7*86400000);
+// NB : sopLabel pesée SOP est maintenant persisté dans l'entrée HISTORY via _submitActual
+//   _meta.sopLabel = S._sopCtx.label  (type==='pesee' && S._sopCtx)
 ```
 
 **Format de l'entrée** :
@@ -545,7 +545,9 @@ if(h.sopLabel !== undefined && h.sopLabel !== null && h.sopLabel !== evt.label) 
 // _pdPartialCount : étapes où CERTAINES bêtes ont été traitées (🔄 X/N)
 // Affiché : "✅ X · 🔄 Y / total" dans l'en-tête
 //
-// _fait = TOUTES les bêtes actives traitées (plus 1 bête != tout le troupeau)
+// _fait = _sopBeteIds.length > 0 && _betesDonePd.length >= _sopBeteIds.length
+// ⚠️ TOUTES les bêtes actives doivent être traitées (commit d343c1a) — plus "1 bête suffit"
+// Badge : "✅ N/N traitées" quand complet
 // La liste _sopBeteIds est calculée une fois avant la map (même logique que beteDropdown)
 ```
 
@@ -600,6 +602,127 @@ if (!_configAppTabOk) {
 }
 ```
 Evite l'appel `addSheet` à chaque `saveObjectifs()`. Remis à `false` uniquement si on détecte un cycle reset.
+
+### Modal init cycle — étape bêtes *(commit `f23647e`)*
+
+Redesign complet de l'étape 4 (registre des bêtes) :
+
+- **Boutons tap race** par bête dans la liste (Djakoré / Gobra / Autre) — plus de select dropdown
+- **Bulk race** : "Tout Djakoré" / "Tout Gobra" / "Tout Autre…" applique une race à toutes les bêtes d'un coup — champ texte libre si Autre
+- **Stepper +/−** pour choisir combien de bêtes ajouter d'un coup (`MODAL.data._addN`)
+- **Bouton "Supprimer les N dernières"** : `_removeLastBetes(n)` — visible uniquement si `MODAL.data.betes.length > 0`
+- **Poids défaut global** : input modifiable + bouton "Réinitialiser tous →" (`_resetAllPoids()`)
+
+Fonctions nouvelles (ES5, déclarées au niveau global) :
+```javascript
+function addBeteModal(count)     // Ajoute `count` bêtes avec IDs auto (CX-00N)
+function _setBulkRace(race)      // Applique race à toutes les bêtes — ouvre champ texte si 'Autre'
+function _applyBulkRaceLabel()   // Applique MODAL.data._bulkRaceLabel à toutes les bêtes race=Autre
+function _removeLastBetes(n)     // Supprime les n dernières bêtes du tableau
+function _resetAllPoids()        // Remet toutes les poidsEntree au poidsDepart courant
+```
+
+### Go/No-Go — critère c3 incidents *(commit `d7a591b`)*
+
+```javascript
+var _incOuverts = (LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';}).length;
+// c3 auto-true si aucun cycle en cours (pas d'incidents possibles)
+var c3 = !CYCLE.initialized || _incOuverts === 0;
+```
+
+- **Auto-true** si `!CYCLE.initialized` — évite un faux ✗ avant le premier cycle
+- Label affiché : `c3 ? 'ok — aucun ouvert' : _incOuverts+' ouvert(s) — à fermer'`
+
+### Simulateur de charges — nouveaux champs *(commit `fa4343e`)*
+
+Champs ajoutés (en plus de main d'œuvre, transport, assurance CNAAS, imprévus) :
+
+| Champ S.xxx | Variable | Type | Unité |
+|---|---|---|---|
+| `smat` | `cmat` | Matériels / équipements démarrage | FCFA one-shot |
+| `sterrain` | `cterrain` | Loyer terrain / parc | FCFA/mois × dureeMois |
+| `sprospect` | `cprospect` | Prospection / info marché | FCFA forfait |
+| `sfoirail` | `cfoirail` | Droits foirail (achat + vente) | FCFA one-shot |
+| `sgestion` | `cgestion` | Gestion / applis / téléphone | FCFA/mois × dureeMois |
+
+**Imprévus plafonné à 10%** de `cBase` — règle contractuelle (accord écrit requis au-delà) :
+```javascript
+var _simpPctCapped = Math.min(simpPct, 10);
+var cImprev = simpMode === 'pct' ? Math.round(cBase * _simpPctCapped / 100) : simpFix;
+```
+
+Reset simulateur étendu : bouton "↺ Reset" remet à `undefined` les 5 nouveaux champs + les anciens.
+
+### Formules ventes / KPI *(commits `e82ea08`, `f2660f8`, `725b968`, `dffb445`)*
+
+#### `caProj` — CA projeté total
+Inclut les ventes déjà réalisées ce cycle :
+```javascript
+var _ventesCA = (LIVE.ventes||[]).reduce(function(s,v){return s+(v.total||0);},0);
+var caProj    = _ventesCA + actBetes * poidsFinalProj * objectifPrix;
+// Sidebar + onglet "month" : caProj + ROI projeté affichés (incluent ventesCA)
+```
+
+#### `depTotale` — coût de revient réel
+```javascript
+var _depTotale = Math.max(0, (CYCLE.capital||1450000) + _ventesCA - Math.max(0, MOCK.treso));
+// gainTotal inclut le gain des bêtes déjà vendues :
+var _gainVentes = (LIVE.ventes||[]).reduce(function(s,v){return s+Math.max(0,(v.poids||0)-(CYCLE.poidsDepart||270));},0);
+var _gainTotal  = _gainVentes + (poidsFinalProj-(CYCLE.poidsDepart||270))*actBetes;
+```
+
+#### `_depReal` — dépenses réelles (simulateur bannière)
+```javascript
+var _baseCapital = (CYCLE.capital||0) + _ventesCA;
+// _kpiSurplus : KPI > base = capital sous-déclaré (apport externe non configuré)
+var _kpiSurplus  = MOCK.tresoSource === 'kpi' && MOCK.treso >= _baseCapital;
+// _depReal réel seulement si tresoSource=kpi ET pas de surplus
+var _depReal     = (MOCK.tresoSource === 'kpi' && !_kpiSurplus) ? (_baseCapital - MOCK.treso) : null;
+// Si _kpiSurplus → warning orange + fallback simulation
+```
+
+#### Réconciliation MOCK.betes (Vague 1)
+```javascript
+// Si réseau KO (rowsVentes=null) et LIVE.sold local non vide :
+// Sante_Mortalite a écrit nbBetes-décès sans soustraire les ventes déjà connues en cache
+if (!rowsVentes && (LIVE.sold||[]).length > 0) {
+  MOCK.betes = Math.max(0, MOCK.betes - LIVE.sold.length);
+}
+```
+
+#### Reset cycle — sold + Ventes_Betes *(commit `5655e69`)*
+```javascript
+lsSet('sold', []);                    // [fix] manquait entre cycles
+lsSet('sold_debut', CYCLE.dateDebut); // recalibration sold au nouveau cycle
+// Vider Ventes_Betes dans fondateur + commerciale (ventes cycle précédent)
+[SID.fondateur, SID.commerciale].filter(Boolean).forEach(function(sid) {
+  fetch('.../values/'+encodeURIComponent('Ventes_Betes')+'!A4:Z500:clear', {method:'POST', ...});
+});
+// Injection de l'entrée "Cycle démarré" dans HISTORY après wipe Config_App
+addHistory('cycle', 'Cycle '+(CYCLE.numCycle||1)+' démarré — '+(CYCLE.nbBetes||0)+' bête(s)', {...});
+```
+
+### Sécurité XSS — _escHtml ventes *(commit `93352ce`)*
+
+```javascript
+// 3 affichages dans viewLiv sub=ventes :
+_escHtml(v.id)    // ID bête dans tableau ventes
+_escHtml(v.race)  // Race dans tableau ventes
+// pageConfirm() — message confirmation modale :
+_escHtml(CONFIRM.msg)  // était affiché raw — XSS possible si msg contient <script>
+```
+
+### Rapport WhatsApp — ventes *(commit `e82ea08`)*
+
+```javascript
+// Ventes du jour dans le rapport quotidien gérant :
+var ventesAujourdhui = (LIVE.ventes||[]).filter(function(v){ return v.date === _td; });
+// Section "Ventes réalisées ce cycle" :
+if ((LIVE.ventes||[]).length > 0) {
+  var _vtotKPI = (LIVE.ventes||[]).reduce(function(s,v){return s+(v.total||0);},0);
+  // ...
+}
+```
 
 ---
 
@@ -919,7 +1042,7 @@ renderTab(tab)
 
 ---
 
-## 14. Bugs corrigés — audits multi-passes (commits `51f5fee` → `f7a962b`)
+## 14. Bugs corrigés — audits multi-passes (commits `51f5fee` → `6a4d8d6`)
 
 ### Passe 1 — 7 corrections (`51f5fee`)
 | # | Localisation | Bug | Fix |
@@ -971,6 +1094,30 @@ renderTab(tab)
 | 8 | `f7a962b` | **`fl()` CRITIQUE** — `'fl'+(val?'has-val':'')` génère `class="flhas-val"` — la classe CSS `.fl.has-val` n'était jamais appliquée — tous les floating labels restaient en position haute même avec valeur pré-remplie | Espace ajouté : `'fl '+(val?' has-val':'')` |
 | 9 | `f7a962b` | `S._sopSyncDone` non déclaré dans `S = {}` — `!undefined` = `true` fonctionnait accidentellement | Déclaré explicitement `_sopSyncDone: false` dans `S` |
 | 10 | `f7a962b` | `'betes'` sans accent dans le hero card dashboard | Corrigé en `'bêtes'` |
+
+### Passe 6 — Session Mai 2026 (commits `dffb445` → `6a4d8d6`)
+
+| # | Commit | Bug / Feature | Fix |
+|---|---|---|---|
+| 1 | `dffb445` | Formulaires vente/alim/pesée : `f.date` non initialisé → `undefined` → chaîne ISO invalide | Fallback `f.date \|\| todayISO()` dans les 3 formulaires (fm, falim, fv) |
+| 2 | `dffb445` | `MOCK.betes` trop élevé si `rowsVentes=null` (réseau KO) et ventes déjà en cache `LIVE.sold` | Réconciliation : `if (!rowsVentes && LIVE.sold.length > 0) MOCK.betes -= LIVE.sold.length` |
+| 3 | `dffb445` | XSS : `v.id` et `v.race` affichés raw dans tableau ventes (livrable) | `_escHtml(v.id)`, `_escHtml(v.race)` ajoutés |
+| 4 | `e82ea08` | `caProj` dans KPI livrables ne tenait pas compte des ventes déjà réalisées | `caProj = _ventesCA + betes_restantes * poidsFinalProj * objectifPrix` |
+| 5 | `e82ea08` | `depTotale` (coût de revient) ignorait les ventes comme source de capital | `depTotale = max(0, capital + ventesCA - treso)` |
+| 6 | `e82ea08` | Rapport WhatsApp gérant sans mention des ventes du jour ni du cycle | Ajout section "Ventes du jour" et "Ventes réalisées" dans `_buildRapportWA()` |
+| 7 | `f2660f8` | Sidebar "Projection vente" et "ROI projeté" ignoraient les ventes déjà encaissées | `_vtCA` inclus dans `_baseCap` et `caProj` dans les 2 calculs IIFE sidebar |
+| 8 | `725b968` | `_depReal` utilisait `< base*0.98` → faux positif si tréso ≈ capital (jamais de dépenses affichées) | Condition : `tresoSource === 'kpi' && !_kpiSurplus` — affiche dépenses seulement si KPI source ET pas de surplus |
+| 9 | `725b968` | Tréso KPI > capital+ventes déclaré → crash silencieux des calculs dépenses | `_kpiSurplus = MOCK.tresoSource === 'kpi' && MOCK.treso >= _baseCapital` → warning orange + fallback simulation |
+| 10 | `5655e69` | Reset cycle n'effaçait pas `sold` localStorage → ventes cycle précédent persistaient | `lsSet('sold', [])` + `lsSet('sold_debut', CYCLE.dateDebut)` ajoutés dans `saveCycle()` |
+| 11 | `5655e69` | `Ventes_Betes` Sheets non vidé au reset → ventes cycle précédent toujours visibles | Clear `Ventes_Betes!A4:Z500` dans fondateur + commerciale lors de `saveCycle()` |
+| 12 | `5655e69` | Aucune entrée HISTORY "Cycle démarré" après wipe Config_App | `addHistory('cycle', 'Cycle X démarré — N bête(s)', {...})` injecté aux 2 endroits de wipe |
+| 13 | `93352ce` | XSS : `v.id`, `v.race` dans 3 affichages ventes (livrable ventes) + `CONFIRM.msg` dans `pageConfirm` | `_escHtml()` ajouté sur tous les champs suspects |
+| 14 | `f23647e` | Modal init étape bêtes : dropdown `<select>` peu ergonomique sur mobile, ajout 1 seule bête à la fois | Redesign : boutons tap race (Djakoré/Gobra/Autre), bulk, stepper +/−, `_removeLastBetes`, `_resetAllPoids` |
+| 15 | `d7a591b` | GoNoGo critère c3 : faux ✗ "incidents ouverts" si aucun cycle en cours (pas d'incidents possibles) | `c3 = !CYCLE.initialized \|\| _incOuverts === 0` |
+| 16 | `fa4343e` | Simulateur : charges réelles incomplètes (terrain, matériaux, prospection, foirail, gestion absentes) | Ajout 5 champs + imprévus plafonné 10% `Math.min(simpPct, 10)` |
+| 17 | `d343c1a` | SOP véto `_fait` : 1 bête validée suffisait pour marquer l'étape complète pour tout le troupeau | `_fait = _sopBeteIds.length > 0 && _betesDonePd.length >= _sopBeteIds.length` |
+| 18 | `6a4d8d6` | SOP véto : window ±3j trop stricte pour entrées manuelles sans sopLabel (doublons faux négatifs) | Fenêtre hybride : `sopLabel` exact OU ±7j pour entrées sans sopLabel |
+| 19 | `6a4d8d6` | SOP véto pesée : `sopLabel` non persisté dans HISTORY → fenêtre matching jamais utilisée pour la pesée | `_meta.sopLabel = S._sopCtx.label` dans `_submitActual` quand `type==='pesee' && S._sopCtx` |
 
 ---
 

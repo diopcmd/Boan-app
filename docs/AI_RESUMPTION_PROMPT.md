@@ -12,7 +12,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 - **GitHub** : https://github.com/diopcmd/Boan-app (branche `main`)
 - **Dossier local** : `C:\Temp\Boan-app\`
 - **Langue** : Tout en français (code, UI, communications)
-- **Dernier commit** : `0a96562` — fix calBadge + 3 bugs audit (accordion light mode, _clotureData, _recette fallback) — Avril 2026
+- **Dernier commit** : `6a4d8d6` — fix SOP véto fenêtre matching hybride ±7j + sopLabel pesée SOP persisté — 28 Mai 2026
 - **Webhook Vercel** : actif → auto-déploiement sur push `main`
 
 ---
@@ -462,7 +462,9 @@ L6013  viewLiv()          L6776  viewMarche()
 
 ### Simulateur de charges
 - **Assurance CNAAS** (`CYCLE.simCharges.sassur`) : champ one-shot comme transport — inclus dans `_calcDepSim()` et `_calcPrixSeuil()` — ligne résultat masquée si 0
-- Champs : main d'oeuvre, transport+vente, imprévus, assurance CNAAS — tous optionnels
+- **Nouveaux champs** *(commit `fa4343e`)* : matériaux/équipements démarrage (`smat`), loyer terrain/parc/mois (`sterrain`), prospection/info marché (`sprospect`), droits foirail (`sfoirail`), gestion/applis/tél/mois (`sgestion`)
+- **Imprévus plafonné à 10%** de `cBase` (règle contractuelle) — `Math.min(simpPct, 10)`
+- Champs : main d'œuvre, transport+vente, assurance CNAAS, matériaux, terrain, prospection, foirail, gestion, imprévus — tous optionnels
 
 ### Dashboard gérant vs fondateur — différences de contenu
 - **Gérant** : 4ème kcard = Score Santé Troupeau /100 (remplace Trésorerie) ; bloc "📋 Tâches actives"
@@ -556,6 +558,7 @@ if (_pendingArch && _pendingArch.dateDebut && SID.fondateur) {
 
 ### Go/No-Go (Livrables — fondateur/rga)
 - Checklist **8 critères** : 3 **automatiques** (vétérinaire renseigné, N° CNAAS saisi, 0 incident ouvert) + 5 **manuels** (cash, betes, contrats, infra, securite)
+- **c3 (incidents)** *(commit `d7a591b`)* : `!CYCLE.initialized || _incOuverts === 0` — **auto-true si aucun cycle en cours** (évite faux ✗ avant le 1er cycle)
 - `CYCLE.gonogo = {cash, betes, contrats, infra, securite}` — réinitialisé au reset cycle
 - `CYCLE.numCnaas` persisté dans `Config_App` et `Config_Cycle!S1`
 - Champ saisie N° CNAAS affiché si `canEdit && !ggAssur`
@@ -582,16 +585,15 @@ if (_pendingArch && _pendingArch.dateDebut && SID.fondateur) {
 ### Calendrier SOP vétérinaire (fondateur / rga / gérant lecture)
 - Protocoles calculés depuis `CYCLE.dateDebut` — J15 vaccin, J30 déparasitage, J60 balnéation…
 - Statut ✅ fait / 🔔 à venir / ⚠️ en retard calculé automatiquement
-- **Tolérance ±3 jours** (pas ±7j) — corrigée dans 4 endroits : sopvet calendrier, compteur `_cd`, vue protocole Saisie, `_sopInlineSave`
-  - `CYCLE.gonogo = {cash, betes, contrats, infra, securite}` — réinitialisé au reset cycle
-  - `CYCLE.numCnaas` persisté `Config_App` et `Config_Cycle!S1`
-  - **Input CNAAS** : `oninput` stocke sans `r()`, `onblur` déclenche `r()` — évite saut clavier
-- **SOP véto** tolérance **±3 jours** (pas ±7j) dans 4 endroits : sopvet calendrier, compteur `_cd`, vue protocole Saisie, `_sopInlineSave`
+- **Fenêtre matching hybride** *(commit `6a4d8d6`)* : `sopLabel` exact OU ±7j date pour entrées manuelles (sans `sopLabel`)  
+  `var _inWindow = (h.sopLabel === evt.label) || (Math.abs(_hd - _td) <= 7*86400000);`
+- **`_fait` = toutes les bêtes traitées** *(commit `d343c1a`)* : `_sopBeteIds.length > 0 && _betesDonePd.length >= _sopBeteIds.length` (plus "1 bête suffit")
+- **sopLabel pesée SOP persisté** : `_meta.sopLabel = S._sopCtx.label` dans `_submitActual` (type=pesee)
 - **Formulaire inline (santé)** : mini-form bête + résultat directement dans la carte, SANS changer de page
   - Déclenché par `_sopValider(idx)` (sante) → `S._sopInlineIdx = idx`
   - Validé par `_sopInlineSave(idx)` → écrit dans `HISTORY` ET dans `Sante_Mortalite!A:I` (tous SIDs)
 - **Pesée SOP** : `_sopValider(idx)` (pesee) → `S._sopCtx = {label, j}` + `S.sub = 'pesee'`
-  - Bannière contextuelle aff ichée dans le form pesée
+  - Bannière contextuelle affichée dans le form pesée
   - `S._sopCtx` nettoyé après soumission réussie (`_submitActual` > `if(type==='pesee') S._sopCtx = null`)
 - **Compteur double** : `✅ X · ⚠️ Y / total` (à temps vs tardifs) dans l'en-tête de l'onglet
 - Entier personnalisable : fondateur peut ajouter/supprimer/modifier étapes
@@ -688,5 +690,23 @@ if (_pendingArch && _pendingArch.dateDebut && SID.fondateur) {
 | `4334fae` | **fix** : perte cycle à la réinitialisation — backup localStorage + archivage dans getTok + retry au démarrage |
 | `8512048` | **fix** : sidebar gérant — supprime boutons Fiche/SOP/Pesée inutiles + fréquence pesée réservée fondateur |
 | `337c697` | **fix** : sb-foot gérant invisible — div orphelin qui fermait sb-body prématurément |
-| `c0f3b1e` | **fix** : CNAAS oninput→onblur (évite saut clavier) + docs mis à jour |
+| `ff578e2` | **fix** : SOP reset nettoie les validations antérieures — `CYCLE._sopResetAt` + helper `_sopEntryAfterReset()` |
+| `9766040` | **fix** : `saveObjectifs()` auto-sync SOP_Protocol Sheets + champ `numCnaas` dans modal init step 2 |
+| `e1aa293` | **optim** : −1 readSheet `Sante_Mortalite` Vague 2 (`_rowsSanteV1`), TTL 5 min `loadPrix`/`loadAlimPrix`, flag `_configAppTabOk` |
+| `f7a962b` | **fix** : `fl()` espace manquant (`'fl has-val'`), `S._sopSyncDone` déclaré, accent `bêtes` dashboard |
+| `5bad4a0` | **fix** : `fl()` restaure `inputHtml+label` — champs disparus stock/incident/pesée (régression f7a962b) |
+| `4b41bad` | **feat** : vente bêtes — formulaire commerciale/fondateur, `Ventes_Betes` sheet, `LIVE.sold`, score santé corrigé, livrables ventes RGA/fondateur |
+| `2100d30` | **fix** : `Ventes_Betes` lu depuis `sidFondateur` en priorité (écrit commerciale+fondateur, pas gérant) ; wipe cycle efface sold/sold_debut |
+| `4d82be1` | **audit** : `_depReal` inclut `ventesTotal` (IA+simulateur) ; guides commerciale/fondateur/rga ventes ; docs MAJ commit 2100d30 |
+| `dffb445` | **fix** : audit R2 — date fallback `todayISO()` dans formulaires, réconciliation `MOCK.betes` si ventes en cache, `_escHtml` affichage ventes |
+| `e82ea08` | **fix** : KPI/rapport formules ventes — `caProj`, `depTotale`, `gainTotal` incluent `ventesCA` ; rapport WhatsApp ventes du jour + cycle |
+| `f2660f8` | **fix** : `depReal` + `caProj` sidebar et month tab — `ventesCA` inclus dans toutes les formules solde/charges |
+| `725b968` | **fix** : `_depReal` condition `tresoSource=kpi` (pas `< base*0.98`) + warning `_kpiSurplus` si KPI > capital déclaré |
+| `5655e69` | **fix** : reset cycle — `sold` localStorage manquant, `Ventes_Betes` non vidé, `addHistory('cycle',...)` injecté après wipe |
+| `93352ce` | **fix** : XSS — `_escHtml(v.id)`, `_escHtml(v.race)` dans 3 affichages ventes + `_escHtml(CONFIRM.msg)` dans `pageConfirm` |
+| `f23647e` | **feat** : modal init cycle — étape bêtes redesign (boutons tap race, bulk, stepper +/−, suppr N dernières) |
+| `d7a591b` | **fix** : GoNoGo c3 incidents — auto-true si pas de cycle précédent, label clarifié |
+| `fa4343e` | **feat** : simulateur — mat/terrain/prospection/foirail/gestion + imprévus plafonné 10% |
+| `d343c1a` | **fix** : SOP véto — étape validée seulement si toutes les bêtes traitées (`_betesDonePd >= _sopBeteIds`) |
+| `6a4d8d6` | **fix** : SOP véto — fenêtre matching hybride (`sopLabel` exact OU ±7j pour entrées manuelles) + `sopLabel` pesée SOP persisté dans HISTORY |
 
