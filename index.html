@@ -947,8 +947,23 @@ function resetStock() {
 
 // Vérifie si le SOP a été soumis dans les 14 derniers jours (2 semaines)
 function sopDejaFait() {
-  // joursSince('sop') utilise HISTORY + CYCLE._lastSopDate (step1) comme fallback
-  return joursSince('sop') < 14;
+  // Cherche type 'sop' (flux ancien) OU type 'sante'/'pesee' avec _sopValidated (flux protocole)
+  var td = today();
+  // Vérifier si type 'sop' a été créé récemment (dans les 14 derniers jours)
+  var hasSopType = HISTORY.some(function(h){ return h.type === 'sop'; }) && joursSince('sop') < 14;
+  // Vérifier si une pesée/sante du protocole a été créée aujourd'hui avec _sopValidated
+  var hasSopFromProtocol = HISTORY.some(function(h){
+    return (h.type === 'pesee' || h.type === 'sante') && h._sopValidated && h.date === td;
+  });
+  // Vérifier fallback Config_App (robustesse)
+  var hasFallback = CYCLE._lastSopDate && (function(){
+    var p = CYCLE._lastSopDate.split('/');
+    if (p.length !== 3) return false;
+    var _nd2 = _nowDakar();
+    var jours = Math.round((new Date(Date.UTC(_nd2.year, _nd2.month-1, _nd2.day)) - new Date(Date.UTC(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0])))) / 86400000);
+    return jours < 14;
+  })();
+  return hasSopType || hasSopFromProtocol || hasFallback;
 }
 
 // Vérifie si le bilan hebdo de la semaine courante a déjà été soumis
@@ -2329,6 +2344,11 @@ function _submitActual(type) {
                  : type==='marche' ? 'Marché '+(S.fm.foi==='Autre'&&S.fm.foiCustom ? S.fm.foiCustom : (S.fm.foi||''))
                  : type;
       addHistory(type, _label, _meta);
+      // Synchronisation SOP : si c'est une pesée/sante du protocole, ajouter aussi type 'sop' pour sopDejaFait()
+      if ((type === 'pesee' && S._sopCtx) || (type === 'sante' && S.fsa && S.fsa.sopLabel)) {
+        addHistory('sop', 'SOP du '+isoToFr(S.fs.date||todayISO()), {_sopValidated: true});
+        CYCLE._lastSopDate = today();
+      }
       // Mettre à jour SOP_Protocol sheet si c'est une pesée SOP ou un acte santé SOP
       if (type === 'pesee' && S._sopCtx) _syncSopProtocol();
       if (type === 'sante' && S.fsa && S.fsa.sopLabel) _syncSopProtocol();
@@ -6954,7 +6974,7 @@ function _syncSopProtocol() {
         if (h.sopLabel !== undefined && h.sopLabel !== null && h.sopLabel !== evt.label) return;
         var _p = h.date.split('/'); if (_p.length !== 3) return;
         var _hd = new Date(_p[2], _p[1]-1, _p[0]);
-        var _inW = (h.sopLabel === evt.label) || (Math.abs(_hd - _td) <= 3*86400000);
+        var _inW = (h.sopLabel === evt.label) || (Math.abs(_hd - _td) <= 7*86400000);
         if (_inW) {
           if (h.id === '__tous__') _betesDone = _beteIds.slice();
           else if (_betesDone.indexOf(h.id) === -1) _betesDone.push(h.id);
@@ -7114,7 +7134,7 @@ function _sopInlineSave(idx, tous){
       var _p = h.date.split('/'); if(_p.length!==3) return;
       var _hd = new Date(_p[2],_p[1]-1,_p[0]);
       // Entrées avec sopLabel explicite = liées définitivement (pas de contrainte de date)
-      var _inW = (h.sopLabel === evt.label) || (Math.abs(_hd - _tdTgt) <= 3*86400000);
+      var _inW = (h.sopLabel === evt.label) || (Math.abs(_hd - _tdTgt) <= 7*86400000);
       if(_inW){
         if(h.id === '__tous__') _doneBetes = _allBetes.slice();
         else if(_doneBetes.indexOf(h.id)===-1) _doneBetes.push(h.id);
