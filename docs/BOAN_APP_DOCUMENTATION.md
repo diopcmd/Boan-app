@@ -5,6 +5,24 @@
 
 ---
 
+## Philosophie de l'application
+
+BOAN doit rester une application de gestion d'élevage concentrée sur la production, la santé et la décision. Ses principes clefs sont :
+
+- **Simplicité d'usage** pour le gérant terrain, avec une navigation claire et des formulaires rapides.
+- **Fiabilité multi-acteurs** : les données saisies par le gérant sont visibles et exploitables par le fondateur, le RGA et la commerciale.
+- **Résilience hors réseau** : les saisies sont persistées localement, puis automatiquement synchronisées dès que la connexion revient.
+- **Traçabilité des processus vétérinaires** : le protocole SOP n'est pas seulement une checklist, c'est un suivi d'actions temporelles réelles avec labels et règles de reset.
+- **Pilotage stratégique** : le tableau de bord et les livrables doivent fournir à la direction des signaux clairs, des alertes actionnables et une vue de cycle cohérente.
+
+## Audit et correctifs récents
+
+Le correctif actuel renforce la cohérence entre le flux de saisie SOP et le suivi des livrables :
+
+- Les saisies SOP santé héritent d'un `sopLabel` explicite et sont désormais liées au protocole vétérinaire dans `Livrables > SOP Véto`.
+- Le reset cycle du fondateur efface correctement les états persistés (`CYCLE._last*`, `sopResetAt`, contexte SOP) pour éviter les marqueurs obsolètes.
+- La documentation produit est mise à jour pour refléter ces règles de comportement et renforcer la confiance du directeur général dans l'application.
+
 ## Table des matières
 
 0. [Vue d'ensemble](#0-vue-densemble)

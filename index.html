@@ -913,9 +913,13 @@ function resetFiche() {
 function resetSop() {
   var td = todayISO();
   S.fs = {date:td,net:'',des:'',rat:'',eau:'',stk:'',san:'',prob:'',sopStep:-1};
+  S._sopInlineIdx = null;
+  S._sopCtx = null;
+  S._sopInlineData = {};
   HISTORY = HISTORY.filter(function(h){ return h.type!=='sop'; });
   lsSet('history', HISTORY);
   CYCLE._lastSopDate = ''; lsSet('cycle', CYCLE);
+  _syncConfigApp().catch(function(){});
   r();
 }
 function resetBilan() {
@@ -934,7 +938,7 @@ function resetInc() {
 }
 function resetSante() {
   var td = todayISO();
-  S.fsa = {date:td,id:'',sym:'',tra:'',cout:'',res:'',dec:'',bcs:'',muq:''};
+  S.fsa = {date:td,id:'',sym:'',tra:'',cout:'',res:'',dec:'',bcs:'',muq:'',sopLabel:''};
   r();
 }
 function resetStock() {
@@ -1072,7 +1076,7 @@ var S = {
   fst:{date:'',mvts:[],stockInput:'',stockKg:'',rat:''},
   fin:{date:'',id:'',type:'',grav:'1',desc:'',act:'',clos:''},
   fp:{date:'',id:'',race:'',raceCustom:'',poids:'',prev:'',datePrev:'',_autoFilled:false,_autoFilledId:''},
-  fsa:{date:'',id:'',sym:'',tra:'',cout:'',res:'',dec:'',bcs:'',muq:''},
+  fsa:{date:'',id:'',sym:'',tra:'',cout:'',res:'',dec:'',bcs:'',muq:'',sopLabel:''},
   fb:{sem:'',nb:'',nou:'',stk:'',inc:'',poi:'',msg:''},
   fm:{date:'',foi:'Thiès',foiCustom:'',bas:'',moy:'',haut:''},
   falim:{date:'',type:'',prix:''},
@@ -1492,7 +1496,10 @@ function loadLiveData() {
                 if (val === null) CYCLE.sopProtocol = null;                     // reset explicite depuis _sopReset()
                 else if (Array.isArray(val) && val.length) CYCLE.sopProtocol = val;
               }
-              if (key === 'sopResetAt' && val) CYCLE._sopResetAt = val;
+              if (key === 'sopResetAt') {
+                if (val && val.length) CYCLE._sopResetAt = val;
+                else CYCLE._sopResetAt = '';
+              }
               if (key === 'numCycle'    && val && parseInt(val) > 0) CYCLE.numCycle = parseInt(val);
               if (key === 'numCnaas'    && val !== null && val !== undefined) CYCLE.numCnaas = val;
               if (key === 'gonogo'      && val && typeof val === 'object') CYCLE.gonogo = Object.assign(CYCLE.gonogo||{}, val);
@@ -1843,9 +1850,28 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   (pesees || []).forEach(function(r) {
     if (!r[0]) return;
     var id = r[1] || '\u2014'; var poids = r[3] || '\u2014';
+    var _peseeSopLabel = (function(){
+      var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+      var _deb = parseISO(CYCLE.dateDebut);
+      if (!_deb) return undefined;
+      var _rowDate = parseFR(r[0]);
+      if (!_rowDate) return undefined;
+      var _best = null;
+      var _bestDiff = Infinity;
+      _proto.forEach(function(evt){
+        if (evt.type !== 'pesee') return;
+        var _evtDate = new Date(_deb.getTime()); _evtDate.setDate(_evtDate.getDate() + evt.j);
+        var _diff = Math.abs(_rowDate - _evtDate);
+        if (_diff <= 7*86400000 && _diff < _bestDiff) {
+          _bestDiff = _diff;
+          _best = evt.label;
+        }
+      });
+      return _best;
+    })();
     // id ET _id pour cohérence avec les entrées locales (SOP pesée)
     entries.push({ type:'pesee', label:id+' \u2014 '+poids+'kg', icon:icons.pesee,
-      date:r[0], time:'\u2014', id:id, _id:id, _src:'sheets' });
+      date:r[0], time:'\u2014', id:id, _id:id, _src:'sheets', sopLabel:_peseeSopLabel });
   });
 
   // SOP_Check [date, net, des, rat, eau, stk, san, prob]
@@ -2027,19 +2053,31 @@ function doSubmit(type) {
   if (type==='sop' && typeof S.fs.sopStep === 'number' && S.fs.sopStep >= 0) {
     var _evt = (CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT)[S.fs.sopStep];
     if (_evt) {
-      if (_evt.type === 'pesee') {
-        S._sopCtx = {label: _evt.label, j: _evt.j};
-        S.sub = 'pesee';
-        r();
-        return;
-      }
-      if (_evt.type === 'sante') {
-        S.sub = 'protocole';
-        S._sopInlineIdx = S.fs.sopStep;
-        S._sopInlineData = {id:'', res:'Guéri'};
-        r();
-        return;
-      }
+      var _continueProtocole = function() {
+        if (_evt.type === 'pesee') {
+          S._sopCtx = {label: _evt.label, j: _evt.j};
+          S.sub = 'pesee';
+          r();
+          return;
+        }
+        if (_evt.type === 'sante') {
+          S.sub = 'sante';
+          S.fsa.sopLabel = _evt.label;
+          if (!S.fsa.sym) S.fsa.sym = _evt.label;
+          if (!S.fsa.tra && _evt.note) S.fsa.tra = _evt.note;
+          r();
+          return;
+        }
+      };
+      return _submitActual('sop').then(function(res) {
+        if (res && res.ok) {
+          _continueProtocole();
+        } else if (res && res.err) {
+          S.sending = false;
+          S.msg = 'err:' + res.err;
+          r();
+        }
+      });
     }
   }
 
@@ -2320,7 +2358,7 @@ function _submitActual(type) {
   } else {
     p=Promise.resolve({ok:false,err:'Type inconnu'});
   }
-  p.then(function(res){
+  return p.then(function(res){
     S.sending=false; S._sendCount=0; S._sendSheet='';
     if (res&&res.ok) {
       S.msg='ok:\u2705 Envoy\u00e9 dans Sheets';
@@ -2339,7 +2377,7 @@ function _submitActual(type) {
       // Métas pour anti-doublons
       var _meta = {};
       if(type==='inc')   _meta = {_id: S.fin.id, _typeInc: S.fin.type};
-      if(type==='sante') _meta = {_id: S.fsa.id, _sym: S.fsa.sym};
+      if(type==='sante') _meta = {_id: S.fsa.id, _sym: S.fsa.sym, sopLabel: S.fsa.sopLabel};
       if(type==='pesee' && S._sopCtx) _meta.sopLabel = S._sopCtx.label; // ancre pesée SOP au protocole
       if(type==='bilan') _meta._sem = String(calcSemaine()); // pour bilanDejaFaitCetteSemaine() via h._sem
       // Capturer ID bête avant reset formulaire (pour tracker les bêtes déjà traitées)
@@ -2366,12 +2404,12 @@ function _submitActual(type) {
       // Reset formulaire après soumission réussie
       var td = todayISO();
       if(type==='fiche') S.fi={date:td,nb:'',nourris:'',eau:'',enclos:'',incident:'',desc:''};
-      if(type==='sop')   S.fs={date:td,net:'',des:'',rat:'',eau:'',stk:'',san:'',prob:''};
+      if(type==='sop')   S.fs={date:td,net:'',des:'',rat:'',eau:'',stk:'',san:'',prob:'',sopStep:-1};
       if(type==='stock') S.fst={date:td,mvts:[],stockInput:'',stockKg:'',rat:''};
       if(type==='inc')   S.fin={date:td,id:'',type:'',grav:'1',desc:'',act:'',clos:''};
       if(type==='pesee') S.fp={date:td,id:'',race:'',raceCustom:'',poids:'',prev:'',datePrev:'',_autoFilled:false,_autoFilledId:''};
       if(type==='pesee') { S._sopCtx = null; }
-      if(type==='sante') S.fsa={date:td,id:'',sym:'',tra:'',cout:'',res:'',dec:''};
+      if(type==='sante') S.fsa={date:td,id:'',sym:'',tra:'',cout:'',res:'',dec:'',bcs:'',muq:'',sopLabel:''};
       if(type==='bilan') S.fb={sem:String(calcSemaine()),nb:'',nou:'',stk:'',inc:'',poi:'',msg:''};
       if(type==='marche')S.fm={date:td,foi:S.fm.foi||'Thiès',foiCustom:S.fm.foiCustom||'',bas:'',moy:'',haut:''}
       if(type==='alim')  S.falim={date:td,type:S.falim.type||'',prix:''};
@@ -2433,7 +2471,7 @@ function _syncConfigApp() {
       ['numCnaas',         JSON.stringify(CYCLE.numCnaas           || '')],
       ['gonogo',           JSON.stringify(CYCLE.gonogo             || {})],
       ['sopProtocol',      JSON.stringify(CYCLE.sopProtocol        || null)],
-      ['sopResetAt',       JSON.stringify(CYCLE._sopResetAt        || null)]
+      ['sopResetAt',       JSON.stringify(CYCLE._sopResetAt        || '')]
     ];
     // Créer l'onglet Config_App uniquement si pas encore confirmé ce cycle (optim : évite 1 appel Sheets inutile à chaque enregistrement)
     if (!_configAppTabOk) {
@@ -4689,6 +4727,7 @@ function saveCycle(){
   CYCLE.gonogo     = {cash:false, betes:false, contrats:false, infra:false, securite:false}; // [fix] cases Go/No-Go manuelles remises à 0
   CYCLE.simCharges = {};        // [fix] charges simulateur spécifiques au cycle sortant
   CYCLE._mktUpdated = '';       // [fix] date de mise à jour marché — repart de zéro
+  CYCLE._sopResetAt = '';       // [fix] reset SOP date from previous cycle
   // ── Reset état UI SOP ──
   S._sopEd          = null;     // [fix] formulaire d'édition SOP ouvert
   S._sopInlineIdx   = null;     // [fix] formulaire inline SOP ouvert
@@ -4698,6 +4737,7 @@ function saveCycle(){
   STOCK_MVTS = [];
   saveMvts();
   lsSet('cycle', CYCLE);
+  _syncConfigApp().catch(function(){});
   MOCK.betes = CYCLE.nbBetes || MOCK.betes;
   MOCK.sem = 1; // Nouveau cycle démarre à la semaine 1
   MOCK.stock = 0; // Réinitialiser stock — sera recalculé depuis stockLines ou Sheets
@@ -6370,6 +6410,9 @@ function viewSaisie(){
         +'</select>'
       +'</div>'
       +'<div class="al al-o" style="font-size:11px;margin-bottom:10px;line-height:1.4">Sélectionnez un acte du protocole SOP pour le lier au suivi vétérinaire. Si aucun acte n’est choisi, le bouton valider enregistre uniquement la checklist SOP classique.</div>'
+      +((f.sopStep>=0 && (CYCLE.sopProtocol||SOP_PROTOCOL_DEFAULT)[f.sopStep].type==='sante')
+        ? '<div class="al al-o" style="font-size:11px;margin-bottom:10px;line-height:1.4">Vous avez choisi une étape santé du protocole. Après validation, le système proposera d’enregistrer l’acte vétérinaire pour le troupeau, ce qui rendra la validation visible dans Livrables > SOP Véto.</div>'
+        : '')
       +'<div class="fg"><label>Nettoyage enclos</label>'+yn(f.net,'net','fs')+'</div>'
       +'<div class="fg"><label>Desinfection</label>'+yn(f.des,'des','fs')+'</div>'
       +'<div class="fg"><label>Ration respectee</label>'+yn(f.rat,'rat','fs')+'</div>'

@@ -9,6 +9,32 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
 
 ---
 
+## Philosophie produit
+
+BOAN est conçu pour être un outil simple, robuste et opérationnel sur terrain mobile à connectivité intermittente. La priorité est donnée à la fiabilité des saisies, à la cohérence multi-acteurs et à la traçabilité des protocoles de santé.
+
+- **Fiabilité terrain** : le gérant saisit rapidement, même hors réseau, et les données sont ensuite synchronisées vers Google Sheets.
+- **Rôles clairs** : chaque profil a des onglets et des actions adaptés à sa fonction.
+- **Transparence des cycles** : un cycle est un périmètre de production complet, avec démarrage, suivi et clôture archivés.
+- **Conformité SOP vétérinaire** : les actes santé et pesées SOP sont suivis par étape, étiquetés `sopLabel`, et réinitialisés proprement en cas de reset protocole.
+- **Décisionnel** : le fondateur et le RGA disposent d’une vue livrable axée sur les résultats, alertes et objectifs opérationnels.
+
+## Audit & ajustements récents
+
+Ce commit aligne l’application sur la philosophie produit en corrigeant deux points clés :
+
+1. **Cohérence SOP vétérinaire**
+   - Les saisies SOP santé depuis l’onglet `Saisie` sont propagées avec un `sopLabel` explicite.
+   - La validation d’une étape santé du protocole passe maintenant par la saisie Santé, pas par un mode protocole séparé.
+   - Les entrées SOP sont associées de façon déterministe au bon événement SOP, même en présence de plusieurs étapes voisines.
+
+2. **Reset cycle / fondateur**
+   - `saveCycle()` efface le contexte SOP du cycle précédent et synchronise immédiatement `Config_App`.
+   - Le flag `sopResetAt` est persisté pour que le reset soit visible par tous les acteurs.
+   - Les dates `_last*` sont vidées proprement pour éviter que des marqueurs de cycle précédent polluent la nouvelle phase.
+
+---
+
 ## Rôles et accès
 
 | Rôle | Identifiant | Onglets | Description |
