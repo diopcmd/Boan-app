@@ -912,7 +912,7 @@ function resetFiche() {
 }
 function resetSop() {
   var td = todayISO();
-  S.fs = {date:td,net:'',des:'',rat:'',eau:'',stk:'',san:'',prob:''};
+  S.fs = {date:td,net:'',des:'',rat:'',eau:'',stk:'',san:'',prob:'',sopStep:-1};
   HISTORY = HISTORY.filter(function(h){ return h.type!=='sop'; });
   lsSet('history', HISTORY);
   CYCLE._lastSopDate = ''; lsSet('cycle', CYCLE);
@@ -2022,6 +2022,25 @@ function doSubmit(type) {
   }
   if (type==='bilan' && (!S.fb.nb || !S.fb.stk)) {
     S.msg='err:Nb bêtes et stock sont obligatoires'; r(); return;
+  }
+
+  if (type==='sop' && typeof S.fs.sopStep === 'number' && S.fs.sopStep >= 0) {
+    var _evt = (CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT)[S.fs.sopStep];
+    if (_evt) {
+      if (_evt.type === 'pesee') {
+        S._sopCtx = {label: _evt.label, j: _evt.j};
+        S.sub = 'pesee';
+        r();
+        return;
+      }
+      if (_evt.type === 'sante') {
+        S.sub = 'protocole';
+        S._sopInlineIdx = S.fs.sopStep;
+        S._sopInlineData = {id:'', res:'Guéri'};
+        r();
+        return;
+      }
+    }
   }
 
   // ── ANTI-DOUBLONS CALENDAIRES ──
@@ -6340,6 +6359,17 @@ function viewSaisie(){
         return calBadge(fait, msg, 'resetSop()');
       })()
       +fl('Date','<input type="date" value="'+f.date+'" oninput="S.fs.date=this.value">',f.date)
+      +'<div class="fg"><label>Étape protocole SOP</label>'
+        +'<select onchange="S.fs.sopStep=parseInt(this.value,10);r()" style="background:#0a1a0a;border:1px solid #2a4a2a;border-radius:6px;color:#ccc;font-size:12px;padding:8px 10px;width:100%">'
+        +'<option value="-1"'+(f.sopStep===-1?' selected':'')+'>Aucun — checklist SOP classique</option>'
+        +((CYCLE.sopProtocol||SOP_PROTOCOL_DEFAULT).map(function(evt, idx){
+          return '<option value="'+idx+'"'+(f.sopStep===idx?' selected':'')+'>'
+            +evt.label+' (J+'+evt.j+' — '+(evt.type==='pesee'?'Pesée':'Santé')+')'
+            +'</option>';
+        }).join(''))
+        +'</select>'
+      +'</div>'
+      +'<div class="al al-o" style="font-size:11px;margin-bottom:10px;line-height:1.4">Sélectionnez un acte du protocole SOP pour le lier au suivi vétérinaire. Si aucun acte n’est choisi, le bouton valider enregistre uniquement la checklist SOP classique.</div>'
       +'<div class="fg"><label>Nettoyage enclos</label>'+yn(f.net,'net','fs')+'</div>'
       +'<div class="fg"><label>Desinfection</label>'+yn(f.des,'des','fs')+'</div>'
       +'<div class="fg"><label>Ration respectee</label>'+yn(f.rat,'rat','fs')+'</div>'

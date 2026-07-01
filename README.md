@@ -5,7 +5,7 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
 
 **Production** → https://boan-app-9u5e.vercel.app  
 **Stack** : Vanilla JS ES5 · Vercel Serverless · Google Sheets API v4  
-**État** : commit `2100d30` — ~9 600 lignes — Mai 2026
+**État** : commit `6a4d8d6` — ~9 600 lignes — Mai 2026
 
 ---
 

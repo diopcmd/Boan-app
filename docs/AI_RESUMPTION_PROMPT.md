@@ -10,9 +10,9 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 
 - **Production** : https://boan-app-9u5e.vercel.app
 - **GitHub** : https://github.com/diopcmd/Boan-app (branche `main`)
-- **Dossier local** : `C:\Temp\Boan-app\`
+- **Dossier local** : clone local de travail du dépôt
 - **Langue** : Tout en français (code, UI, communications)
-- **Dernier commit** : `0a96562` — fix calBadge + 3 bugs audit (accordion light mode, _clotureData, _recette fallback) — Avril 2026
+- **Dernier commit** : `6a4d8d6` — fix: SOP véto — fenêtre matching ±3j→±7j + sopLabel pesée SOP persisté — Mai 2026
 - **Webhook Vercel** : actif → auto-déploiement sur push `main`
 
 ---
@@ -21,7 +21,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 
 | Couche | Technologie |
 |---|---|
-| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~9 030 lignes) |
+| Frontend | Vanilla JS (ES5 `var`), HTML/CSS inline dans `index.html` (~9 600 lignes) |
 | Backend | Vercel Serverless Functions (ES Module `export default async function handler`) |
 | Auth | Session token custom HMAC-SHA256 (`base64(payload).hmac_hex`), 8h |
 | Données | Google Sheets API v4 via Service Account RS256 JWT |
@@ -35,7 +35,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 
 ```
 Boan-app/
-├── index.html              SPA complète (~8 200 lignes)
+├── index.html              SPA complète (~9 600 lignes)
 ├── vercel.json             Rewrites SPA (exclut /api/ et /manifest.json)
 ├── manifest.json           Web App Manifest (PWA — icône, nom, display:standalone)
 ├── sw.js                   Service Worker

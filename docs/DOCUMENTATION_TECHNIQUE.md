@@ -1,7 +1,7 @@
 ﻿# DOCUMENTATION TECHNIQUE — BOAN App
 
 Référence développeur pour l'application de gestion d'élevage **BOAN**.  
-**Commit HEAD** : `2100d30` — ~9 600 lignes — 22 Mai 2026
+**Commit HEAD** : `6a4d8d6` — ~9 600 lignes — Mai 2026
 
 ---
 
@@ -792,7 +792,7 @@ renderTab(tab)
 ## 12. Index des numéros de ligne — `index.html`
 
 > Référence rapide pour naviguer dans le fichier (~9 600 lignes). Vérifier après chaque commit car les lignes peuvent décaler.
-> **Dernière mise à jour : commit `2100d30` (22 mai 2026)**
+> **Dernière mise à jour : commit `6a4d8d6` (Mai 2026)**
 
 > ⚠️ Les numéros de ligne ci-dessous sont approximatifs. Utiliser la recherche de texte pour localiser avec précision.
 

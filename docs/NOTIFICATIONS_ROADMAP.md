@@ -9,7 +9,7 @@
 >   ⚖️ Maître Diallo — Juriste droit CIMA / assurance agricole Dakar
 >   🌍 Dr Fernandez — DG ferme internationale (Sénégal/Espagne)
 >
-> **Référence code** : `index.html` ~9 030 lignes, ES5 strict (`var`, pas `const`/`let`/arrow).
+> **Référence code** : `index.html` ~9 600 lignes, ES5 strict (`var`, pas `const`/`let`/arrow).
 > Commit HEAD : `407c7a7`. App en prod : `https://boan-app-9u5e.vercel.app`
 
 ---

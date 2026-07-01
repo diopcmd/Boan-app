@@ -1,7 +1,7 @@
 # BOAN — Documentation Complète de l'Application
-> Version 1.2 — Mise à jour le 22 Avril 2026 (commits `8728afb`→`0a96562`)
-> Commit HEAD : `0a96562` · App en prod : `https://boan-app-9u5e.vercel.app`
-> Codebase : `index.html` ~9 030 lignes · ES5 strict (`var`, pas `const`/`let`/arrow)
+> Version 1.2 — Mise à jour Mai 2026 (commits `8728afb`→`6a4d8d6`)
+> Commit HEAD : `6a4d8d6` · App en prod : `https://boan-app-9u5e.vercel.app`
+> Codebase : `index.html` ~9 600 lignes · ES5 strict (`var`, pas `const`/`let`/arrow)
 
 ---
 
