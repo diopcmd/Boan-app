@@ -193,6 +193,35 @@ Le correctif actuel renforce la cohérence entre le flux de saisie SOP et le sui
 
 ---
 
+## 3.5 Simplification UI par rôle
+
+### Gérant terrain
+- Interface réduite aux tâches essentielles : fiche du jour, santé, pesée, incident, stock, bilan.
+- Pas d'accès direct à l'éditeur de protocole SOP (`SOP Véto`) ni aux objectifs financiers.
+- Alertes claires : fiche manquante, pesée en retard, décès/incident critique.
+- Les champs avancés restent cachés derrière une section "Options avancées".
+- Les actions liées CNAAS/vol sont traitées comme des incidents spécifiques et ne génèrent pas de nouveaux onglets.
+
+### Fondateur / Direction
+- UI centrée sur les décisions de cycle : état du cycle, conformité SOP, cash-flow, risque de mortalité, statut CNAAS.
+- Formulaires dédiés réduits à la configuration et aux validations : cycle, protocole SOP, clôture.
+- Pas de saisies quotidiennes de terrain : le fondateur vérifie, confirme, et déclenche des actions si nécessaire.
+- Alertes pressantes remontent en priorité : décès non confirmé, expert CNAAS absent, vente en retard, fin de contrat CNAAS.
+
+### RGA
+- Interface orientée contrôle qualité : validation des données saisies par le gérant, visualisation des écarts et anomalies.
+- Pas de saisie de marché ni de vente : focus sur SOP, santé, incidents, conformité des pesées.
+- Accès direct à une liste de vérification "actions à revoir" : fiches manquantes, pesées sans date, incidents sans clôture.
+- Consolidation des alertes de terrain en un flux simple à parcourir plutôt qu'une page de KPI exhaustive.
+
+### Commerciale
+- UI limitée aux indicateurs marché et ventes : prix foirail, prix aliments, prévisions de recettes, saisie de vente de bêtes.
+- Aucun formulaire technique de santé ou de SOP : ces sujets restent hors périmètre commercial.
+- Notification claire lorsque la fin de cycle ou la vente est prioritaire.
+- Le bouton principal est une action commerciale : `Nouvelle vente` ou `Suivi prix`.
+
+---
+
 ## 4. Schémas de données Google Sheets
 
 ### 4.1 `Config_Cycle` (A1:S1 — 1 seule ligne, 19 colonnes)

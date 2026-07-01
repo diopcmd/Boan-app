@@ -2875,6 +2875,7 @@ function chTab(t){
   }, 10);
 }
 function chSub(s){
+  if (s==='protocole' && S.user !== 'fondateur') return;
   S.sub=s; S.msg=''; r(); setTimeout(initSwipe,10);
   // Auto-sync SOP_Protocol sheet à la première ouverture de l'onglet SOP Véto
   if ((s==='sopvet'||s==='protocole') && !S._sopSyncDone) {
@@ -6354,8 +6355,15 @@ function viewDash(){
     +'<div class="sep"></div>'    +'<div class="stitle">Activité récente</div>'    +(HISTORY.length      ? HISTORY.slice(0,4).map(function(h){          return '<div class="act"><div class="dot"></div><div>'            +'<div style="font-size:13px;color:#ccc">'+h.icon+' '+h.label+'</div>'            +'<div style="font-size:11px;color:#555;margin-top:2px">'+h.date+' — '+h.time+'</div>'            +'</div></div>';        }).join('')      : '<div style="color:#7a9a7a;font-size:12px;padding:8px 0">Aucune activité enregistrée</div>')    +'</div>';
 }
 
+function getSaisieSubtabs(){
+  if (S.user==='fondateur') {
+    return [['fiche','Fiche du jour'],['sop','SOP'],['stock','Stock'],['inc','Incident'],['pesee','Pesée'],['sante','Santé'],['bilan','Bilan'],['protocole','📅 SOP Véto']];
+  }
+  return [['fiche','Fiche du jour'],['sop','SOP'],['stock','Stock'],['inc','Incident'],['pesee','Pesée'],['sante','Santé'],['bilan','Bilan']];
+}
+
 function viewSaisie(){
-  var subs=[['fiche','Fiche du jour'],['sop','SOP'],['stock','Stock'],['inc','Incident'],['pesee','Pesée'],['sante','Santé'],['bilan','Bilan'],['protocole','📅 SOP Véto']];
+  var subs = getSaisieSubtabs();
   var stabs=subs.map(function(s){return'<div class="stab '+(S.sub===s[0]?'on':'')+'" onclick="chSub(\''+s[0]+'\')">'+s[1]+'</div>';}).join('');
   var td=todayISO();
   var form='';

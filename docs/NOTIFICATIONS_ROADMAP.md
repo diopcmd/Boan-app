@@ -123,6 +123,80 @@ La CNAAS exige que l'animal décédé reste intact jusqu'au passage de leur expe
 - Photos inventaire initial si disponibles
 ```
 
+### 0.7 CNAAS — Règles métier assurance bovine
+
+> Base métier pour automatisation des alertes / emails.
+
+#### Contrat
+- durée : 1 an
+- renouvellement : manuel, sur demande client
+- prime : paiement unique (souscription / renouvellement, non mensuel)
+- modif_cheptel : ajout/retrait possible en cours de contrat
+- vente_animal : déclaration obligatoire à CNAAS
+- remplacement : transfert assurance possible sur autre bovin
+
+#### Franchise
+- bovin_metis :
+  - sinistre_1 : 20%
+  - sinistre_2_plus : 60%
+- bovin_local : 20% fixe, tous sinistres
+
+#### Indemnisation
+- base_calcul : valeur assurée au contrat (pas nouvelle estimation)
+- delai_paiement : 30 jours max après validation du dossier
+- refus_possible_si : animal non identifiable avec certitude
+
+#### Déclaration décès
+- delai_max : 48h après constat
+- action : alerter CNAAS immédiatement
+- constat_par :
+  - vétérinaire mandaté CNAAS
+  - vétérinaire habituel (si CNAAS informée)
+- documents_requis :
+  - rapport_veterinaire (modèle fourni CNAAS, signé)
+  - photo_animal_entier
+  - photo_numero_identification
+
+#### Garantie vol
+- type : extension garantie (surprime)
+- delai_declaration : immédiat
+- preuves_requises : PV police / gendarmerie / autorité compétente
+- verification_cnaas : descente terrain
+- exclusions :
+  - animaux en divagation (non gardés)
+  - vol commis par employé / gardien / famille
+
+#### Maladies
+- liste_exclusions : aucune
+- condition : vaccinations obligatoires à jour
+- epidemies : couvertes si vaccination conforme
+
+#### Abattage urgence
+- requis : PV / rapport vétérinaire justifiant raison médicale
+- indemnisation : possible si autorisation vétérinaire fournie
+
+#### Identification obligatoire
+- boucle : numéro + signalement + valeur
+- obligation_eleveur : surveillance normale (pas juste compter sur assurance)
+- refus_cnaas_possible : si animal jugé non assurable
+
+#### Exemple de proposition
+- bovins_metis : {nombre: 2, valeur_unitaire: 475000, valeur_totale: 950000, taux: 10%, prime: 95000}
+- bovins_locaux : {nombre: 2, valeur_unitaire: 290000, valeur_totale: 580000, taux: 10%, prime: 58000}
+- valeur_totale_assuree : 1530000
+- prime_nette_ht : 76500
+- accessoires : 5000
+- prime_totale_ttc : 81500
+- franchise : 20%
+- statut : proposition (pas contrat)
+
+#### Triggers automatisation suggérés
+- deces_constate -> compte_a_rebours(48h) -> email_cnaas + email_veto
+- vol_constate -> email_immediat_cnaas + email_gendarmerie
+- dossier_soumis -> compte_a_rebours(30j) -> relance_si_non_paye
+- fin_contrat_proche(J-30) -> email_renouvellement
+- vente_animal -> email_declaration_cnaas
+
 ---
 
 ## 1. Schémas de données Google Sheets
