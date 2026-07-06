@@ -172,6 +172,13 @@ body.light .act div div[style*="color:#555"]{color:#778877 !important}
 .online-dot{width:8px;height:8px;border-radius:50%;background:#4caf50;display:inline-block;flex-shrink:0;animation:pulse 2.5s infinite}
 .offline-dot{width:8px;height:8px;border-radius:50%;background:#f44336;display:inline-block;flex-shrink:0}
 .day-banner{background:#2e2010;border-bottom:2px solid #8a5a00;color:#ff9800;padding:10px 16px;font-size:13px;text-align:center;cursor:pointer}
+.onb-banner{background:linear-gradient(135deg,#173117,#1b3d1b);border:1px solid #2f5f2f;border-left:4px solid #C8A06A;color:#d8f0d8;padding:12px 14px;margin:8px 10px 0;border-radius:10px}
+.onb-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.onb-title{font-size:12px;font-weight:700;letter-spacing:.02em;color:#C8A06A}
+.onb-close{width:auto;background:#1a3a1a;border:1px solid #2a4a2a;color:#88bb88;padding:4px 10px;font-size:11px;border-radius:14px;box-shadow:none}
+.onb-actions{display:flex;gap:7px;flex-wrap:wrap}
+.onb-chip{width:auto;background:rgba(45,106,45,0.26);border:1px solid rgba(94,152,94,0.45);color:#e8ffe8;padding:7px 10px;border-radius:14px;font-size:12px;box-shadow:none}
+.onb-sub{font-size:11px;color:#9fc79f;margin-bottom:9px}
 .hist-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #0f1f0f;font-size:12px}
 .hist-ico{width:28px;height:28px;border-radius:8px;background:#1a3a1a;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
 .step-dot{width:8px;height:8px;border-radius:50%;background:#2a4a2a;transition:background .2s}
@@ -257,6 +264,11 @@ body.light .ddi{border-color:#e8f0e8;color:#1a2e1a}
 body.light .act .dot{background:#2d6a2d}
 body.light .sep{background:#c8dcc8}
 body.light .day-banner{background:#fff8ee;border-color:#c87800;color:#7a4800}
+body.light .onb-banner{background:linear-gradient(135deg,#f8fcf4,#edf7ea);border-color:#bcdab3;color:#2d4a2d}
+body.light .onb-title{color:#8f6a35}
+body.light .onb-sub{color:#557755}
+body.light .onb-chip{background:#eaf4e8;color:#2d4a2d;border-color:#b8d0b8}
+body.light .onb-close{background:#eef6ee;color:#456745;border-color:#b8d0b8}
 body.light button{background:#2d6a2d}
 body.light .btn-sec{background:#e8f0e8;color:#1a2e1a;border-color:#c8dcc8}
 body.light .ubtn{background:#1e5a1e}
@@ -1214,6 +1226,66 @@ function setStatusMsg(msg, ttlMs) {
   }
 }
 
+function _navKey(role) {
+  return role ? ('nav_' + role) : '';
+}
+function _saveNavState() {
+  if (!S.user || S.page !== 'app') return;
+  lsSet(_navKey(S.user), { tab: S.tab || '', sub: S.sub || '', ts: Date.now() });
+}
+function _restoreNavState(role) {
+  if (!role || !USERS[role] || !USERS[role].tabs) return null;
+  var n = lsGet(_navKey(role));
+  if (!n || !n.tab) return null;
+  if (n.ts && (Date.now() - n.ts) > (45 * 24 * 3600 * 1000)) return null;
+  if (USERS[role].tabs.indexOf(n.tab) === -1) return null;
+  return { tab: n.tab, sub: (typeof n.sub === 'string' ? n.sub : '') };
+}
+function _onbKey(role) {
+  return role ? ('onb_v1_' + role) : '';
+}
+function dismissOnboarding() {
+  if (!S.user) return;
+  lsSet(_onbKey(S.user), true);
+  r();
+}
+function _onbAct(tab, sub) {
+  dismissOnboarding();
+  chTab(tab);
+  if (sub) chSub(sub);
+}
+function _onbTipsForRole(role) {
+  if (role === 'gerant') {
+    return [
+      { t:'Saisir fiche', tab:'saisie', sub:'fiche' },
+      { t:'Valider SOP', tab:'saisie', sub:'sop' },
+      { t:'Ajouter pesee', tab:'saisie', sub:'pesee' }
+    ];
+  }
+  if (role === 'fondateur') {
+    return [
+      { t:'Voir synthese', tab:'dashboard', sub:'' },
+      { t:'Suivre treso', tab:'livrables', sub:'treso' },
+      { t:'Verifier prix', tab:'marche', sub:'prix' }
+    ];
+  }
+  if (role === 'rga') {
+    return [
+      { t:'Vue globale', tab:'dashboard', sub:'' },
+      { t:'Consulter livrables', tab:'livrables', sub:'treso' },
+      { t:'Lecture guide', tab:'guide', sub:'quick' }
+    ];
+  }
+  if (role === 'commerciale') {
+    return [
+      { t:'Saisir marche', tab:'marche', sub:'prix' },
+      { t:'Enregistrer vente', tab:'saisie', sub:'vente' },
+      { t:'Voir guide', tab:'guide', sub:'quick' }
+    ];
+  }
+  return [];
+}
+
 function doLogin() {
   var id = S.lid.trim().toLowerCase();
   var pw = S.lpw;
@@ -1248,8 +1320,14 @@ function doLogin() {
     }
     S.tab = USERS[role].tabs[0];
     S.sub = S.tab==='saisie'?'fiche':S.tab==='livrables'?'treso':S.tab==='marche'?'prix':S.tab==='guide'?'quick':'';
+    var _nav = _restoreNavState(role);
+    if (_nav) {
+      S.tab = _nav.tab;
+      S.sub = _nav.sub || (S.tab==='saisie'?'fiche':S.tab==='livrables'?'treso':S.tab==='marche'?'prix':S.tab==='guide'?'quick':'');
+    }
     LAST_ACTIVITY = Date.now();
     S.page = 'app';
+    _saveNavState();
     loadLiveData();             // sync immédiate — SID déjà peuplu00e9
     setTimeout(rebuildAlimList, 50);
     setTimeout(loadPesees, 50);  // LIVE.pesees + LIVE.beteIds
@@ -2982,6 +3060,7 @@ function chTabSwipe(t, dir) {
 function chTab(t){
   S.tab=t; S.msg=''; S.dd=false;
   S.sub=t==='saisie'?'fiche':t==='livrables'?'treso':t==='marche'?'prix':'';
+  _saveNavState();
   if(t==='marche'){ setTimeout(loadPrix, 50); setTimeout(loadAlimPrix, 100); }
   if(t==='marche' && !S.falim.date) S.falim.date = todayISO();
   if(t==='marche' && !S.fm.date)    S.fm.date    = todayISO();
@@ -3003,13 +3082,24 @@ function chTab(t){
 function chSub(s){
   if (s==='protocole' && S.user !== 'fondateur') return;
   S.sub=s; S.msg=''; r(); setTimeout(initSwipe,10);
+  _saveNavState();
   // Auto-sync SOP_Protocol sheet à la première ouverture de l'onglet SOP Véto
   if ((s==='sopvet'||s==='protocole') && !S._sopSyncDone) {
     S._sopSyncDone = true;
     setTimeout(_syncSopProtocol, 500); // décaler pour ne pas bloquer le rendu
   }
 }
-function swUser(k){if(S.user!=='fondateur')return;S.user=k;S.dd=false;chTab(USERS[k].tabs[0]);}
+function swUser(k){
+  if(S.user!=='fondateur')return;
+  S.user=k; S.dd=false;
+  var _nav=_restoreNavState(k);
+  if(_nav){
+    chTab(_nav.tab);
+    if(_nav.sub) chSub(_nav.sub);
+    return;
+  }
+  chTab(USERS[k].tabs[0]);
+}
 
 // Floating label field helper
 function fl(label, inputHtml, val) {
@@ -5359,6 +5449,23 @@ function pageApp(){
   }
 
   // Bannières empilées
+  var onboardingHtml = '';
+  var _onbSeen = !!lsGet(_onbKey(S.user));
+  if (!_onbSeen) {
+    var _tips = _onbTipsForRole(S.user);
+    if (_tips.length) {
+      onboardingHtml = '<div class="onb-banner">'
+        +'<div class="onb-head"><div class="onb-title">Astuce rapide</div>'
+        +'<button class="onb-close" onclick="dismissOnboarding()">Masquer</button></div>'
+        +'<div class="onb-sub">Acces direct aux actions les plus utiles pour ton role.</div>'
+        +'<div class="onb-actions">'
+        +_tips.map(function(x){
+          return '<button class="onb-chip" onclick="_onbAct(\''+x.tab+'\',\''+(x.sub||'')+'\')">'+x.t+'</button>';
+        }).join('')
+        +'</div></div>';
+    }
+  }
+
   var bannerHtml = '';
   if (_alertFiche)
     bannerHtml += '<div class="day-banner" onclick="chTab(\'saisie\');chSub(\'fiche\')">⚠️ Fiche du jour non remplie — Tap pour saisir</div>';
@@ -5388,6 +5495,7 @@ function pageApp(){
     +ddHtml
     +'<button class="hbg" onclick="openSB()" title="Menu">☰'+((hasAlert||_nbNewEntries>0)?'<div class="hbg-badge">'+((_nbNewEntries>0&&!hasAlert)?_nbNewEntries:'')+'</div>':'')+'</button>'
     +'</div></div>'
+    +onboardingHtml
     +bannerHtml
     +'<div class="tabs">'+tabsHtml+'</div>'
     +'<div class="tab-wrap" id="tab-wrap"><div class="tab-content" id="tab-content">'+content+'</div></div>'
