@@ -512,10 +512,10 @@ Client                          Serveur (/api/auth)
 |---|---|---|
 | Comparaison timing-safe des MDP | ✅ | `crypto.timingSafeEqual` dans auth.js |
 | CORS auth | ✅ | Restreint à `*.vercel.app` + localhost |
-| CORS autres endpoints | ⚠️ | `Access-Control-Allow-Origin: *` |
+| CORS autres endpoints | ✅ | Même politique que auth + `ALLOWED_ORIGINS` (CSV) |
 | Stockage MDP override | ⚠️ | Base64 dans Sheets (pas de hashing) |
 | Session token | ✅ | HMAC-SHA256, 8h TTL, vérifié serveur |
-| Fallback SESSION_SECRET | ⛔ | `'boanr_dev_secret'` codé en dur si env var absente |
+| Fallback SESSION_SECRET | ✅ | Supprimé: `SESSION_SECRET` requis (>=32) |
 | Rate limiting auth | ❌ | Aucun — brute-force théoriquement possible |
 | Rôle check /api/ai | ⚠️ | Aucun — tout utilisateur authentifié peut appeler Claude |
 | Rôle check change-password | ✅ | Double auth fondateur (session + re-saisie MDP) |
@@ -1178,10 +1178,10 @@ GitHub main → Vercel auto-deploy → https://boan-app-ur3x.vercel.app
 
 | # | Risque | Sévérité | Description |
 |---|---|---|---|
-| S-01 | Fallback SESSION_SECRET | ⛔ Critique | `'boanr_dev_secret'` codé en dur → tokens prévisibles si env var absente |
+| S-01 | Fallback SESSION_SECRET | ✅ Corrigé | Fallback supprimé, secret obligatoire |
 | S-02 | MDP base64 dans Sheets | ⚠️ Moyen | Pas de hashing — récupérables si accès au Sheet |
 | S-03 | Pas de rate limiting | ⚠️ Moyen | Auth brute-force possible (mais sur Vercel = coût) |
-| S-04 | CORS `*` sur token/sheets/ai | ⚠️ Faible | Acceptable car session token requis |
+| S-04 | CORS large sur token/sheets/ai | ✅ Corrigé | CORS aligné sur allowlist stricte + origines configurables |
 | S-05 | /api/ai sans role check | ⚠️ Faible | Tout utilisateur authentifié peut appeler Claude |
 
 ### 17.3 Données

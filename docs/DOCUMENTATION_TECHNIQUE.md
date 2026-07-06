@@ -679,14 +679,22 @@ O  NumCycle    entier — numéro du cycle
 - `Secure` — HTTPS uniquement
 - `SameSite=Strict` — protection CSRF
 
-### CORS (`api/auth.js`)
+### CORS (`api/*.js`)
 ```javascript
-var ALLOWED_ORIGINS = ['http://localhost:3000', 'http://localhost:5000'];
 var origin = req.headers.origin || '';
-var isSameOrigin = !origin;
-var isVercel = /\.vercel\.app$/.test(origin);
-if (isSameOrigin || isVercel || ALLOWED_ORIGINS.indexOf(origin) !== -1) {
-  res.setHeader('Access-Control-Allow-Origin', origin || '*');
+var configured = String(process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(function(x){ return x.trim(); })
+  .filter(Boolean);
+var isAllowed = !origin
+  || configured.indexOf(origin) >= 0
+  || /\.vercel\.app$/.test(origin)
+  || origin === 'https://vercel.app'
+  || origin === 'http://localhost:3000'
+  || origin === 'http://localhost:5000';
+if (isAllowed && origin) {
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Vary', 'Origin');
 }
 ```
 
@@ -722,6 +730,7 @@ SA_CLIENT_EMAIL, SA_PRIVATE_KEY   # SA_PRIVATE_KEY avec \n pour les newlines
 
 # Session
 SESSION_SECRET    # >= 32 caractères aléatoires, HMAC SHA-256
+ALLOWED_ORIGINS   # optionnel, CSV d'origines supplémentaires autorisées
 
 # IA (optionnel)
 ANTHROPIC_API_KEY

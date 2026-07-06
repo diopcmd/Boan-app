@@ -216,6 +216,7 @@ SA_PRIVATE_KEY    Clé privée RSA Service Account (\n pour les sauts de ligne)
 SA_CLIENT_EMAIL   Email du Service Account Google
 
 SESSION_SECRET    Secret HMAC session (>= 32 caractères aléatoires)
+ALLOWED_ORIGINS   Optionnel: liste CSV d'origines additionnelles autorisées (ex: https://boan.example.com,https://staging.example.com)
 ANTHROPIC_API_KEY Clé Anthropic (optionnel — IA fondateur)
 ```
 

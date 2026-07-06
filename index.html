@@ -26,10 +26,12 @@ input,textarea,select,button,a{touch-action:manipulation}
 .splash-sub{font-size:13px;color:#88aa88;margin-top:6px}
 .splash-dot{width:6px;height:6px;border-radius:50%;background:#C8A06A;margin-top:24px;animation:pulse 1s infinite}
 #app{min-height:100vh}
-.hdr{background:#1e4a1e;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,0.35);transition:transform .25s ease,opacity .25s ease}.hdr.hdr-hidden{transform:translateY(-100%);opacity:0}
+.hdr{background:linear-gradient(180deg,rgba(30,74,30,0.95),rgba(26,58,26,0.90));padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;box-shadow:0 2px 10px rgba(0,0,0,0.28);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);transition:transform .28s ease,opacity .28s ease,padding .24s ease,box-shadow .24s ease,border-radius .24s ease,margin .24s ease}.hdr.hdr-hidden{transform:translateY(-120%);opacity:0}
 .logo{display:flex;align-items:center;gap:10px}
 .logo-b{width:36px;height:36px;background:#2d6a2d;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px}
-.tabs{background:#1a3a1a;display:flex;border-bottom:1px solid #2d4a2d;overflow-x:auto;position:sticky;top:60px;z-index:9;transition:transform .25s ease,opacity .25s ease}.tabs.tabs-hidden{transform:translateY(calc(-100% - 60px));opacity:0}
+.tabs{background:rgba(26,58,26,0.92);display:flex;border-bottom:1px solid #2d4a2d;overflow-x:auto;position:sticky;top:60px;z-index:9;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);transition:transform .28s ease,opacity .28s ease,top .24s ease,padding .24s ease,margin .24s ease,border-radius .24s ease,box-shadow .24s ease}.tabs.tabs-hidden{transform:translateY(calc(-100% - 64px));opacity:0}
+.hdr.hdr-compact{padding:8px 12px;margin:6px 8px 0;border-radius:12px;border:1px solid rgba(61,122,61,0.45);box-shadow:0 8px 20px rgba(0,0,0,0.24)}
+.tabs.tabs-compact{top:56px;margin:4px 8px 0;padding:0 4px;border:1px solid rgba(45,106,45,0.35);border-radius:12px;box-shadow:0 6px 14px rgba(0,0,0,0.20)}
 .tabs::-webkit-scrollbar{display:none}
 .tab{padding:12px 20px;font-size:14px;color:#88bb88;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent}
 .tab.on{color:#fff;border-bottom-color:#fff;background:rgba(255,255,255,0.07)}
@@ -197,6 +199,8 @@ body.light{background:#f0f5f0;color:#1a2e1a}
 body.light .hdr{background:#2d6a2d}
 body.light .logo-b{background:#1a4a1a;color:#fff}
 body.light .tabs{background:#e8f0e8;border-color:#c8dcc8}
+body.light .hdr.hdr-compact{background:rgba(45,106,45,0.88) !important;border-color:#7fb07f !important;box-shadow:0 8px 18px rgba(45,106,45,0.18)}
+body.light .tabs.tabs-compact{background:rgba(232,240,232,0.94) !important;border-color:#b8d0b8 !important;box-shadow:0 6px 14px rgba(45,106,45,0.12)}
 body.light .tab{color:#557755}
 body.light .tab.on{color:#fff;border-bottom-color:#fff;background:rgba(45,106,45,0.14)}
 body.light .kcard,body.light .card,body.light .reco-card,body.light .mkt{background:#fff;border-color:#c8dcc8}
@@ -2245,6 +2249,15 @@ function _submitActual(type) {
     return appendRow(SID.fondateur, 'KPI_Hebdo!A:J', vals);
   }
 
+  // Si la fiche indique un incident, rediriger ensuite vers le formulaire incident pré-rempli.
+  var _redirectToIncident = false;
+  var _redirectIncidentDesc = '';
+  if (type === 'fiche') {
+    var _fi = S.fi || {};
+    _redirectToIncident = String(_fi.incident || '').toUpperCase() === 'OUI';
+    _redirectIncidentDesc = String(_fi.desc || '').trim();
+  }
+
   if(type==='fiche'){
     var f=S.fi; var td=isoToFr(f.date);
     p=writeAll([SID.gerant,SID.fondateur],'Fiche_Quotidienne!A:G',[td,f.nb,f.nourris,f.eau,f.enclos,f.incident,f.desc])
@@ -2377,7 +2390,7 @@ function _submitActual(type) {
       // Métas pour anti-doublons
       var _meta = {};
       if(type==='inc')   _meta = {_id: S.fin.id, _typeInc: S.fin.type};
-      if(type==='sante') _meta = {_id: S.fsa.id, _sym: S.fsa.sym, sopLabel: S.fsa.sopLabel};
+      if(type==='sante') _meta = {id: S.fsa.id, _id: S.fsa.id, _sym: S.fsa.sym, sopLabel: S.fsa.sopLabel};
       if(type==='pesee' && S._sopCtx) _meta.sopLabel = S._sopCtx.label; // ancre pesée SOP au protocole
       if(type==='bilan') _meta._sem = String(calcSemaine()); // pour bilanDejaFaitCetteSemaine() via h._sem
       // Capturer ID bête avant reset formulaire (pour tracker les bêtes déjà traitées)
@@ -2415,6 +2428,19 @@ function _submitActual(type) {
       if(type==='alim')  S.falim={date:td,type:S.falim.type||'',prix:''};
       if(type==='alim')  setTimeout(loadAlimPrix, 400);
       if(type==='vente') { S.fv={date:todayISO(),id:'',race:'',poids:'',prixKg:'',acheteur:'',tel:'',mode:'CASH',ctx:'DIRECT',notes:''}; S.sub='vente'; }
+
+      if (type==='fiche' && _redirectToIncident) {
+        S.sub = 'inc';
+        S.fin = {
+          date: td,
+          id: '',
+          type: 'Incident signalé (fiche quotidienne)',
+          grav: '1',
+          desc: _redirectIncidentDesc || 'Incident signalé depuis la fiche quotidienne',
+          act: '',
+          clos: 'NON'
+        };
+      }
       // Tracker bêtes pesées uniquement — exclusion dropdown jusqu'à ce que toutes soient pesées
       // (santé + incidents : pas d'exclusion — on peut saisir plusieurs fois la même bête)
       if (_beteIdSubmit && type==='pesee') {
@@ -2801,13 +2827,26 @@ function _initScrollHide() {
     _scrollTicking = true;
     requestAnimationFrame(function() {
       var y = window.scrollY;
+      var dy = y - _scrollLastY;
+      var goingDown = dy > 2;
+      var goingUp = dy < -2;
       var hdr = document.querySelector('.hdr');
       var tabs = document.querySelector('.tabs');
       if (hdr && tabs) {
-        if (y > _scrollLastY && y > 80) {
+        // Mode compact dès qu'on quitte le haut de page
+        if (y > 12) {
+          hdr.classList.add('hdr-compact');
+          tabs.classList.add('tabs-compact');
+        } else {
+          hdr.classList.remove('hdr-compact');
+          tabs.classList.remove('tabs-compact');
+        }
+
+        // Masquer seulement lors d'un vrai scroll descendant prolongé
+        if (goingDown && y > 150) {
           hdr.classList.add('hdr-hidden');
           tabs.classList.add('tabs-hidden');
-        } else {
+        } else if (goingUp || y < 90) {
           hdr.classList.remove('hdr-hidden');
           tabs.classList.remove('tabs-hidden');
         }
@@ -6853,10 +6892,11 @@ function viewSaisie(){
           // Entrées sans sopLabel = heuristique par proximité ±7j (cohérent avec garde 7j avant date prévue)
           var _inWindow = (h.sopLabel === evt.label) || (Math.abs(_hd - _td) <= 7*86400000);
           if(_inWindow){
-            if(h.id === '__tous__'){
+            var _hid = h.id || h._id || '';
+            if(_hid === '__tous__'){
               _betesDonePd = _sopBeteIds.slice();
-            } else if(_betesDonePd.indexOf(h.id) === -1){
-              _betesDonePd.push(h.id);
+            } else if(_hid && _betesDonePd.indexOf(_hid) === -1){
+              _betesDonePd.push(_hid);
             }
           }
         });
@@ -7037,8 +7077,9 @@ function _syncSopProtocol() {
         var _hd = new Date(_p[2], _p[1]-1, _p[0]);
         var _inW = (h.sopLabel === evt.label) || (Math.abs(_hd - _td) <= 3*86400000);
         if (_inW) {
-          if (h.id === '__tous__') _betesDone = _beteIds.slice();
-          else if (_betesDone.indexOf(h.id) === -1) _betesDone.push(h.id);
+          var _hid = h.id || h._id || '';
+          if (_hid === '__tous__') _betesDone = _beteIds.slice();
+          else if (_hid && _betesDone.indexOf(_hid) === -1) _betesDone.push(_hid);
         }
       });
     }
@@ -7197,8 +7238,9 @@ function _sopInlineSave(idx, tous){
       // Entrées avec sopLabel explicite = liées définitivement (pas de contrainte de date)
       var _inW = (h.sopLabel === evt.label) || (Math.abs(_hd - _tdTgt) <= 3*86400000);
       if(_inW){
-        if(h.id === '__tous__') _doneBetes = _allBetes.slice();
-        else if(_doneBetes.indexOf(h.id)===-1) _doneBetes.push(h.id);
+        var _hid = h.id || h._id || '';
+        if(_hid === '__tous__') _doneBetes = _allBetes.slice();
+        else if(_hid && _doneBetes.indexOf(_hid)===-1) _doneBetes.push(_hid);
       }
     });
   }
@@ -8035,7 +8077,14 @@ function viewLiv(){
         if(!_cb) return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #1a2e1a"><div style="font-size:20px;width:32px;text-align:center">'+evt.ico+'</div><div style="flex:1"><div style="font-size:13px;color:#88aa88;font-weight:600">J+'+evt.j+' — '+evt.label+'</div><div style="font-size:10px;color:#7a9a7a">'+evt.note+'</div></div><div style="font-size:11px;color:#2a4a2a">Non démarré</div></div>';
         var _td2 = new Date(_cb.getTime()); _td2.setDate(_td2.getDate()+evt.j);
         var _win = 3*86400000;
-        var _f = HISTORY.some(function(h){ if(h.type!==evt.type)return false; if(!_sopEntryAfterReset(h))return false; var _p=h.date.split('/'); if(_p.length!==3)return false; return Math.abs(new Date(_p[2],_p[1]-1,_p[0])-_td2)<=_win; });
+        var _f = HISTORY.some(function(h){
+          if(h.type!==evt.type) return false;
+          if(!_sopEntryAfterReset(h)) return false;
+          // Une entrée avec sopLabel explicite valide cette étape même hors fenêtre.
+          if(h.sopLabel !== undefined && h.sopLabel !== null) return h.sopLabel === evt.label;
+          var _p=h.date.split('/'); if(_p.length!==3) return false;
+          return Math.abs(new Date(_p[2],_p[1]-1,_p[0])-_td2)<=7*86400000;
+        });
         var _dt = Math.round((_td2-_ct)/86400000);
         var _s,_sc,_sb,_sbd;
         if(_f){_s='✅ Fait';_sc='#4caf50';_sb='#0f2a0f';_sbd='#2d6a2d';}

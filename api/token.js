@@ -4,7 +4,16 @@
 import { createSign, createHmac, timingSafeEqual } from 'node:crypto';
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const reqOrigin = req.headers.origin || '';
+  const originOk = isAllowedOrigin(reqOrigin);
+  if (!originOk) {
+    return res.status(403).json({ error: 'Origin non autorise' });
+  }
+
+  if (reqOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', reqOrigin);
+    res.setHeader('Vary', 'Origin');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Session-Token');
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -16,6 +25,10 @@ export default async function handler(req, res) {
   }
 
   try {
+    if (!process.env.SA_PRIVATE_KEY || !process.env.SA_CLIENT_EMAIL) {
+      return res.status(500).json({ error: 'Configuration Google manquante' });
+    }
+
     const privateKey = process.env.SA_PRIVATE_KEY.replace(/\\n/g, '\n');
     const clientEmail = process.env.SA_CLIENT_EMAIL;
     const now = Math.floor(Date.now() / 1000);
@@ -57,14 +70,31 @@ function base64url(str) {
 }
 
 function verifySession(token) {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret || secret.length < 32) return false;
   if (!token) return false;
   try {
     const [payloadB64, hmac] = token.split('.');
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64').toString());
     if (payload.exp < Date.now()) return false;
-    const expected = createHmac('sha256', process.env.SESSION_SECRET || 'boanr_dev_secret')
+    const expected = createHmac('sha256', secret)
       .update(JSON.stringify(payload)).digest('hex');
     try { return timingSafeEqual(Buffer.from(hmac), Buffer.from(expected)); }
     catch { return hmac === expected; }
   } catch { return false; }
+}
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+
+  var configured = String(process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(function(x) { return x.trim(); })
+    .filter(Boolean);
+  if (configured.indexOf(origin) >= 0) return true;
+
+  return origin.endsWith('.vercel.app')
+    || origin === 'https://vercel.app'
+    || origin === 'http://localhost:3000'
+    || origin === 'http://localhost:5000';
 }

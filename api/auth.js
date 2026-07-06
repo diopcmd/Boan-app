@@ -4,6 +4,11 @@
 import { createHmac, createSign, timingSafeEqual } from 'node:crypto';
 
 export default async function handler(req, res) {
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!sessionSecret || sessionSecret.length < 32) {
+    return res.status(500).json({ ok: false, error: 'SESSION_SECRET manquant ou trop court (>=32)' });
+  }
+
   const USERS = {
     fondateur: { name:'Direction',      pwd: process.env.PWD_FONDATEUR, tabs:['dashboard','saisie','livrables','marche','guide'], sid: process.env.SID_FONDATEUR },
     gerant:    { name:'Gerant terrain', pwd: process.env.PWD_GERANT,    tabs:['dashboard','saisie','guide'],                      sid: process.env.SID_GERANT    },
@@ -15,16 +20,14 @@ export default async function handler(req, res) {
   // Les appels same-origin (depuis le front Vercel vers /api/auth) n'ont pas de header Origin
   // Les previews Vercel utilisent *.vercel.app — on autorise tous les sous-domaines vercel.app
   const reqOrigin = req.headers.origin || '';
-  const originOk = !reqOrigin  // same-origin : pas de header Origin → toujours OK
-    || reqOrigin.endsWith('.vercel.app')
-    || reqOrigin === 'https://vercel.app'
-    || reqOrigin === 'http://localhost:3000'
-    || reqOrigin === 'http://localhost:5000';
+  const originOk = isAllowedOrigin(reqOrigin);
   if (!originOk) {
     return res.status(403).json({ ok: false, error: 'Origin non autorisé' });
   }
-  res.setHeader('Access-Control-Allow-Origin', reqOrigin || '*');
-  res.setHeader('Vary', 'Origin');
+  if (reqOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', reqOrigin);
+    res.setHeader('Vary', 'Origin');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -94,7 +97,7 @@ export default async function handler(req, res) {
 
     // Générer session token
     const payload = JSON.stringify({ login, role, exp: Date.now() + 8 * 3600 * 1000 });
-    const hmac = createHmac('sha256', process.env.SESSION_SECRET || 'boanr_dev_secret')
+    const hmac = createHmac('sha256', sessionSecret)
       .update(payload).digest('hex');
     const sessionToken = Buffer.from(payload).toString('base64') + '.' + hmac;
 
@@ -161,4 +164,19 @@ async function getGoogleToken() {
   const d = await r.json();
   if (d.access_token) { _tokenCache = { token:d.access_token, exp:Date.now()+(d.expires_in*1000) }; return d.access_token; }
   return null;
+}
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+
+  var configured = String(process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(function(x) { return x.trim(); })
+    .filter(Boolean);
+  if (configured.indexOf(origin) >= 0) return true;
+
+  return origin.endsWith('.vercel.app')
+    || origin === 'https://vercel.app'
+    || origin === 'http://localhost:3000'
+    || origin === 'http://localhost:5000';
 }
