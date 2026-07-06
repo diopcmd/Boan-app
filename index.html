@@ -1113,9 +1113,14 @@ function closeSB() {
   setTimeout(function(){ SB.open=false; SB.closing=false; r(); }, 200);
 }
 
-function r() {
+// Rendu synchrone sûr: coalesce les appels imbriqués sans changer la sémantique.
+var _renderInProgress = false;
+var _renderQueued = false;
+
+function _renderNow() {
+  _renderInProgress = true;
   var el = document.getElementById('app');
-  if (!el) return;
+  if (!el) { _renderInProgress = false; return; }
   // Sauvegarder focus avant re-render (évite disparition clavier mobile)
   var _ae = document.activeElement;
   var _aid = _ae && _ae.id ? _ae.id : null;
@@ -1164,6 +1169,48 @@ function r() {
         try { _re.setSelectionRange(_asel0, _asel1); } catch(e) {}
       }
     }
+  }
+  _renderInProgress = false;
+  if (_renderQueued) {
+    _renderQueued = false;
+    r();
+  }
+}
+
+function r(force) {
+  if (force === true) {
+    _renderQueued = false;
+    _renderNow();
+    return;
+  }
+  if (_renderInProgress) {
+    _renderQueued = true;
+    return;
+  }
+
+  // Boucle synchrone: si un r() survient pendant le render, on rejoue une fois.
+  do {
+    _renderQueued = false;
+    _renderNow();
+  } while (_renderQueued);
+}
+
+var _msgClearTimer = null;
+function setStatusMsg(msg, ttlMs) {
+  if (_msgClearTimer) {
+    clearTimeout(_msgClearTimer);
+    _msgClearTimer = null;
+  }
+  S.msg = msg || '';
+  r();
+  if (ttlMs && ttlMs > 0) {
+    _msgClearTimer = setTimeout(function() {
+      _msgClearTimer = null;
+      if (S.msg) {
+        S.msg = '';
+        r();
+      }
+    }, ttlMs);
   }
 }
 
@@ -1226,6 +1273,16 @@ function b64bin(str) {
   return b.replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
 }
 
+var _sheetReadCache = {};
+var _sheetReadInFlight = {};
+function _sheetCacheKey(sid, range) {
+  return String(sid || '') + '::' + String(range || '');
+}
+function _clearSheetReadCache() {
+  _sheetReadCache = {};
+  _sheetReadInFlight = {};
+}
+
 function getTok() {
   // Token Google obtenu via /api/token (SA cachée côté serveur)
   return new Promise(function(resolve) {
@@ -1283,7 +1340,11 @@ function appendRow(sid, range, vals) {
       var fbUrl = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+fbSheet+'!'+fbCols+':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS';
       return fetch(fbUrl, {method:'POST', headers:{Authorization:'Bearer '+tk,'Content-Type':'application/json'}, body:JSON.stringify({values:[vals]})})
         .then(function(res){return res.json();})
-        .then(function(d){return d.error?{ok:false,err:d.error.message}:{ok:true};});
+        .then(function(d){
+          if (d.error) return {ok:false,err:d.error.message};
+          _clearSheetReadCache();
+          return {ok:true};
+        });
     }
     // 1. Lire colonne A pour compter les lignes déjà saisies dans le tableau
     // Note: encodeURIComponent encode ":" en "%3A" ce que l'API Sheets n'accepte pas —
@@ -1323,11 +1384,16 @@ function appendRow(sid, range, vals) {
                 var _tl2=Math.min(tr.start+_rows2.length,tr.end);
                 var _wu2='https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+enc+'!A'+_tl2+'?valueInputOption=USER_ENTERED';
                 return fetch(_wu2,{method:'PUT',headers:{Authorization:'Bearer '+tk,'Content-Type':'application/json'},body:JSON.stringify({values:[vals]})});
-              }).then(function(r){return r.json();}).then(function(d3){return d3.error?{ok:false,err:d3.error.message}:{ok:true};});
+              }).then(function(r){return r.json();}).then(function(d3){
+                if (d3.error) return {ok:false,err:d3.error.message};
+                _clearSheetReadCache();
+                return {ok:true};
+              });
             }).catch(function(){ return {ok:false, err:'Impossible de créer l\'onglet "'+sheetName+'" — vérifier les permissions'}; });
           }
           return {ok:false, err:_em};
         }
+        _clearSheetReadCache();
         return {ok:true};
       })
       .catch(function(e){return{ok:false,err:e.message};});
@@ -1335,8 +1401,21 @@ function appendRow(sid, range, vals) {
 }
 
 // ── Lecture Google Sheets ──
-function readSheet(sid, range) {
-  return getTok().then(function(tk) {
+function readSheet(sid, range, opts) {
+  opts = opts || {};
+  var _ttlMs = (typeof opts.ttlMs === 'number') ? opts.ttlMs : 8000;
+  var _force = !!opts.force;
+  var _key = _sheetCacheKey(sid, range);
+  var _now = Date.now();
+
+  if (!_force && _sheetReadCache[_key] && (_now - _sheetReadCache[_key].ts) <= _ttlMs) {
+    return Promise.resolve(_sheetReadCache[_key].values);
+  }
+  if (!_force && _sheetReadInFlight[_key]) {
+    return _sheetReadInFlight[_key];
+  }
+
+  _sheetReadInFlight[_key] = getTok().then(function(tk) {
     if (!tk) return null;
     // ⚠️ encodeURIComponent(':') = '%3A' que l'API Sheets rejette — on encode uniquement le nom de la feuille
     var _rParts = range.split('!');
@@ -1349,7 +1428,16 @@ function readSheet(sid, range) {
       .then(function(res){ return res.json(); })
       .then(function(d){ return d.values || []; })
       .catch(function(){ return null; });
+  }).then(function(values) {
+    _sheetReadCache[_key] = { ts: Date.now(), values: values };
+    delete _sheetReadInFlight[_key];
+    return values;
+  }).catch(function() {
+    delete _sheetReadInFlight[_key];
+    return null;
   });
+
+  return _sheetReadInFlight[_key];
 }
 
 // ── Chargement des KPIs réels depuis Sheets ──
@@ -2455,8 +2543,7 @@ function _submitActual(type) {
       S.msg='err:'+(res&&res.err?res.err:'Erreur');
       haptic('error');
     }
-    r();
-    setTimeout(function(){S.msg='';r();},4000);
+    setStatusMsg(S.msg, 4000);
   });
 }
 
@@ -5013,9 +5100,7 @@ function submitCloseInc() {
       LIVE.incidents[ci.idx].clos = 'OUI';
       S.sending = false;
       S._closeInc = null;
-      S.msg = '✅ Incident clôturé';
-      r();
-      setTimeout(function(){ S.msg=''; r(); }, 3000);
+      setStatusMsg('✅ Incident clôturé', 3000);
     }).catch(function(e) {
       S.sending = false;
       S.msg = '❌ ' + (e.message || 'Erreur réseau');
@@ -7287,12 +7372,10 @@ function saveObjectifs(){
   // PUT atomique Config_App + sync SOP_Protocol sheet en parallèle
   _syncConfigApp().then(function(d){
     if (d && d.error) {
-      S.msg='err:Erreur lors de l\'enregistrement (' + (d.error.message||'') + ')'; r();
-      setTimeout(function(){ S.msg=''; r(); }, 4000);
+      setStatusMsg('err:Erreur lors de l\'enregistrement (' + (d.error.message||'') + ')', 4000);
     } else {
       _syncSopProtocol(); // Mettre à jour le tableau SOP Sheets en même temps
-      S.msg='ok:\u2705 Enregistré et synchronisé'; r();
-      setTimeout(function(){ S.msg=''; r(); }, 3000);
+      setStatusMsg('ok:\u2705 Enregistré et synchronisé', 3000);
     }
   });
 }
