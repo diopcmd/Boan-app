@@ -6587,10 +6587,7 @@ function viewSaisie(){
       +'<div class="fg"><label>Sante check</label>'+yn(f.san,'san','fs')+'</div>'
       +fl('Problème (laisser vide si aucun)','<input placeholder=" " value="'+f.prob+'" oninput="S.fs.prob=this.value">',f.prob)
       +(function(){
-        var _it=[f.net,f.des,f.rat,f.eau,f.stk,f.san];
-        var _ok=_it.filter(function(c){return c==='OUI';}).length;
-        var _cs=_ok>=5?'al-g':_ok>=3?'al-o':'al-r';
-        return '<div class="al '+_cs+'" style="margin-bottom:8px">Compliance SOP : <strong>'+_ok+'/6</strong>'+(_ok===6?' ✅ Parfait !':_ok>=4?' — Bien':'  — Vérifier les points manquants')+'</div>';
+        return '';
       })()
       +'<button '+(S.sending?'disabled':'')+' onclick="doSubmit(\'sop\')">Valider</button>'+msgHtml()+'</div>';
   } else if(S.sub==='stock'){
