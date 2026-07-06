@@ -9442,13 +9442,7 @@ function viewMarche(){
 // ── GUIDE TAB — vue ❓ par rôle ──────────────────────────────
 function viewGuide(){
   var u = S.user;
-  var _pdfBase = window.location.origin + '/guides/';
-  var _pdfLink = function(role, label){
-    return '<a href="'+_pdfBase+role+'.html" target="_blank" rel="noopener" '
-      +'style="display:block;background:#1a2e1a;border:1px solid #2d6a2d;border-radius:10px;'
-      +'padding:12px 16px;color:#88ee88;font-size:13px;font-weight:700;text-decoration:none;'
-      +'text-align:center;margin-top:14px">📄 '+label+' (ouvrir · imprimer en PDF)</a>';
-  };
+
   var _card = function(ico, titre, items){
     return '<div class="card" style="margin-bottom:12px">'
       +'<div class="stitle">'+ico+' '+titre+'</div>'
@@ -9513,7 +9507,6 @@ function viewGuide(){
       ['📵','Toujours saisir d\'abord','Même en urgence : saisir dans l\'app AVANT d\'appeler.']
     ]);
     view += '<button class="btn" style="width:100%;margin-top:4px" onclick="S._guideOpen=true;r()">📖 Ouvrir mon guide interactif</button>';
-    view += _pdfLink('gerant','Guide complet Gérant Terrain');
   }
 
   // ── FONDATEUR ──
@@ -9545,16 +9538,16 @@ function viewGuide(){
       ['✅','Lire le Go/No-Go','Livrables > Go/No-Go — tous les feux verts requis.'],
       ['💹','Comparer marché vs objectif','Marché > Prix foirail — cours actuel vs objectifPrix.'],
       ['🧮','Simuler la marge finale','Marché > Simulateur — ajuster le prix de vente visé.'],
-      ['�','Enregistrer la vente','Marché > 💚 Vente — sélectionner la bête, saisir le prix/kg et l\'acheteur.'],
+      ['🤝','Enregistrer la vente','Marché > 💚 Vente — sélectionner la bête, saisir le prix/kg et l\'acheteur.'],
       ['💰','Contrôler les ventes','Livrables > 💰 Ventes — historique complet, récap Cash/Mobile/Crédit.'],
-      ['�📜','Archiver le cycle','Saisie > Clôturer — snapshot automatique dans Cycles.'],
+      ['📜','Archiver le cycle','Saisie > Clôturer — snapshot automatique dans Cycles.'],
     ]);
     view += _card('⚙️','Réglages — quand les réviser',[
       ['📦','Prix aliment','Chaque semaine si le marché bouge. Livrables > Objectifs > Marché.'],
       ['💹','Prix vente visé','Avant chaque décision de vente. Idem.'],
       ['🎯','Objectifs zootechniques','Début de chaque cycle si race ou foirail différent.'],
     ]);
-    view += _pdfLink('fondateur','Guide complet Fondateur / Direction');
+
   }
 
   // ── RGA ──
@@ -9580,8 +9573,8 @@ function viewGuide(){
     ]);
     view += _card('📆','Contrôle mensuel',[
       ['🧮','Préparer rapport mensuel aliments','Marché > Prix aliments > bouton Rapport mensuel.'],
-      ['�','Audit des ventes du cycle','Livrables > 💰 Ventes — vérifier dates, prix/kg, acheteurs, modes de paiement.'],
-      ['�📜','Comparer avec cycle précédent','Livrables > Cycles — historique archivé.'],
+      ['📋','Audit des ventes du cycle','Livrables > 💰 Ventes — vérifier dates, prix/kg, acheteurs, modes de paiement.'],
+      ['🔄','Comparer avec cycle précédent','Livrables > Cycles — historique archivé.'],
       ['💰','Coût de revient vs objectif','Livrables > KPI — colonne Coût / kg gain vs coutRevientMax.'],
     ]);
     view += _card('🏁','Préparer une recommandation de vente',[
@@ -9595,7 +9588,7 @@ function viewGuide(){
       ['📊','Marge brute / tête','Tréso finale − Capital investi, divisé par nb bêtes fin.'],
       ['☠️','Taux de mortalité','(bêtes départ − bêtes fin) ÷ bêtes départ × 100. Max acceptable : '+(CYCLE.tauxMortMax||3)+'%.'],
     ]);
-    view += _pdfLink('rga','Guide complet RGA');
+
   }
 
   // ── COMMERCIALE ──
@@ -9644,7 +9637,7 @@ function viewGuide(){
       ['📅','Fin de cycle ≤ 2-3 semaines','Urgence de positionnement foirail avant les autres vendeurs.'],
       ['💹','Prix marché ≥ objectif vente','Fenêtre favorable — ne pas attendre.'],
     ]);
-    view += _pdfLink('commerciale','Guide complet Commerciale');
+
   }
 
   return '<div class="cnt">'+view+'</div>';
