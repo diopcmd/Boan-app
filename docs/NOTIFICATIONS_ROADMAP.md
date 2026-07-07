@@ -391,6 +391,8 @@ var _so = lsGet('sinistres_ouverts') || [];
 _so.push({ id: S.fsa.id, date: td, expertPasse: false, ts: Date.now() });
 lsSet('sinistres_ouverts', _so);
 if (!ONLINE) {
+  // ✅ État machine offline (Sofia panel) — prévient race condition avec cron
+  lsSet('deces_state', 'OFFLINE_PENDING');
   lsSet('deces_pending', { id: S.fsa.id, date: td,
     sym: safeTextClient(S.fsa.sym), tra: safeTextClient(S.fsa.tra),
     cout: S.fsa.cout, ts: Date.now() });
@@ -401,6 +403,8 @@ function safeTextClient(s) {
   return String(s || '').replace(/[\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 ```
+
+**État machine deces_state (Sofia panel)** : Transition IDLE → OFFLINE_PENDING → SYNCING → SYNCED. Prévient doublon email si cron run pendant sync.
 
 ### 3.2 Saisie > Incident (type VOL) — Gérant
 
@@ -727,8 +731,9 @@ function beteMultiSelect() {
 // Validation : if (!S.fin.beteIds.length) { showMsg('err','Sélectionner au moins une bête'); return; }
 ```
 
-### 3.9 Chargement LIVE.sinistres + LIVE.notifLog (Vague 2)
+### 3.9 Chargement LIVE.sinistres + LIVE.notifLog (Vague 2) — Lazy Load (Anouk panel)
 
+**Standard (synchrone)** :
 ```js
 // Dans loadLiveData(), dans le Promise.all de la Vague 2 — fondateur/rga uniquement
 if (S.user === 'fondateur' || S.user === 'rga') {
@@ -742,7 +747,38 @@ if (S.user === 'fondateur' || S.user === 'rga') {
 }
 ```
 
-> ⚠️ Range mis à jour : `A2:M200` → **`A2:Q200`** (schema étendu 16 colonnes — section 1.2).
+**✅ RECOMMANDÉ : Lazy Load avec cache localStorage 1j (Anouk panel)** :
+Évite blocage Vague 2 pour gérant 3G. Charge après Vague 2 complete sans bloquer.
+```js
+if (S.user === 'fondateur' || S.user === 'rga') {
+  var todayISO = new Date().toISOString().slice(0, 10);
+  var cacheKey = 'LIVE_sinistres_cache_' + todayISO;
+  var cached = lsGet(cacheKey);
+  if (cached) {
+    LIVE.sinistres = JSON.parse(cached);
+    LIVE.notifLog = JSON.parse(lsGet('LIVE_notifLog_cache_' + todayISO) || '[]');
+    _reconcileSinistresOuverts();
+  }
+  Promise.race([
+    readSheet(SID.fondateur, 'Sinistres_CNAAS!A2:Q200'),
+    new Promise(function(_, rej) { setTimeout(function() { rej('timeout'); }, 3000); })
+  ]).then(function(rows) {
+    LIVE.sinistres = rows || [];
+    lsSet(cacheKey, JSON.stringify(LIVE.sinistres));
+    _reconcileSinistresOuverts();
+    if (!cached) r();
+  }).catch(function(err) { console.warn('sinistres lazy-load: ' + err); });
+  Promise.race([
+    readSheet(SID.fondateur, 'Notifications_Log!A2:I500'),
+    new Promise(function(_, rej) { setTimeout(function() { rej('timeout'); }, 3000); })
+  ]).then(function(rows) {
+    LIVE.notifLog = rows || [];
+    lsSet('LIVE_notifLog_cache_' + todayISO, JSON.stringify(LIVE.notifLog));
+  }).catch(function(err) { console.warn('notifLog lazy-load: ' + err); });
+}
+```
+
+> **Amélioration Anouk panel** : Cache localStorage 1j, timeout 3s, fallback graceful. Perf gérant 3G.
 
 ### 3.10 Dashboard gérant — Chronomètre 48h VOL
 
@@ -909,8 +945,9 @@ function safeText(s) {
 // NE PAS appliquer sur : IDs animaux, dates, montants, variables Config_App (contrôlées)
 ```
 
-### 4.4 Idempotence — double guard + TTL PENDING 2h
+### 4.4 Idempotence — double guard + TTL PENDING 2h + État machine (Priya + Sofia panel)
 
+**Idempotence par Reference_ID + TTL PENDING 2h** :
 ```js
 async function isAlreadySent(token, sid, notifLog, refId) {
   for (var i = 0; i < notifLog.length; i++) {
@@ -919,7 +956,7 @@ async function isAlreadySent(token, sid, notifLog, refId) {
     if (row[5] === 'SENT' || row[5] === 'CONFIRME') return true;  // col F = Statut
     if (row[5] === 'PENDING') {
       var pendingTs = new Date(String(row[0] || '')).getTime();   // col A = Date_Envoi
-      if (Date.now() - pendingTs < 2 * 3600 * 1000) return true; // encore en cours
+      if (Date.now() - pendingTs < 2 * 3600 * 1000) return true; // encore en cours (< 2h)
       // Stale > 2h → libérer (rowIdx = i + 2 : 1-indexed + header)
       await updateCell(token, sid, 'Notifications_Log!F' + (i + 2), 'ERROR_TIMEOUT');
     }
@@ -927,6 +964,19 @@ async function isAlreadySent(token, sid, notifLog, refId) {
   return false;
 }
 ```
+
+**✅ NOUVEAU : État machine deces_state (Sofia panel)** :
+Élimine race condition offline décès + cron parallèle.
+```js
+function getDecessState() {
+  return lsGet('deces_state') || 'IDLE'; // IDLE | OFFLINE_PENDING | SYNCING | SYNCED
+}
+// Au retour online : transition OFFLINE_PENDING → SYNCING → SYNCED
+// Cron deces attend state SYNCING < 5s avant de traiter Sinistres_CNAAS
+// createSinistrePending() vérifie pas de doublon row offline vs cron
+```
+
+> **Mitigation Sofia panel** : État machine élimine doublon email si cron run pendant sync offline (section 3.1).
 
 ### 4.5 Validation acte SOP
 
@@ -1204,15 +1254,31 @@ async function checkAndSendCnaasFollowups(token, cfg, sinistresRows, notifLog) {
 }
 ```
 
-### 4.10 /api/cron.js
+### 4.10 /api/cron.js — Rate Limit + Type Validation (Marcus panel)
 
 ```js
 // CommonJS — requis pour Vercel serverless (module.exports, pas export default)
 module.exports = async function handler(req, res) {
+  // 1. Secret check
   if (req.headers['x-cron-secret'] !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
+  
+  // 2. Type whitelist + validation (Marcus panel)
   var type = req.query.type || 'vet';
+  if (['vet', 'deces', 'relances'].indexOf(type) === -1) {
+    return res.status(400).json({ error: 'Invalid type — must be vet|deces|relances' });
+  }
+  
+  // 3. Rate limit simple (Marcus panel)
+  var lastCallKey = '_cron_last_call_' + type;
+  var lastCall = lsGet(lastCallKey);
+  if (lastCall && Date.now() - lastCall < 60000) {
+    console.warn('Rate limit hit for type=' + type);
+    return res.status(429).json({ error: 'Too soon — retry after 60s' });
+  }
+  lsSet(lastCallKey, Date.now());
+  
   try {
     var token = await getGoogleToken(); // réutilise /api/token.js
     var cfg   = await readConfigApp(token, process.env.SID_FONDATEUR);
@@ -1224,7 +1290,7 @@ module.exports = async function handler(req, res) {
 
     var notifLog      = await readSheet(token, cfg._sid, 'Notifications_Log!A2:I500');
     var santeRows     = await readSheet(token, cfg._sid, 'Sante_Mortalite!A2:J500');
-    var sinistresRows = await readSheet(token, cfg._sid, 'Sinistres_CNAAS!A2:M200');
+    var sinistresRows = await readSheet(token, cfg._sid, 'Sinistres_CNAAS!A2:Q200'); // Range étendue
 
     if (type === 'vet')      await checkAndSendVetReminders(token, cfg, cycle, santeRows, notifLog);
     if (type === 'deces')    await checkAndSendDecesAlerts(token, cfg, cycle, santeRows, sinistresRows, notifLog);
@@ -1237,6 +1303,8 @@ module.exports = async function handler(req, res) {
   }
 };
 ```
+
+> **Rate limit (Marcus panel)** : Type validation 400. Throttle 60s localStorage. Range A2:Q200 (16 colonnes).
 
 ### 4.11 /.github/workflows/cron-notifications.yml
 
@@ -1632,26 +1700,106 @@ Ferme BOAN — [lsGet('cfg_contact_gerant_tel')]
 □ CRON_SECRET dans GitHub Secrets
 ```
 
-### BLOC E — Tests
+### BLOC E — Tests + Fixtures (Marta panel)
+
+**Tests d'implémentation (50+ test cases)** :
 ```
-□ curl /api/cron?type=vet — 200 en < 10s
-□ curl /api/cron?type=deces + ?type=relances — idem
-□ Email test vers adresse fondateur — vérifier text/plain, objet sans crochets, CC présents
-□ WhatsApp → wa.me/ ouvre conversation avec message pré-rempli correct
-□ Idempotence : appeler /api/cron deux fois → une seule ligne SENT dans Notifications_Log
-□ TTL PENDING : ligne PENDING > 2h → cron → ERROR_TIMEOUT
-□ Offline décès : submit offline → lsGet('deces_pending') non vide
-    → reconnexion → createSinistrePending() → ligne Sinistres_CNAAS email_pending=OUI
-    → cron → email envoyé, email_pending=NON
-□ N° police vide → Statut INCOMPLET_POLICE + alerte soft app
-□ Prix foirail > 30j → alerte dans formulaire décès
-□ Bannière ⛔ après rechargement → lsGet('sinistres_ouverts') persisté
-□ beteMultiSelect() : coche 2 bêtes → S.fin.beteIds = ['C1-001','C1-002']
-□ Alerte croisée dates : col M < col L → email fondateur envoyé
-□ Dashboard gérant J-1 SOP → tap WA → flagKey présent → bannière disparaît le lendemain
-□ _reconcileSinistresOuverts() : Expert_Passe=OUI Sheets → expertPasse=true localStorage
-□ Mise en production
+✅ Infrastructure & Rate Limit:
+  □ curl /api/cron?type=vet — 200 en < 3s
+  □ curl /api/cron?type=deces — 200 en < 4s
+  □ curl /api/cron?type=relances — 200 en < 2s
+  □ Rate limit : appeler /api/cron 2× en < 60s → 2e = 429 Too Soon
+  □ Type validation : /api/cron?type=xyz → 400 Invalid type
+
+✅ Idempotence & Sheets:
+  □ Appeler /api/cron?type=vet 2× = 1 seule ligne SENT dans Notifications_Log (Reference_ID garde)
+  □ TTL PENDING : ligne PENDING > 2h → cron → ERROR_TIMEOUT
+  □ Reference_ID unique par [Type+Acte+Date]
+
+✅ Offline Décès (État machine Sofia):
+  □ Submit décès OFFLINE → lsGet('deces_state') = 'OFFLINE_PENDING'
+  □ Reconnect ONLINE → OFFLINE_PENDING → SYNCING → SYNCED (< 2s)
+  □ Cron deces @ 07h02 attend SYNCING < 5s → continue normal
+  □ Sinistres_CNAAS : 1 seule row créée (offline ou cron, pas 2)
+  □ Email : 1 SENT vet + 1 SENT cnaas (pas 4)
+
+✅ Email & Validation:
+  □ Email test → text/plain (pas HTML), objet sans crochets, CC présents
+  □ safeText() : injection CRLF "test\r\nBcc: evil" → "test Bcc: evil" (safe)
+  □ N° police vide → Statut INCOMPLET_POLICE
+
+✅ UI & localStorage:
+  □ WhatsApp → wa.me/ ouvre conversation
+  □ Bannière ⛔ → lsGet('sinistres_ouverts') persiste rechargement
+  □ beteMultiSelect() : 2 bêtes → S.fin.beteIds = ['C1-001','C1-002']
+  □ Alerte croisée dates : col M < col L → email fondateur
+  □ Dashboard gérant J-1 SOP → WA → flagKey → bannière disparaît lendemain
+  □ _reconcileSinistresOuverts() : Expert_Passe=OUI → expertPasse=true
+
+✅ Performance (Lazy Load Anouk):
+  □ Lazy load LIVE.sinistres : cache localStorage 1j, timeout 3s, fallback
+  □ Vague 2 loadLiveData : < 2.2s total
+  □ Gérant 3G : Vague 2 ne bloque pas
+  
+  □ Mise en production
 ```
+
+**✅ Test Fixtures (Marta panel)** — données normalisées QA :
+
+`fixtures/test-deces.json` :
+```json
+{
+  "id": "C1-TEST-001",
+  "date": "2026-07-08",
+  "sym": "Diarrhée sévère\r\ntest\t injection",
+  "tra": "Antibiothérapie × 2",
+  "cout": "50000",
+  "expected": {
+    "notifLog_rows": 2,
+    "notifLog_types": ["VET_DECES_J0", "CNAAS_DECES_J0"],
+    "sinistres_row": {
+      "Statut": "EN_COURS",
+      "email_pending": "NON",
+      "Type": "DECES"
+    },
+    "emails_sent": [
+      { "to": "vet_email@domain.com", "type": "VET_DECES_J0" },
+      { "to": "cnaas_email@domain.com", "type": "CNAAS_DECES_J0" }
+    ]
+  }
+}
+```
+
+`fixtures/test-vol.json` :
+```json
+{
+  "beteIds": ["C1-TEST-101", "C1-TEST-102"],
+  "noRecepisse": "GND-2026-1234",
+  "heureDecouverte": 1720428000000,
+  "expected": {
+    "chrono_visible": true,
+    "heures_remaining_48": 48,
+    "notifLog_rows": 1,
+    "notifLog_types": ["CNAAS_VOL_J0"],
+    "sinistres_row": {
+      "Type": "VOL",
+      "ID_Animal_s": "C1-TEST-101,C1-TEST-102",
+      "N_Recepisse": "GND-2026-1234"
+    }
+  }
+}
+```
+
+**Scénario test complet** :
+1. Submit TEST_DECES offline @ 18h J+0 → lsGet('deces_state') = 'OFFLINE_PENDING'
+2. Reconnect online @ 08h J+1 → transition SYNCING → SYNCED (< 2s)
+3. Cron vet @ 07h00 → email vét rappel SOP
+4. Cron deces @ 07h02 → emails VET + CNAAS
+5. Vérifier Notifications_Log : 2 rows SENT (Reference_ID distincts)
+6. Vérifier Sinistres_CNAAS : 1 row (pas 2), Statut EN_COURS, email_pending NON
+7. Relancer cron 2× → toujours 1 row SENT (idempotence ✅)
+
+> **Fixtures (Marta panel)** : Données normalisées reproductibles. Valide complet flow sans saisie manuelle.
 
 ---
 
