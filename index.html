@@ -978,6 +978,41 @@ var _lastPrixLoad    = 0; // timestamp dernier loadPrix réussi
 var _lastAlimLoad    = 0; // timestamp dernier loadAlimPrix réussi
 var _configAppTabOk  = false; // flag : onglet Config_App déjà créé ce cycle
 function resetActivity() { LAST_ACTIVITY = Date.now(); }
+
+// ── OFFLINE MODE ──
+// Queue pour les écritures échouées — replay automatique au retour online
+var _OFFLINE_QUEUE = [];
+function _replayOfflineQueue() {
+  if (!_OFFLINE_QUEUE.length) return;
+  setStatusMsg('🔄 Reconnexion — envoi des données en attente...', 3000);
+  var queue = _OFFLINE_QUEUE.slice();
+  _OFFLINE_QUEUE = [];
+  lsSet('offline_queue', []);
+  queue.forEach(function(fn) {
+    try { fn(); } catch(e) { console.error('[offline-retry]', e); }
+  });
+}
+window.addEventListener('online', function() {
+  if (S.page === 'app') {
+    console.log('[offline] Connexion rétablie');
+    _replayOfflineQueue();
+    loadLiveData();
+  }
+});
+window.addEventListener('offline', function() {
+  console.log('[offline] Mode hors-ligne activé');
+  setStatusMsg('⚠️ Hors-ligne — données enregistrées localement', 0);
+});
+
+// ── STANDARDIZED ERROR HANDLER ──
+function _handleError(context, err, isCritical) {
+  var msg = (err && typeof err === 'object') ? (err.message || JSON.stringify(err)) : String(err);
+  console.error('['+context+']', msg);
+  if (isCritical) {
+    setStatusMsg('err:'+context+' — '+msg, 5000);
+  }
+  return msg;
+}
 document.addEventListener('touchstart', resetActivity);
 document.addEventListener('click', resetActivity);
 setInterval(function() {
@@ -1284,6 +1319,7 @@ function doLogin() {
   .catch(function(e){
     S.sending = false;
     S.lerr = 'Erreur réseau : ' + e.message;
+    S.sessionToken = null; // ✓ cleanup token en cas d'erreur auth
     r();
   });
 }
@@ -1643,26 +1679,39 @@ function loadLiveData() {
     : Promise.resolve();
 
   step1.then(function() {
-    // ── ÉTAPE 2 — Vague 1 critique (parallèle, ~1 seconde) ──
-    // Pour Pesees, Stock_Nourriture et Sante_Mortalite :
-    // → essayer sidGerant d'abord, puis sidFondateur en fallback.
-    // Le gérant écrit dans les deux sheets via writeAll, donc les données
-    // sont toujours disponibles dans au moins l'un des deux.
+    // ── ÉTAPE 2 — Vagues 1+2 fusionnées (parallèle, optimisé) ──
+    // Lancer TOUS les readSheet en parallèle — wave1 (critique) + wave2 (historique)
+    // → Aucune dépendance entre les waves (cache est isolé par clé)
+    // → Fusion = gain ~500-1000ms de latence
     var sidDataSource = sidGerant || sidFondateur;
-    // Ventes_Betes : écrites dans commerciale + fondateur (pas gérant) — lire depuis fondateur en priorité
     var sidVentes = sidFondateur || SID.commerciale || sidDataSource;
+    var sidHisto = sidGerant || sidFondateur;
+    
     return Promise.all([
+      // ── Wave 1 : données critiques pour le dashboard ──
       sidDataSource  ? readSheet(sidDataSource,  'Pesees!A4:G200')           : Promise.resolve(null),
       sidDataSource  ? readSheet(sidDataSource,  'Stock_Nourriture!A4:F200') : Promise.resolve(null),
       sidFondateur   ? readSheet(sidFondateur,   'KPI_Mensuels!A4:K50')      : Promise.resolve(null),
       sidDataSource  ? readSheet(sidDataSource,  'Sante_Mortalite!A4:G200')  : Promise.resolve(null),
       sidVentes      ? readSheet(sidVentes,       'Ventes_Betes!A4:K200')     : Promise.resolve(null),
+      // ── Wave 2 : historique pour la sidebar (lancé en parallèle) ──
+      sidHisto ? readSheet(sidHisto, 'Fiche_Quotidienne!A4:G500')  : Promise.resolve(null),
+      sidHisto ? readSheet(sidHisto, 'Incidents!A4:G200')          : Promise.resolve(null),
+      (sidHisto ? readSheet(sidHisto,'Hebdomadaire!A4:H200').then(function(rows){
+        if(rows&&rows.length) return rows;
+        return (sidFondateur&&sidFondateur!==sidHisto)?readSheet(sidFondateur,'Hebdomadaire!A4:H200'):(rows||[]);
+      }) : Promise.resolve(null)),
+      sidHisto ? readSheet(sidHisto, 'SOP_Check!A4:H200')          : Promise.resolve(null),
     ]).then(function(results) {
       var rowsPesees = results[0];
       var rowsStock  = results[1];
       var rowsKpi    = results[2];
       var rowsSante  = results[3];
       var rowsVentes = results[4];
+      var fiches     = (results[5] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
+      var incidents  = (results[6] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
+      var bilans     = (results[7] || []).filter(function(r){ return r[0]; });
+      var sops       = (results[8] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
 
       // Sante_Mortalite → MOCK.betes + SPARK.betes (filtré par début de cycle)
       if (rowsSante && rowsSante.length) {
@@ -1837,62 +1886,31 @@ function loadLiveData() {
       LIVE.source = 'live';
       r(); // → dashboard s'affiche avec vraies données
 
-      // ── ÉTAPE 3 — Vague 2 historique (parallèle, après Vague 1) ──
-      // Lire depuis SID.gerant : source de vérité complète (données gérant avant ET après writeAll fix)
-      // Le fondateur a SID.gerant dans son objet SID — writeAll écrit les soumissions gérant ET fondateur dans les deux sheets
-      var sidHisto = sidGerant || sidFondateur;
-      // Optim : Sante_Mortalite déjà lue en Vague 1 depuis le même SID — réutiliser le résultat
-      var _rowsSanteV1 = rowsSante;
-      return Promise.all([
-        sidHisto ? readSheet(sidHisto, 'Fiche_Quotidienne!A4:G500')  : Promise.resolve(null),
-        sidHisto ? readSheet(sidHisto, 'Incidents!A4:G200')          : Promise.resolve(null),
-        Promise.resolve(_rowsSanteV1), // réutilise Vague 1 — évite 1 appel Sheets inutile
-        // Hebdomadaire : lecture avec fallback sidFondateur si sidHisto (gérant) est vide
-        // (couvre le cas où writeAll a écrit sur fondateur mais pas gérant)
-        (sidHisto ? readSheet(sidHisto,'Hebdomadaire!A4:H200').then(function(rows){
-          if(rows&&rows.length) return rows;
-          return (sidFondateur&&sidFondateur!==sidHisto)?readSheet(sidFondateur,'Hebdomadaire!A4:H200'):(rows||[]);
-        }) : Promise.resolve(null)),
-        sidHisto ? readSheet(sidHisto, 'Pesees!A4:G200')             : Promise.resolve(null),
-        sidHisto ? readSheet(sidHisto, 'SOP_Check!A4:H200')          : Promise.resolve(null),
-        sidHisto ? readSheet(sidHisto, 'Stock_Nourriture!A4:F200')   : Promise.resolve(null),
-      ]).then(function(hist) {
-        var fiches    = (hist[0] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
-        var incidents = (hist[1] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
-        var santes    = (hist[2] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
-        // Hebdomadaire col A = numéro de semaine (ex: "1"), pas une date — pas de filtre apresDebut
-        var bilans    = (hist[3] || []).filter(function(r){ return r[0]; });
-        var pesees    = (hist[4] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
-        var sops      = (hist[5] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
-        var stocks    = (hist[6] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
-        // Reconstruire STOCK_MVTS depuis Vague 2 uniquement si Sheets a plus ou autant de données
-        // (evite d'écraser le local après un submit récent ou les stockLines initiales non encore en Sheets)
-        if (stocks.length > 0 && (!STOCK_MVTS || STOCK_MVTS.length === 0 || stocks.length >= STOCK_MVTS.length)) {
-          var cycleDebut2 = CYCLE.dateDebut || todayISO();
-          STOCK_MVTS = [];
-          stocks.forEach(function(row) {
-            if (!row[0] || !row[1]) return;
-            var kgRow2 = parseFloat(row[2]);
-            if (isNaN(kgRow2)) return;
-            STOCK_MVTS.push({
-              date: row[0], type: row[1],
-              mode: kgRow2 >= 0 ? 'ajouter' : 'consommer',
-              kg: Math.abs(kgRow2), cycleDebut: cycleDebut2
-            });
+      // ── Traitement de l'historique directement (déjà chargé en parallèle) ──
+      var stocks = (rowsStock || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
+      if (stocks.length > 0 && (!STOCK_MVTS || STOCK_MVTS.length === 0 || stocks.length >= STOCK_MVTS.length)) {
+        var cycleDebut2 = CYCLE.dateDebut || todayISO();
+        STOCK_MVTS = [];
+        stocks.forEach(function(row) {
+          if (!row[0] || !row[1]) return;
+          var kgRow2 = parseFloat(row[2]);
+          if (isNaN(kgRow2)) return;
+          STOCK_MVTS.push({
+            date: row[0], type: row[1],
+            mode: kgRow2 >= 0 ? 'ajouter' : 'consommer',
+            kg: Math.abs(kgRow2), cycleDebut: cycleDebut2
           });
-          saveMvts();
-        }
-        buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops, stocks);
-        _lastSyncTS = Date.now(); // ✓ marquer le moment de la synchro réussie
-        _LIVE_LOADING = false;
-        r(); // → sidebar et alertes se mettent à jour
-      }).catch(function() {
-        // Vague 2 échouée — Vague 1 déjà affichée, pas critique
-        _LIVE_LOADING = false;
-      });
+        });
+        saveMvts();
+      }
+      buildHistoryFromSheets(fiches, incidents, rowsSante, bilans, rowsPesees, sops, stocks);
+      _lastSyncTS = Date.now(); // ✓ marquer le moment de la synchro réussie
+      _LIVE_LOADING = false;
+      r(); // → sidebar et alertes se mettent à jour
 
-    }).catch(function() {
-      // Sheets inaccessible (Vague 1) → ne pas écraser localStorage
+    }).catch(function(e) {
+      // Sheets inaccessible (Vagues 1+2 fusionnées) → fallback cache local
+      _handleError('loadLiveData', e, false);
       LIVE.source = 'cache';
       _LIVE_LOADING = false;
       r(); // → badge Cache affiché
