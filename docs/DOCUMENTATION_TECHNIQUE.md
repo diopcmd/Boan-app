@@ -1,7 +1,54 @@
 ﻿# DOCUMENTATION TECHNIQUE — BOAN App
 
 Référence développeur pour l'application de gestion d'élevage **BOAN**.  
-**Commit HEAD** : `6a4d8d6` — ~9 600 lignes — Mai 2026
+**Commit HEAD** : `479f073` — ~9 800 lignes — Juillet 2026
+
+---
+
+## 0. 🔐 RBAC — Contrôle d'accès par rôle (AUDIT JUILLET 2026)
+
+### Structure des rôles (ligne ~459-463)
+
+```javascript
+var USERS = {
+  fondateur:      {name:'Direction',              tabs:['dashboard','saisie','livrables','marche','guide']},
+  gerant:         {name:'Gerant terrain',         tabs:['dashboard','saisie','guide']},
+  rga:            {name:'RGA — Gestion Admin',    tabs:['dashboard','livrables','guide']},
+  commerciale:    {name:'Commerciale',            tabs:['dashboard','marche','guide']},
+};
+```
+
+### Matrice d'accès Sheets
+
+| Feuille | Fondateur | Gérant | RGA | Commerciale | Notes |
+|---|---|---|---|---|---|
+| **Config_Cycle** | ✅ R/W | ✅ R | ✅ R | ✅ R | Source fondateur, écrit par fondateur+RGA seulement |
+| **Config_App** | ✅ W | ❌ - | ❌ - | ❌ - | SID.fondateur uniquement |
+| **Pesees** | ✅ R | ✅ R/W | ✅ R | ❌ - | SID.gerant — validation rôle en ligne 2844 |
+| **Stock_Nourriture** | ✅ R | ✅ R/W | ✅ R | ❌ - | SID.gerant |
+| **Fiche_Quotidienne** | ✅ R | ✅ R/W | ✅ R | ❌ - | SID.gerant |
+| **Incidents** | ✅ R | ✅ R/W | ✅ R | ❌ - | SID.gerant |
+| **Sante_Mortalite** | ✅ R | ✅ R/W | ✅ R | ❌ - | SID.gerant |
+| **Ventes_Betes** | ✅ R | ✅ R/W | ✅ R | ❌ - | SID.gerant + fondateur fallback |
+| **Suivi_Marche** | ✅ R/W | ❌ - | ⚠️ R | ✅ W | Fondateur read, Commerciale write, RGA read |
+| **Suivi_Aliments** | ✅ R | ❌ - | ⚠️ R | ✅ W | Fondateur read, Commerciale write, RGA read |
+
+### Validations de rôle appliquées (Audit Juillet 2026)
+
+1. **Line ~459** : RGA rôle filtré — **'marche' ôté** (c'est un rôle administratif, pas commercial)
+2. **Line ~2267** : `_syncCycle()` — validation `if (['fondateur', 'rga'].indexOf(S.user) === -1) return` ✓
+3. **Line ~2844** : `loadPesees()` — validation `if (['fondateur', 'gerant', 'rga'].indexOf(S.user) === -1) return` ✓
+4. **Line ~3055** : `loadPrix()` — validation `if (['fondateur', 'commerciale', 'rga'].indexOf(S.user) === -1) return` ✓
+5. **Line ~3085** : `loadAlimPrix()` — validation `if (['fondateur', 'commerciale', 'rga'].indexOf(S.user) === -1) return` ✓
+
+### Politique d'accès par rôle
+
+| Rôle | Lecture | Écriture | Cas d'usage |
+|---|---|---|---|
+| **Fondateur** | Tous onglets | Config, cycle | Direction : vue complète, gestion stratégique |
+| **Gérant** | Dashboard + Saisie | Pesée, Fiche, Stock, Incidents, Santé | Terrain : données quotidiennes |
+| **RGA** | Dashboard + Livrables | Config cycles (clone) | Admin : rapports clôture, archivage |
+| **Commerciale** | Dashboard + Marché | Prix foirail, prix aliments | Commercial : stratégie prix |
 
 ---
 
