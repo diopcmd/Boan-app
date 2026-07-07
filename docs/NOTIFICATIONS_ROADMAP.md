@@ -260,11 +260,11 @@ La CNAAS exige que l'animal décédé reste intact jusqu'au passage de leur expe
 | Trigger | Délai | Action | Destinataire(s) | Contenu clé |
 |---|---|---|---|---|
 | **Décès constaté** | Immédiat (J+0) | Email déclaration CNAAS | CNAAS + Vét + RGA | N° police, ID animal, race, symptômes, traits, engagement NE PAS ENTERRER |
-| **Compte-à-rebours décès** | J+0 18:00 → J+2 18:00 | Bannière ⛔ + alerte fondateur | Dashboard fondateur/gérant | 48h max CNAAS, horodatage email = preuve |
-| **Vol constaté** | Immédiat (J+0) | Email CNAAS + SMS/WA gérant | CNAAS + Brigade Thiès + Gérant | Heure découverte, ID bêtes, N° récépissé, PV demandé |
+| **Compte-à-rebours décès** | J+0 immédiat + J+1 cron | Email fondateur J+0 (< 1s) + Bannière ⛔ RGA | Dashboard RGA/gérant | 48h max CNAAS, horodatage email = preuve |
+| **Vol constaté** | Immédiat (J+0) + J+1 cron | Email fondateur J+0 (< 1s) + Email CNAAS | CNAAS + Brigade + RGA + Fondateur | Heure découverte, ID bêtes, N° récépissé, Email J+0 immédiat |
 | **Fenêtre VOL 48h** | Compte-à-rebours live | Dashboard chronomètre VOL | Gérant (device) | Poursuite chaude 48h, urgence < 6h (CRITIQUE) |
-| **Dossier > 30j** | J+0 email → J+30 | Relance paiement CNAAS | Fondateur + Agent CNAAS | Délai max paiement 30j après validation dossier |
-| **Fin contrat J-30** | Auto cron | Email renouvellement | Fondateur + Agent CNAAS | Contrat expire J+X, renouvellement manuel requis |
+| **Dossier > 30j** | J+0 email → J+30 | Relance paiement CNAAS | RGA + Agent CNAAS | Délai max paiement 30j après validation dossier |
+| **Fin contrat J-30** | Auto cron | Email renouvellement | RGA + Agent CNAAS | Contrat expire J+X, renouvellement manuel requis |
 | **Vente animal** | J+0 après saisie | Email déclaration CNAAS | CNAAS | Éleveur, ID animal, type (transfert/suppression) |
 | **Modification cheptel** | J+0 après saisie | Email déclaration CNAAS | CNAAS | Ajout/retrait animal, impact valeur assuré |
 
@@ -294,7 +294,7 @@ J+0 — Gérant constate le décès
   2d. Cron suivant 07h02 envoie les emails
 
   3. App affiche post-submit :
-     Modal : "✅ Dossier créé. ⚠️ APPEL VOCAL FONDATEUR OBLIGATOIRE"
+     Modal : "✅ Dossier créé + Email fondateur J+0 immédiat. ⚠️ RGA APPELLE CNAAS + VÉT"
      Boutons (par priorité) :
        1️⃣ 📞 Appeler CNAAS — tel:[contact_cnaas_tel]
        2️⃣ 📞 Appeler Vétérinaire — tel:[contact_vet_tel]
@@ -308,9 +308,9 @@ J+0 — Fondateur reçoit notification
   5. Fondateur appelle vétérinaire pour confirmer date de venue
 
 J+1 — Cron 07h02 : checkAndSendDecesAlerts()
-  6. Envoie email VET (section 5.2) + email CNAAS (section 5.3) si email_pending=OUI
-  7. Si Date_Confirmation vide dans Notifications_Log : envoie rappel vét (section 5.2b)
-  8. Si col M < col L dans Sinistres_CNAAS : notifie fondateur "⚠️ Expert avant vét"
+  7. Envoie email VET (section 5.2) + email CNAAS (section 5.3) si email_pending=OUI`n     ✅ **Idempotence Reference_ID (Priya panel, section 4.4)** : skip si J+0 email déjà SENT (TTL 2h)
+  8. Si Date_Confirmation vide dans Notifications_Log : envoie rappel vét (section 5.2b)
+  9. Si col M < col L dans Sinistres_CNAAS : notifie RGA "⚠️ Expert avant vét"
 
 Dashboard gérant (J+1 et au-delà)
   9. Si sinistres_ouverts[expertPasse=false] ET > 24h depuis le décès :
@@ -318,20 +318,20 @@ Dashboard gérant (J+1 et au-delà)
 
 J+1 à J+5-7 — Vétérinaire constate
   10. Vétérinaire signe le certificat de constatation
-  11. Fondateur scanne → joint par email de suivi "Suite dossier [ID]"
-  12. Fondateur coche : ☑ Certif reçu + ☑ Certif transmis CNAAS le [date]
+  12. RGA scanne → joint par email de suivi "Suite dossier [ID]"
+  13. RGA coche : ☑ Certif reçu + ☑ Certif transmis CNAAS le [date]
 
 Expert CNAAS (J+5 à J+10)
   13. Expert CNAAS vient constater
-  14. Fondateur coche : ☑ Expert passé → bannière NE PAS ENTERRER libérée
+  15. RGA coche : ☑ Expert passé → bannière NE PAS ENTERRER libérée
       → lsSet('sinistres_ouverts') expertPasse=true
 
 Relances automatiques (cron 07h04, si Statut_CNAAS = EN_COURS)
   J+7  → Email relance courtois (section 5.5)
-  J+14 → Email relance + notification fondateur "Appel vocal recommandé"
+  J+14 → Email relance + notification RGA "Appel vocal recommandé"
 
 Clôture
-  15. Fondateur clique "CNAAS a confirmé" → Statut_CNAAS = CLOTURE
+  16. RGA clique "CNAAS a confirmé" → Statut_CNAAS = CLOTURE
 ```
 
 ### 2.2 CAS VOL
@@ -399,7 +399,7 @@ Dashboard gérant (jour J-1)
 | Alerte photo 📸 Photographiez MAINTENANT | Au-dessus du bouton Enregistrer | `S.fsa.dec === 'OUI'` |
 | Alerte prix foirail obsolète | "⚠️ Prix non mis à jour depuis N jours" | `_lastPrixLoad` > 30j |
 | Alerte N° police absent | Soft warning — n'empêche pas le submit | `!CYCLE.numCnaas` |
-| Modal post-submit | "✅ Dossier créé. ⚠️ APPEL VOCAL FONDATEUR OBLIGATOIRE" | Post-submit |
+| Modal post-submit | "✅ Dossier créé + Email fondateur J+0. ⚠️ RGA APPELLE CNAAS + VÉT" | Post-submit |
 | 1️⃣ 📞 Appeler CNAAS | `tel:[contact_cnaas_tel]` | Post-submit |
 | 2️⃣ 📞 Appeler Vétérinaire | `tel:[contact_vet_tel]` | Post-submit |
 | 3️⃣ 💬 WhatsApp Vétérinaire | `wa.me/[contact_vet_tel]?text=...` msg 6.1 | Post-submit |
@@ -2369,3 +2369,4 @@ Page 5 — Coordonnées & engagement
 ---
 
 > 📌 **Rappel architectural** : toutes les actions BOAN listées ci-dessus correspondent à des éléments déjà spécifiés dans les sections 2-10 de ce roadmap. La section 11 est le point d'entrée terrain vers la documentation technique.
+
