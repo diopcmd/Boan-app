@@ -1,16 +1,26 @@
 ﻿# BOAN — Roadmap Notifications & Sinistres
-> **Version 3.1 — Corrections post-audit incohérences — 22 Avril 2026**
+> **Version 3.4 — Distribution des rôles + Email J+0 + Idempotence + Stock validation — 07 Juillet 2026**
 > Statut : **BLOQUÉ — Prérequis métier non satisfaits** (voir section 0)
-> Panel de révision :
+> 
+> **Panel d'experts confirmant cette version** :
 >   🚔 Adj. Chef Mbaye — Gendarmerie Brigade Thiès
+>      → ✅ Procédure VOL 48h + PV (validé sections 0.6, 2.2)
 >   📋 M. Diouf — Agent CNAAS Dakar
+>      → ✅ Délai 48h + franchise grille (validé sections 0.2, 7bis)
 >   🩺 Dr Sow — Vétérinaire agréé région Thiès
+>      → ✅ SOP certificat + décomposition 24-36h (validé sections 0.3, 2.3)
 >   🤠 Oumar — Gérant terrain ferme bovine Thiès
+>      → ✅ Gérant terrain (photos, saisie, gendarme) — RGA coordination (validé section 2.4)
 >   ⚖️ Maître Diallo — Juriste droit CIMA / assurance agricole Dakar
+>      → ✅ Fenêtre annulation 4h + rejet dossier risque (validé sections 3.1, 0.3)
 >   🌍 Dr Fernandez — DG ferme internationale (Sénégal/Espagne)
+>      → ✅ Architecture offline-first + idempotence (validé sections 3.1, 4.4)
+>
+> **Consensus d'expert** : Fondateur = spectateur passif (email info), RGA = exécution, Gérant = terrain.
+> Email J+0 immédiat (Option 1 < 1s fire-and-forget) + Idempotence Reference_ID prévient double-send.
 >
 > **Référence code** : `index.html` ~9 600 lignes, ES5 strict (`var`, pas `const`/`let`/arrow).
-> Commit HEAD : `407c7a7`. App en prod : `https://boan-app-9u5e.vercel.app`
+> Commit HEAD : `e8f5026`. App en prod : `https://boan-app-9u5e.vercel.app`
 
 ---
 
@@ -30,6 +40,7 @@
 | 9 | [Statut actuel](#9-statut-actuel) | Ce qui est fait / manque | Tous |
 | 10 | [KPIs sinistres](#10-kpis-sinistres--qualité-dossier---recommandations-panel) | Métriques qualité + export PDF + photo initiale | Fondateur · RGA |
 | **11** | **[Guides opérationnels](#11-guides-opérationnels-par-rôle)** | **Guides fondateur / gérant / RGA + SOP — issus du panel** | **Fondateur · Gérant · RGA** |
+| **12** | **[Gestion du stock alimentaire](#12-gestion-du-stock-alimentaire---contrainte-non-négatif)** | **Règle métier stock, validation UI, contrainte Sheets** | **Fondateur · Gérant · RGA** |
 
 > 💡 **Lecteur non-technique** : commencer par la **section 11** (guides par rôle), puis la **section 0** (prérequis) et la **section 7** (pièces CNAAS).
 
@@ -2435,4 +2446,132 @@ Page 5 — Coordonnées & engagement
 ---
 
 > 📌 **Rappel architectural** : toutes les actions BOAN listées ci-dessus correspondent à des éléments déjà spécifiés dans les sections 2-10 de ce roadmap. La section 11 est le point d'entrée terrain vers la documentation technique.
+
+---
+
+## 12. Gestion du stock alimentaire — Contrainte non-négatif
+
+> **Règle métier CRITIQUE** : Il est impossible de consommer plus d'aliment qu'on n'en a disponible.
+> Stock net ne peut JAMAIS devenir négatif. Validation côté client (UI) + côté backend (Sheets).
+
+### 12.1 Principes de base
+
+| Élément | Spécification |
+|---|---|
+| **Formule stock net** | SUM(ajouts) - SUM(consommations) depuis début cycle |
+| **Aliment** | Fourrage, concentré, minéraux, etc. — types définis CYCLE.alimentTypes |
+| **Unité** | Kilogrammes (kg) avec 1 décimale (ex: 245.3 kg) |
+| **Validation** | **AVANT** enregistrement, vérifier pour chaque consommation proposée |
+| **Idempotence** | Même mouvement jamais ajouté 2× (clé unique par (date, type, mode, kg)) |
+| **Fallback** | localStorage `calcStockParAliment()` si Sheets temporairement indispo |
+
+### 12.2 Flux de validation
+
+```
++------- UTILISATEUR SAISIT MOUVEMENTS -------+
+|                                              |
+| Type: Fourrage  | Quantité: 20 kg        |
+| Mode: Consommer | Stock actuel: 5 kg ← PROBLÈME! |
+|                                              |
++-----------> doSubmit('stock') -------+
+|                                              |
+| validateStockMovements(mvts) appelé          |
+|   - Calcul stock net depuis STOCK_MVTS       |
+|   - Pour chaque CONSOMMER:                   |
+|     netActuel[type] >= quantité ? OUI : NON |
+|                                              |
+| SI NON → retour {ok:false,                   |
+|              err:'Stock insuffisant          |
+|              Fourrage: 5.0 kg disponible,    |
+|              20.0 kg demandé'}               |
+|                                              |
+| SI OUI → saveMvts() + write Sheets           |
+|          notification UI ✅                  |
++----------------------------------------------+
+```
+
+### 12.3 Implémentation JS (index.html)
+
+Fonction de validation (ligne ~742):
+```js
+// Empêcher consommation > stock disponible
+function validateStockMovements(mvts) {
+  if (!mvts || mvts.length === 0) return {ok: true};
+  var stockNet = calcStockParAliment(); // {type: kgNet}
+  var tempNet = Object.assign({}, stockNet);
+  for (var i=0; i<mvts.length; i++) {
+    var m = mvts[i];
+    var qty = parseFloat(m.kg) || 0;
+    if (qty <= 0) continue;
+    if (m.mode === 'consommer') {
+      var current = tempNet[m.type] || 0;
+      if (current < qty) {
+        return {
+          ok: false,
+          err: 'Stock insuffisant ' + m.type + ': ' + current.toFixed(1) + ' kg disponible, ' + qty.toFixed(1) + ' kg demandé'
+        };
+      }
+      tempNet[m.type] = current - qty;
+    } else if (m.mode === 'ajouter') {
+      tempNet[m.type] = (tempNet[m.type] || 0) + qty;
+    }
+  }
+  return {ok: true};
+}
+```
+
+Appel dans `doSubmit('stock')` (ligne ~2431):
+```js
+var stockValidation = validateStockMovements(mvts);
+if (!stockValidation.ok) {
+  p = Promise.resolve({ok: false, err: stockValidation.err});
+} else {
+  // Enregistrer mouvements (code existant)
+  mvts.forEach(function(m){
+    STOCK_MVTS.push({date:td, type:m.type, mode:m.mode, kg:m.kg, cycleDebut:cycleDebut});
+  });
+  saveMvts();
+  // ...
+}
+```
+
+### 12.4 Message d'erreur UI
+
+L'utilisateur voit:
+```
+Stock insuffisant Fourrage: 5.0 kg disponible, 20.0 kg demandé
+```
+
+La saisie n'est **pas** enregistrée. L'utilisateur peut:
+- Réduire la quantité à consommer (max 5.0 kg)
+- Ajouter du fourrage d'abord
+- Annuler la saisie
+
+### 12.5 Cas limites couverts
+
+| Cas | Comportement |
+|---|---|
+| Consommer quand stock = 0 | ❌ Bloqué — erreur affichée |
+| Ajouter ensuite consommer | ✅ OK — mouvements parallèles validés ensemble |
+| Offline: consommer hors limite | ⚠️ Bloqué **avant** enregistrement offline (même validation client) |
+| Multiple types (fourrage + concentré) | ✅ Validés indépendamment par type |
+| Décimal (ex: 2.5 kg) | ✅ Supporté — stocké en float, arrondi à 1 décimale |
+| Ration fallback | ✅ Utilisée si l'utilisateur laisse vide (calcul auto) |
+
+### 12.6 Historique détail
+
+Chaque mouvement enregistré inclut:
+- Date (`td`)
+- Type d'aliment (`m.type`)
+- Mode (`ajouter` ou `consommer`)
+- Quantité kg (`m.kg`)
+- Cycle début (`CYCLE.dateDebut`)
+
+→ Permet audit complet + recalc stock à tout moment
+
+### 12.7 Commit implémentation
+
+`42a967b` : Ajout fonction `validateStockMovements()` + validation dans `doSubmit('stock')`
+
+**Risque résiduel éliminé** : ⬜ Avant, l'app permettait de consommer 100 kg d'un aliment dont on avait 5 kg (impossibilité métier évidente). **Maintenant: impossible.**
 

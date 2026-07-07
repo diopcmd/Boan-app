@@ -4314,6 +4314,20 @@ function exportKpiPDF(){
     S.msg='err:jsPDF non chargé'; r(); return;
   }
   var doc = new (window.jspdf ? window.jspdf.jsPDF : jsPDF)({orientation:'portrait',unit:'mm',format:'a4'});
+  doc.setFont(undefined,'normal');  // Force UTF-8 support
+  // Fonction pour normaliser les accents en latin-9 compatible jsPDF
+  var normalize = function(str) {
+    if (!str) return str;
+    return String(str)
+      .replace(/é/g, 'e').replace(/è/g, 'e').replace(/ê/g, 'e').replace(/ë/g, 'e')
+      .replace(/à/g, 'a').replace(/â/g, 'a').replace(/ä/g, 'a')
+      .replace(/ù/g, 'u').replace(/û/g, 'u').replace(/ü/g, 'u')
+      .replace(/ô/g, 'o').replace(/ö/g, 'o')
+      .replace(/î/g, 'i').replace(/ï/g, 'i')
+      .replace(/ç/g, 'c')
+      .replace(/œ/g, 'oe').replace(/æ/g, 'ae');
+  };
+  doc.setFont(undefined,'normal');  // Force UTF-8 support
   var today = (function(){var n=_nowDakar();var mFR=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];return (n.day<10?'0':'')+n.day+' '+mFR[n.month-1]+' '+n.year;})();
   var sem = calcSemaine();
   var totalSemCycle = Math.round((CYCLE.dureeMois||8)*4.33);
@@ -4326,30 +4340,30 @@ function exportKpiPDF(){
   doc.setTextColor(200,160,106);
   doc.setFontSize(18);
   doc.setFont(undefined,'bold');
-  doc.text('BOANR — Rapport KPI', 14, 14);
+  doc.text(normalize('BOANR — Rapport KPI'), 14, 14);
   doc.setFontSize(9);
   doc.setFont(undefined,'normal');
   doc.setTextColor(136,170,136);
-  doc.text('Élevage bovin engraissement — Thiès/Thiénaba, Sénégal', 14, 22);
-  doc.text('Édité le '+today, 14, 28);
-  doc.text('Semaine '+sem+' / 35  ('+pct+'% du cycle)', 130, 28);
+  doc.text(normalize('Elevage bovin engraissement — Thies/Thienaba, Senegal'), 14, 22);
+  doc.text(normalize('Edite le ')+normalize(today), 14, 28);
+  doc.text(normalize('Semaine ')+sem+normalize(' / 35  (')+pct+normalize('% du cycle)'), 130, 28);
 
   // ── Bloc infos cycle ──
   doc.setTextColor(30,30,30);
   doc.setFontSize(11);
   doc.setFont(undefined,'bold');
-  doc.text('Informations du cycle', 14, 46);
+  doc.text(normalize('Informations du cycle'), 14, 46);
   doc.setFont(undefined,'normal');
   doc.setFontSize(10);
   var infos = [
-    ['Début du cycle', CYCLE.dateDebut ? isoToFr(CYCLE.dateDebut) : '—'],
-    ['Nombre de bêtes', (CYCLE.nbBetes||4)+' têtes'],
-    ['Race', CYCLE.race||'Djakoré'],
-    ['Foirail', CYCLE.foirail||'Thiès'],
-    ['Ration / j (brut)', (CYCLE.ration||12)+' kg/bête'],
-    ['Capital investi', fmt(CYCLE.capital||1450000)+' FCFA'],
-    ['Objectif prix', fmt(CYCLE.objectifPrix||2000)+' FCFA/kg'],
-    ['Vétérinaire', CYCLE.veterinaire||'—'],
+    [normalize('Debut du cycle'), CYCLE.dateDebut ? isoToFr(CYCLE.dateDebut) : '—'],
+    [normalize('Nombre de betes'), (CYCLE.nbBetes||4)+' tetes'],
+    ['Race', CYCLE.race||'Djakore'],
+    [normalize('Foirail'), CYCLE.foirail||'Thies'],
+    [normalize('Ration / j (brut)'), (CYCLE.ration||12)+' kg/bete'],
+    [normalize('Capital investi'), fmt(CYCLE.capital||1450000)+' FCFA'],
+    [normalize('Objectif prix'), fmt(CYCLE.objectifPrix||2000)+' FCFA/kg'],
+    [normalize('Veterinaire'), CYCLE.veterinaire||'—'],
   ];
   var y = 54;
   infos.forEach(function(r,i){
@@ -4370,15 +4384,15 @@ function exportKpiPDF(){
   doc.setTextColor(200,160,106);
   doc.setFontSize(11);
   doc.setFont(undefined,'bold');
-  doc.text('KPIs Principaux', 16, y+5.5);
+  doc.text(normalize('KPIs Principaux'), 16, y+5.5);
   y += 12;
 
   var kpis = [
-    ['Bêtes actives', MOCK.betes+' / '+(CYCLE.nbBetes||4)+((LIVE.sold||[]).length>0?' ('+LIVE.sold.length+' vendue'+(LIVE.sold.length>1?'s':'')+')'  :''), MOCK.betes>=(CYCLE.nbBetes||4)-(LIVE.sold||[]).length],
-    [_gmqLabel(), gmqL+' kg/j', gmqL>=(CYCLE.gmqCible||1)],
-    ['Stock aliments', MOCK.stock+' semaines', MOCK.stock>=6],
-    ['Trésorerie', Math.round(MOCK.treso/1000)+'k FCFA', MOCK.treso>=600000],
-    ['Avancement cycle', pct+'% (Sem. '+sem+'/'+totalSemCycle+')', pct>=0],
+    [normalize('Betes actives'), MOCK.betes+' / '+(CYCLE.nbBetes||4)+((LIVE.sold||[]).length>0?' ('+LIVE.sold.length+' vendue'+(LIVE.sold.length>1?'s':'')+')'  :''), MOCK.betes>=(CYCLE.nbBetes||4)-(LIVE.sold||[]).length],
+    [normalize(_gmqLabel()), gmqL+' kg/j', gmqL>=(CYCLE.gmqCible||1)],
+    [normalize('Stock aliments'), MOCK.stock+' semaines', MOCK.stock>=6],
+    [normalize('Tresorerie'), Math.round(MOCK.treso/1000)+'k FCFA', MOCK.treso>=600000],
+    [normalize('Avancement cycle'), pct+'% (Sem. '+sem+'/'+totalSemCycle+')', pct>=0],
   ];
   kpis.forEach(function(k,i){
     if(i%2===0){ doc.setFillColor(245,250,245); doc.rect(14,y-4,182,7,'F'); }
@@ -4389,7 +4403,7 @@ function exportKpiPDF(){
     doc.setFont(undefined,'bold');
     doc.text(k[1], 120, y);
     doc.setFont(undefined,'normal');
-    doc.text(k[2] ? '✓ OK' : '⚠ Attention', 180, y);
+    doc.text(normalize(k[2] ? 'OK' : 'Attention'), 180, y);
     y += 8;
   });
 
@@ -4403,7 +4417,7 @@ function exportKpiPDF(){
   doc.setTextColor(200,160,106);
   doc.setFontSize(11);
   doc.setFont(undefined,'bold');
-  doc.text('Synthèse Stock du Cycle', 16, y+5.5);
+  doc.text(normalize('Synthese Stock du Cycle'), 16, y+5.5);
   y += 12;
 
   var ajouts={}, consos={};
@@ -4418,7 +4432,7 @@ function exportKpiPDF(){
     doc.setTextColor(130,130,130);
     doc.setFont(undefined,'normal');
     doc.setFontSize(10);
-    doc.text('Aucun mouvement de stock enregistré ce cycle.', 16, y);
+    doc.text(normalize('Aucun mouvement de stock enregistre ce cycle.'), 16, y);
     y += 10;
   } else {
     // En-tête tableau
@@ -4427,10 +4441,10 @@ function exportKpiPDF(){
     doc.setTextColor(60,60,60);
     doc.setFontSize(9);
     doc.setFont(undefined,'bold');
-    doc.text('Aliment',   16, y);
-    doc.text('Ajouté',   105, y, {align:'right'});
-    doc.text('Consommé', 145, y, {align:'right'});
-    doc.text('Stock net', 193, y, {align:'right'});
+    doc.text(normalize('Aliment'),   16, y);
+    doc.text(normalize('Ajoute'),   105, y, {align:'right'});
+    doc.text(normalize('Consomme'), 145, y, {align:'right'});
+    doc.text(normalize('Stock net'), 193, y, {align:'right'});
     doc.setFont(undefined,'normal');
     y += 9;
     var totalA=0, totalC=0;
