@@ -47,35 +47,41 @@ Contractualiser un vétérinaire agréé région de Thiès :
 
 > **Déjà dans l'app** : `CYCLE.veterinaire` (clé `veterinaire` dans `Config_Cycle`, col I). Ne pas recréer.
 
-### 0.2 Contrat CNAAS
+### 0.2 Contrat CNAAS (INFOS OFFICIELLES validées Aicha Gueye, CNAAS Dakar 10/06/2026)
+
 Contacter CNAAS (siège Dakar ou agence Thiès) et obtenir :
 - Police **"Assurance Mortalité Bétail Tout Risque"** souscrite AVANT tout sinistre
 - Numéro de police exact
 - Email officiel de déclaration sinistres + téléphone agent Thiès
-- **Délai de déclaration contractuel** : Code CIMA = 5 jours **ouvrables** (pas calendaires) standard. Certaines polices imposent 24h — lire la police. L'email J+0 horodaté sert de preuve dans tous les cas.
-- Liste exacte des pièces requises
-- **Grille officielle d'indemnisation** par race/classe d'âge (`poids × prix_foirail` sera rejeté)
-- **Franchise** : typiquement **10% de la valeur indemnisée** — à vérifier dans la police. Si animal assuré à 800 000 FCFA, indemnisation nette = 720 000 FCFA.
-- **Délai d'indemnisation réel** : **30 à 60 jours calendaires** après dossier complet accepté. Dossiers contestés : jusqu'à 6 mois. Communiquer cette expectation réaliste au fondateur.
-- **Exclusions fréquentes à vérifier à la souscription** :
-  - Maladie non déclarée lors de la souscription de la police
-  - Animaux non vaccinés selon le protocole SOP défini dans la police ← les enregistrements SOP de BOAN constituent la preuve de vaccination
-  - Cause de mort exclue (ex: certaines épizooties selon la police)
-  - Sinistre déclaré hors délai contractuel
+- **Délai de déclaration CRITIQUE** : **48h maximum après constat du décès** (CNAAS officiel). L'email J+0 horodaté sert de preuve. L'app affiche un compte-à-rebours persistant 48h dès saisie décès.
+- Liste exacte des pièces requises (voir section 7.1)
+- **Franchise CNAAS granulaire** (voir section 7bis) :
+  - Bovin métis : 20% (1er sinistre), 60% (2e+)
+  - Bovin local : 20% (fixe, tous sinistres)
+  - Exemple : animal assuré 800k FCFA, 1er décès métis = 640k indemnisation
+- **Délai d'indemnisation contractuel** : **30 jours maximum après validation dossier complet** (vs. 30-60j estimé). Dossiers contestés : délai additionnel en cours de contentieux.
+- **Exclusions à vérifier à la souscription** :
+  - Animaux non vaccinés selon protocole SOP (enregistrements BOAN = preuve vaccination)
+  - VOL : animaux en divagation, vol commis par employé/famille
+  - Abattage : sans autorisation vétérinaire écrite
+  - Sinistre déclaré hors délai 48h
+- **Contrat** : 1 an, renouvellement manuel (email J-30 requis), modif cheptel possible (déclaration obligatoire)
+- **Vente animal** : déclaration obligatoire CNAAS (transfert assurance ou suppression)
+- **VOL** : extension garantie (surprime), preuves = PV police/gendarmerie, descente terrain CNAAS
 
 > **Déjà dans l'app** : `CYCLE.numCnaas` (clé `numCnaas` dans `Config_App` — modal init step 2 + Go/No-Go, commit `9766040`). Ne pas recréer.
 
 ### 0.3 Clause critique : NE PAS ABATTRE NI ENTERRER
 La CNAAS exige que l'animal décédé reste intact jusqu'au passage de leur expert.
-- ⚠️ **Chaleur Thiès 35–40°C : décomposition visible dès 6-8h.** Après **24-36h**, risque sanitaire réel et état présentable à l'expert compromis. Ne pas attendre 48h.
-- Si l'expert CNAAS n'est pas arrivé dans les **24-36h** → appeler l'agent CNAAS Thiès **par téléphone** pour obtenir une **autorisation d'inhumation d'urgence**.
+- ⚠️ **Chaleur Thiès 35–40°C : décomposition visible dès 6-8h.** Après **24-36h**, risque sanitaire réel et état présentable à l'expert compromis.
+- ⚠️ **Délai CNAAS : 48h max pour déclarer (voir 0.2).** Parallèle : expert arrive en 5-7j réel. Si pas d'expert en 24-36h → appeler CNAAS Thiès **par téléphone** pour **autorisation d'inhumation d'urgence**.
 - ⚠️ **PROCÉDURE OBLIGATOIRE avant inhumation** :
   1. Appel vocal agent CNAAS Thiès
-  2. Confirmation par SMS ou email (preuve écrite horodatée)
-  3. Prendre des photos datées toutes les 6h pour documenter l'état de l'animal
-  4. N'enterrer qu'après confirmation écrite reçue
-- 🚨 **Inhumation sans autorisation écrite = risque de rejet du dossier + risque de qualification en destruction de preuve (art. Code CIMA)**
-- L'app affiche une bannière rouge persistante dès qu'un décès est saisi.
+  2. Confirmation par SMS ou email horodatée (preuve écrite)
+  3. Photos datées toutes les 6h pour documenter état animal
+  4. Inhumation APRÈS confirmation écrite reçue
+- 🚨 **Inhumation sans autorisation écrite = rejet dossier + risque art. Code CIMA**
+- **App affiche** : bannière rouge ⛔ NE PAS ABATTRE persistante + compte-à-rebours 48h horodaté depuis saisie
 
 ### 0.4 Coordination vétérinaire / expert CNAAS
 > ⚠️ **Dépendance critique** : le certificat vétérinaire doit être disponible LORS du passage de l'expert CNAAS. Le vétérinaire terrain Thiès arrive en J+5-7 réel. L'expert CNAAS peut venir plus tôt.
@@ -89,15 +95,14 @@ La CNAAS exige que l'animal décédé reste intact jusqu'au passage de leur expe
 - [ ] `SID_FONDATEUR` dans les Variables Vercel (valeur de `SID.fondateur` dans l'app)
 - [ ] Onglets `Notifications_Log` et `Sinistres_CNAAS` → **auto-créés au 1er run cron** (section 4.1)
 
-### 0.6 Police / Gendarmerie — Procédure VOL : ce que l'app doit savoir
-
-> Synthèse issue du panel terrain — Adj. Chef Mbaye, Gendarmerie Brigade Thiès
+### 0.6 Police / Gendarmerie — Procédure VOL (Adj. Chef Mbaye, Brigade Thiès)
 
 **Fenêtre de poursuite chaude : 48 heures absolues**
-- Dans les 48h suivant le constat de vol, la gendarmerie peut déclencher une traque active (patrouilles, appels réseaux inter-brigades). Au-delà, les chances de retrouver les animaux tombent à 10-15%.
-- **L'app doit capturer l'heure exacte** de découverte du vol — pas seulement la date. Un chronomètre de compte à rebours 48h doit s'afficher dans la bannière dashboard gérant dès qu'un vol est saisi.
+- Dans les 48h suivant le constat de vol, la gendarmerie déclenche traque active (patrouilles, réseaux inter-brigades). Au-delà = chances retrouver animaux 10-15%.
+- **App capture heure exacte découverte vol** (pas date seulement). Chronomètre compte-à-rebours 48h dans dashboard gérant dès saisie vol.
+- **VOL = extension garantie CNAAS** (surprime) : preuves requises = PV police/gendarmerie, descente terrain CNAAS, exclusions animaux divagation/vol familial.
 
-**Récépissé ≠ N° PV**
+**Récépissé vs N° PV officiel**
 - Le gérant ressort de la gendarmerie avec un **récépissé tamponné** — immédiat.
 - Le **procès-verbal officiel** avec numéro est établi par l'officier en 24-72h.
 - BOAN doit distinguer les deux dans `Sinistres_CNAAS` et accepter la déclaration CNAAS dès que le récépissé est obtenu (le N° PV sera ajouté ultérieurement).
@@ -247,6 +252,23 @@ La CNAAS exige que l'animal décédé reste intact jusqu'au passage de leur expe
 ---
 
 ## 2. Processus métier bout en bout
+
+### 2.0 Triggers automatisation CNAAS (Infos officielles)
+
+**Emails + SMS/WhatsApp automatiques déclenchés par l'app** :
+
+| Trigger | Délai | Action | Destinataire(s) | Contenu clé |
+|---|---|---|---|---|
+| **Décès constaté** | Immédiat (J+0) | Email déclaration CNAAS | CNAAS + Vét + RGA | N° police, ID animal, race, symptômes, traits, engagement NE PAS ENTERRER |
+| **Compte-à-rebours décès** | J+0 18:00 → J+2 18:00 | Bannière ⛔ + alerte fondateur | Dashboard fondateur/gérant | 48h max CNAAS, horodatage email = preuve |
+| **Vol constaté** | Immédiat (J+0) | Email CNAAS + SMS/WA gérant | CNAAS + Brigade Thiès + Gérant | Heure découverte, ID bêtes, N° récépissé, PV demandé |
+| **Fenêtre VOL 48h** | Compte-à-rebours live | Dashboard chronomètre VOL | Gérant (device) | Poursuite chaude 48h, urgence < 6h (CRITIQUE) |
+| **Dossier > 30j** | J+0 email → J+30 | Relance paiement CNAAS | Fondateur + Agent CNAAS | Délai max paiement 30j après validation dossier |
+| **Fin contrat J-30** | Auto cron | Email renouvellement | Fondateur + Agent CNAAS | Contrat expire J+X, renouvellement manuel requis |
+| **Vente animal** | J+0 après saisie | Email déclaration CNAAS | CNAAS | Éleveur, ID animal, type (transfert/suppression) |
+| **Modification cheptel** | J+0 après saisie | Email déclaration CNAAS | CNAAS | Ajout/retrait animal, impact valeur assuré |
+
+> **Tous ces triggers** réutilisent `/api/cron.js` (section 4.10) + `sendEmailWithLog()` (section 4.6).
 
 ### 2.1 CAS DÉCÈS
 
@@ -1620,7 +1642,36 @@ Ferme BOAN — [lsGet('cfg_contact_gerant_tel')]
 
 ---
 
-## 7. Pièces CNAAS — Table de référence
+## 7. Pièces CNAAS — Table de référence + Documents requis
+
+### 7.1 Documents requis pour dossier CNAAS complet
+
+| Document | Statut | Source | Format | Délai max | Notes |
+|---|---|---|---|---|---|
+| **Rapport vétérinaire** | ✅ **OBLIGATOIRE J+0** | Modèle CNAAS signé vétérinaire | PDF + papier original | < 48h après constat | Contresigné expert CNAAS si visite avant 48h |
+| **Photo animal entier** | ✅ **OBLIGATOIRE J+0** | Smartphone fondateur | JPG/PNG datée | < 24h après constat | Vue complète côté + ventrale, identification visible |
+| **Photo N° identification** | ✅ **OBLIGATOIRE J+0** | Smartphone fondateur | JPG/PNG datée gros plan | < 24h après constat | Boucle auriculaire, N° et signalement lisibles |
+| **N° récépissé gendarmerie** | ✅ VOL J+0 | Gendarmerie Brigade Thiès | PDF/scan tamponné | Immédiat | Récépissé suffit J+0, PV officiel > 24-72h |
+| **PV officiel gendarmerie** | ⚠️ VOL avant clôture | Gendarmerie | PDF/original tamponné | 24-72h après plainte | Complète récépissé, requis avant indemnisation VOL |
+| **Certificat vaccination** | ✅ **PRÉ-SINISTRE** | Carnet animal (SOP BOAN) | Photo/scan | Date vaccination | Preuve vaccination conforme SOP = couverture maladies |
+| **Proposition CNAAS** | ✅ **PRÉ-SINISTRE** | Aicha Gueye, CNAAS Dakar | Original signé | Valide 1 an | Valeur assurée = base indemnisation (pas nouvelle estimation) |
+
+> **Délai critique horodatage** : rapport vét + 2 photos < 48h après constat (horodatage email BOAN = preuve). Pas photos = rejet dossier possible.
+
+### 7bis. Franchise CNAAS — Grille calcul indemnisation
+
+| Race bovin | 1er sinistre | 2e+ sinistres | Exemple : animal assuré 800 000 FCFA |
+|---|---|---|---|
+| **Métis** | 20% | 60% | 1er décès : 640 000 FCFA (800k - 160k) / 2e décès : 320 000 FCFA (800k - 480k) |
+| **Local** | 20% (fixe) | 20% (fixe) | Tout sinistre : 640 000 FCFA (800k - 160k) |
+
+**Calcul** : `indemnisation_nette = valeur_assurée_au_contrat × (1 - franchise%)`. La valeur assurée = celle inscrite dans la proposition CNAAS, pas nouvelle estimation terrain.
+
+**Délai paiement** : 30 jours max après validation dossier complet.
+
+---
+
+## 7. Pièces CNAAS — Table de référence (Details supplémentaires)
 
 | Pièce | Qui produit | Quand | Dans BOAN |
 |---|---|---|---|
@@ -1660,14 +1711,24 @@ Ferme BOAN — [lsGet('cfg_contact_gerant_tel')]
 □ Sous-onglet "Contacts & Assurance" dans viewLiv() — fondateur uniquement
     → Champs section 3.5, persistés via _syncConfigApp() + cache lsSet('cfg_[key]')
 □ safeTextClient() dans index.html (sym, tra, desc avant stockage localStorage)
+□ ✅ NOUVEAU : Compte-à-rebours 48h décès (section 2.0 trigger)
+    → Bannière rouge ⛔ NE PAS ABATTRE persistante
+    → localStorage key deces_compte_48h_[id]_[date], expire après 48h
+    → Horodatage email J+0 = preuve légale CNAAS
+□ ✅ NOUVEAU : Champs photos obligatoires décès (section 7.1)
+    → Photo animal entier (JPG/PNG datée)
+    → Photo N° identification gros plan
+    → UI validation : pas photo = submit bloqué (alerte photo requise)
 □ viewSaisie() décès=OUI : bannière rouge ⛔ + alerte photo + alerte N° police absent
     + alerte prix foirail > 30j
 □ doSubmit('sante') si décès=OUI :
     lsSet last_deces_ts, sinistres_ouverts, deces_pending (si offline)
+    + lsSet('deces_state', 'OFFLINE_PENDING') si offline
     + window.addEventListener('online') → createSinistrePending()
 □ Modal + boutons post-submit décès : 1️⃣📞CNAAS 2️⃣📞Vét 3️⃣💬WA vét + Annuler 4h
 □ viewSaisie() VOL : beteMultiSelect() (section 3.8) + S.fin.beteIds=[] dans reset (~L1899)
     + champ N° PV bloquant + boutons CNAAS post-submit
+    + ✅ NOUVEAU : heure découverte obligatoire (input time) — base compte-à-rebours 48h
 □ viewDash() : bannière ⛔ sinistre ouvert (tous rôles)
 □ viewDash() fondateur : _checkDecesUrgenceFondateur() (section 3.4 contexte C)
 □ viewDash() gérant : _checkVolChronoBanner() (section 3.10) + _checkVetJ1Banners() + _checkDecesVetBanners() (section 3.3)
@@ -1676,6 +1737,7 @@ Ferme BOAN — [lsGet('cfg_contact_gerant_tel')]
 □ viewLiv() incidents enrichi (section 3.6) :
     bannière ⛔, timeline, champs L/M, alerte croisée,
     checkboxes fondateur, statut select, boutons CLOTURE/ANNULE/RELANCES_STOP
+    + ✅ NOUVEAU : franchises CNAAS affichées (section 7bis) selon race bovin
 □ viewLiv() sopvet (section 3.7) :
     bouton "✓ Vét a confirmé", timeline J-3/J-2/J-1, bouton J-0 gérant
 □ Badge numérique onglet Livrables si sinistres EN_COURS
@@ -1710,11 +1772,19 @@ Ferme BOAN — [lsGet('cfg_contact_gerant_tel')]
   □ curl /api/cron?type=relances — 200 en < 2s
   □ Rate limit : appeler /api/cron 2× en < 60s → 2e = 429 Too Soon
   □ Type validation : /api/cron?type=xyz → 400 Invalid type
+  □ Range Sinistres_CNAAS : lire A2:Q200 (16 colonnes, pas M)
+
+✅ Délais critiques CNAAS (infos officielles Aicha Gueye):
+  □ Compte-à-rebours 48h décès : email J+0, bannière ⛔, horodatage = preuve légale
+  □ Compte-à-rebours 30j paiement : après validation dossier
+  □ Franchise CNAAS : bovin métis 20%/60%, bovin local 20% fixe (voir 7bis)
+  □ Photos obligatoires : animal entier + ID gros plan < 24h (blocage submit si absentes)
+  □ Heure découverte VOL : input time obligatoire (base chrono 48h)
 
 ✅ Idempotence & Sheets:
   □ Appeler /api/cron?type=vet 2× = 1 seule ligne SENT dans Notifications_Log (Reference_ID garde)
   □ TTL PENDING : ligne PENDING > 2h → cron → ERROR_TIMEOUT
-  □ Reference_ID unique par [Type+Acte+Date]
+  □ Reference_ID unique par [Type+Acte+Date] — jamais doublon
 
 ✅ Offline Décès (État machine Sofia):
   □ Submit décès OFFLINE → lsGet('deces_state') = 'OFFLINE_PENDING'
@@ -1727,6 +1797,7 @@ Ferme BOAN — [lsGet('cfg_contact_gerant_tel')]
   □ Email test → text/plain (pas HTML), objet sans crochets, CC présents
   □ safeText() : injection CRLF "test\r\nBcc: evil" → "test Bcc: evil" (safe)
   □ N° police vide → Statut INCOMPLET_POLICE
+  □ ✅ NOUVEAU : photos obligatoires → validation UI avant submit, erreur si absentes
 
 ✅ UI & localStorage:
   □ WhatsApp → wa.me/ ouvre conversation
@@ -1735,6 +1806,9 @@ Ferme BOAN — [lsGet('cfg_contact_gerant_tel')]
   □ Alerte croisée dates : col M < col L → email fondateur
   □ Dashboard gérant J-1 SOP → WA → flagKey → bannière disparaît lendemain
   □ _reconcileSinistresOuverts() : Expert_Passe=OUI → expertPasse=true
+  □ ✅ NOUVEAU : localStorage key deces_compte_48h_[id]_[date], expire 48h auto-clear
+  □ ✅ NOUVEAU : heure_decouverte VOL → base chronomètre 48h
+  □ ✅ NOUVEAU : franchises affichées dans viewLiv() incidents selon race (7bis)
 
 ✅ Performance (Lazy Load Anouk):
   □ Lazy load LIVE.sinistres : cache localStorage 1j, timeout 3s, fallback
@@ -1807,14 +1881,14 @@ Ferme BOAN — [lsGet('cfg_contact_gerant_tel')]
 
 ### Prérequis métier (BLOC A)
 
-| Item | Statut |
-|---|---|
-| Vétérinaire contractualisé (Thiès) | ⛔ Non fait — **bloquant absolu** |
-| Contrat CNAAS + N° police | ⛔ Non fait — **bloquant absolu** |
-| Email/tel CNAAS + grille indemnisation | ⛔ Non fait — bloquant |
-| Compte SendGrid | ⛔ Non fait |
-| Variables Vercel + GitHub Secrets | ⛔ Non fait |
-| `Notifications_Log` + `Sinistres_CNAAS` | ⬛ Auto-créés au 1er run cron (section 4.1) |
+| Item | Statut | Notes |
+|---|---|---|
+| Vétérinaire contractualisé (Thiès) | ⛔ Non fait — **bloquant absolu** | |
+| Contrat CNAAS + N° police | ⛔ Non fait — **bloquant absolu** | **✅ Infos officielles reçues (Aicha Gueye, CNAAS Dakar 10/06/2026)** — délai 48h, franchise 20%/60%/20%, paiement 30j max |
+| Email/tel CNAAS + grille indemnisation | ⛔ Non fait | Grille franchise (section 7bis) : bovin métis 20% 1er/60% 2e+, local 20% fixe |
+| Compte SendGrid | ⛔ Non fait | |
+| Variables Vercel + GitHub Secrets | ⛔ Non fait | |
+| `Notifications_Log` + `Sinistres_CNAAS` | ⬛ Auto-créés au 1er run cron (section 4.1) | Ranges : A2:I + A2:Q200 (16 colonnes) |
 
 ### Code frontend — BLOC B (index.html)
 
