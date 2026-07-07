@@ -301,11 +301,11 @@ J+0 — Gérant constate le décès
        3️⃣ 💬 WhatsApp Vétérinaire — wa.me msg 6.1
        ⚠️ Annuler (erreur de saisie) — visible **4 heures** (fenêtre validée panel — ⚖️ Maître Diallo)
 
-J+0 — Fondateur reçoit notification
-  4. Fondateur appelle CNAAS Thiès vocalement
+J+0 — RGA agit immédiatement (fondateur à distance — notification seulement)
+  4. RGA appelle CNAAS Thiès vocalement
      → Demande coordination date expert APRÈS venue vétérinaire
      → Note heure appel dans app (Sinistres_CNAAS col G)
-  5. Fondateur appelle vétérinaire pour confirmer date de venue
+  5. RGA appelle vétérinaire pour confirmer date de venue
 
 J+1 — Cron 07h02 : checkAndSendDecesAlerts()
   7. Envoie email VET (section 5.2) + email CNAAS (section 5.3) si email_pending=OUI`n     ✅ **Idempotence Reference_ID (Priya panel, section 4.4)** : skip si J+0 email déjà SENT (TTL 2h)
@@ -367,7 +367,7 @@ Relances automatiques (cron 07h04)
   J+7 + J+14 → Email relance courtois
 
 Clôture
-  4. Fondateur clique "CNAAS a confirmé réception"
+  4. RGA clique "CNAAS a confirmé réception"
 ```
 
 ### 2.3 SOP VÉTÉRINAIRE — rappels planifiés
@@ -386,6 +386,38 @@ Dashboard gérant (jour J-1)
   Bouton WhatsApp (msg 6.7) — un tap, message pré-rempli
   → Flag lsSet('boanr_wa_vet_j1_[acteKey]_[YYYY-MM-DD]') après tap
 ```
+
+### 2.4 Distribution des rôles — Fondateur MINIMAL
+
+> **Principe clé** : le fondateur agit le moins possible (à distance) — les tâches opérationnelles vont au **gérant** (terrain) et au **RGA** (coordination).
+
+| Rôle | Saisie | Appels | Validations | Clics dashboard | Notification |
+|---|---|---|---|---|---|
+| **Gérant** (terrain) | ✅ Saisit décès/vol | ❌ | ❌ | ❌ | Email info |
+| | | ✅ Appelle CNAAS gendarme | | | |
+| | | ✅ Appelle fondateur (info) | | | |
+| **RGA** (coordination) | ❌ | ✅ **Appelle CNAAS** | ✅ Coche validations | ✅ Clique clôture | Email actions |
+| | | ✅ **Appelle vétérinaire** | ✅ Scanne certif | ✅ WA rappels | |
+| | | ✅ Coordonne expert/vét | ✅ Coche expertPasse | ✅ Photos justifs | |
+| **Fondateur** (remote) | ❌ | ❌ | ❌ | ❌ | ✅ Alertes info |
+| | | | | | (email J+0 + dashb) |
+
+**Détail actions par sinistre** :
+
+**CAS DÉCÈS** :
+- **Gérant** : constate, prend photos J+0, saisit
+- **RGA** : appelle CNAAS/Vét J+0, scanne certif vét, coche validations, coordonne expert
+- **Fondateur** : reçoit email alerte J+0, reste informé (aucune action requise)
+
+**CAS VOL** :
+- **Gérant** : constate, appelle gendarme J+0, saisit, fait PV
+- **RGA** : appelle CNAAS J+0, suit Brigade Thiès, coordonne renforts
+- **Fondateur** : reçoit email alerte J+0, reste informé (aucune action requise)
+
+**SOP VÉTÉRINAIRE** :
+- **Gérant** : valide quand vétérinaire vient (checkbox), photographe actes
+- **RGA** : reçoit rappels cron, envoie WA vét, suit calendrier
+- **Fondateur** : aucune implication (SOP = suivi troupeau)
 
 ---
 
@@ -589,13 +621,15 @@ if (S.user === 'gerant') {
 - Bannière rouge ⛔ : si `(lsGet('sinistres_ouverts')||[]).some(function(s){return !s.expertPasse;})`
 - Badge numérique onglet Livrables (fondateur/rga) : `(LIVE.sinistres||[]).filter(function(r){return r[4]==='EN_COURS';}).length > 0`
 
-**Contexte C — Fondateur : décès > 24h sans expert + risque décomposition (bannière rouge foncé)**
+**Contexte C — RGA : décès > 24h sans expert + risque décomposition (bannière rouge foncé — ACTIONS RGA)**
 
-Condition : `S.user === 'fondateur'` ET sinistre ouvert dont `ts` > 24h ET `expertPasse = false`.
+Condition : `S.user === 'rga'` ET sinistre ouvert dont `ts` > 24h ET `expertPasse = false`.
+
+**⚠️ NOTE IMPORTANCE** : Cette bannière et ses actions **ne s'affichent QUE pour le RGA**, pas le fondateur (qui reçoit email info seulement).
 
 ```js
-function _checkDecesUrgenceFondateur() {
-  if (S.user !== 'fondateur') return '';
+function _checkDecesUrgenceRGA() {
+  if (S.user !== 'rga') return '';
   var html = '';
   (lsGet('sinistres_ouverts') || []).forEach(function(so) {
     if (so.expertPasse) return;
@@ -614,7 +648,7 @@ function _checkDecesUrgenceFondateur() {
       + '</div>'
       + '<div style="color:#ffaaaa;font-size:13px;margin-bottom:10px">'
       + '🩺 Chaleur Thiès : décomposition visible dès 6-8h. Après 24-36h, l\'expert ne peut plus constater correctement.'
-      + '<br>Si l\'expert CNAAS n\'est pas confirmé, demander une <strong>autorisation d\'inhumation d\'urgence</strong>.'
+      + '<br>Demander <strong>autorisation d\'inhumation d\'urgence</strong> à CNAAS immédiatement.'
       + '</div>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
       + (cnaasTel ? '<a href="tel:+' + cnaasTel.replace(/\D/g,'') + '"'
@@ -627,15 +661,47 @@ function _checkDecesUrgenceFondateur() {
         + 'so.forEach(function(s){if(s.id===\'' + so.id + '\')s.expertPasse=true;});'
         + 'lsSet(\'sinistres_ouverts\',so);r();"
         + ' style="background:#1a2e1a;color:#aaa;border:1px solid #2a4a2a;'
-        + 'padding:8px 14px;border-radius:6px;font-size:13px;cursor:pointer">✓ Vétérinaire confirmé</button>'
+        + 'padding:8px 14px;border-radius:6px;font-size:13px;cursor:pointer">✓ Expert confirmé</button>'
       + '</div></div>';
   });
   return html;
 }
-// Intégration dans viewDash() fondateur — avant les KPI cards :
-// if (S.user === 'fondateur') {
-//   var _urgBanner = _checkDecesUrgenceFondateur();
+// Intégration dans viewDash() RGA — avant les KPI cards :
+// if (S.user === 'rga') {
+//   var _urgBanner = _checkDecesUrgenceRGA();
 //   if (_urgBanner) html += '<div style="margin-bottom:12px">' + _urgBanner + '</div>';
+// }
+
+**Contexte D — Fondateur : alerte info-only (bannière douce — PAS D'ACTION)**
+
+Quand décès > 24h sans expert passé, le fondateur reçoit une bannière d'**information** (pas d'appels, pas de clics — RGA handle).
+
+```js
+function _checkDecesInfoFondateur() {
+  if (S.user !== 'fondateur') return '';
+  var html = '';
+  (lsGet('sinistres_ouverts') || []).forEach(function(so) {
+    if (so.expertPasse) return;
+    var h = (Date.now() - (so.ts || 0)) / 3600000;
+    if (h < 24) return;
+    var hArrondi = Math.round(h);
+    // Fond doux gris (info, pas urgence pour fondateur)
+    html += '<div style="background:#1a1a1a;border:1px solid #666;border-radius:8px;'
+      + 'padding:12px;margin-bottom:10px">'
+      + '<div style="display:flex;align-items:center;gap:8px">'
+      + '<span style="font-size:18px">ℹ️</span>'
+      + '<strong style="color:#aaa">' + so.id + ' — Suivi expert en cours (' + hArrondi + 'h)</strong>'
+      + '</div>'
+      + '<div style="color:#888;font-size:13px;margin-top:8px">'
+      + 'RGA coordonne la visite expert CNAAS. Vous serez notifié de la clôture.'
+      + '</div></div>';
+  });
+  return html;
+}
+// Intégration dans viewDash() Fondateur — avant les KPI cards :
+// if (S.user === 'fondateur') {
+//   var _infoBanner = _checkDecesInfoFondateur();
+//   if (_infoBanner) html += '<div style="margin-bottom:12px">' + _infoBanner + '</div>';
 // }
 ```
 
