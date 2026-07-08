@@ -618,6 +618,373 @@ function rebuildBeteList() {
 function _escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+var CONTACT_TYPES = ['CNAAS', 'VETERINAIRE', 'GENDARMERIE', 'URGENCE'];
+var CONTACT_DRAFTS = lsGet('contacts_drafts') || {};
+
+function _contactsNowLabel() {
+  var n = _nowDakar();
+  return today() + ' ' + (n.hour<10?'0':'') + n.hour + ':' + (n.minute<10?'0':'') + n.minute;
+}
+function _contactTypeLabel(type) {
+  type = String(type || '').toUpperCase();
+  if (type === 'CNAAS') return 'Assurance CNAAS';
+  if (type === 'VETERINAIRE') return 'Veterinaire';
+  if (type === 'GENDARMERIE') return 'Gendarmerie';
+  return 'Urgence interne';
+}
+function _contactReferenceLabel(type) {
+  type = String(type || '').toUpperCase();
+  if (type === 'CNAAS') return 'Reference contrat';
+  if (type === 'GENDARMERIE') return 'Unite / Brigade';
+  if (type === 'VETERINAIRE') return 'Matricule / Licence (optionnel)';
+  return 'Reference';
+}
+function _contactDefault(type) {
+  return {
+    contactId: 'CT-' + Date.now() + '-' + Math.floor(Math.random() * 100000),
+    type: String(type || 'CNAAS').toUpperCase(),
+    referenceCode: '',
+    name: '',
+    organisation: '',
+    tel1: '',
+    tel2: '',
+    whatsapp: '',
+    email: '',
+    zone: '',
+    notes: '',
+    actif: 'OUI',
+    updatedBy: S.user || '',
+    updatedAt: _contactsNowLabel(),
+    rowIndex: null
+  };
+}
+function _cloneContactRef(c) {
+  var d = _contactDefault(c && c.type ? c.type : 'CNAAS');
+  return {
+    contactId: c && c.contactId ? String(c.contactId) : d.contactId,
+    type: String((c && c.type) || d.type).toUpperCase(),
+    referenceCode: String((c && c.referenceCode) || ''),
+    name: String((c && c.name) || ''),
+    organisation: String((c && c.organisation) || ''),
+    tel1: String((c && c.tel1) || ''),
+    tel2: String((c && c.tel2) || ''),
+    whatsapp: String((c && c.whatsapp) || ''),
+    email: String((c && c.email) || ''),
+    zone: String((c && c.zone) || ''),
+    notes: String((c && c.notes) || ''),
+    actif: String((c && c.actif) || 'OUI').toUpperCase() === 'NON' ? 'NON' : 'OUI',
+    updatedBy: String((c && c.updatedBy) || ''),
+    updatedAt: String((c && c.updatedAt) || ''),
+    rowIndex: c && c.rowIndex ? parseInt(c.rowIndex) : null
+  };
+}
+function _contactToRowVals(c) {
+  c = _cloneContactRef(c);
+  return [
+    c.contactId,
+    c.type,
+    c.referenceCode,
+    c.name,
+    c.organisation,
+    c.tel1,
+    c.tel2,
+    c.whatsapp,
+    c.email,
+    c.zone,
+    c.notes,
+    c.actif,
+    c.updatedBy,
+    c.updatedAt
+  ];
+}
+function _rowToContactRef(r, idx) {
+  r = r || [];
+  return _cloneContactRef({
+    contactId: r[0] || '',
+    type: r[1] || 'CNAAS',
+    referenceCode: r[2] || '',
+    name: r[3] || '',
+    organisation: r[4] || '',
+    tel1: r[5] || '',
+    tel2: r[6] || '',
+    whatsapp: r[7] || '',
+    email: r[8] || '',
+    zone: r[9] || '',
+    notes: r[10] || '',
+    actif: r[11] || 'OUI',
+    updatedBy: r[12] || '',
+    updatedAt: r[13] || '',
+    rowIndex: idx
+  });
+}
+function _parseContactTs(s) {
+  if (!s) return 0;
+  var p = String(s).split(' ')[0].split('/');
+  if (p.length !== 3) return 0;
+  var hh = 0, mm = 0;
+  var t = String(s).split(' ')[1] || '';
+  var tp = t.split(':');
+  if (tp.length >= 2) { hh = parseInt(tp[0]) || 0; mm = parseInt(tp[1]) || 0; }
+  return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]), hh, mm, 0, 0).getTime() || 0;
+}
+function _saveContactDrafts() {
+  lsSet('contacts_drafts', CONTACT_DRAFTS || {});
+}
+function _saveContactsLocal(rows) {
+  lsSet('contacts_refs', rows || []);
+}
+function _isContactEditable() {
+  return S.user === 'fondateur' || S.user === 'rga';
+}
+function _mergeContactsRefs(primary, secondary) {
+  var map = {};
+  (secondary || []).forEach(function(c){
+    c = _cloneContactRef(c);
+    if (!c.contactId) c.contactId = 'CT-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
+    map[c.contactId] = c;
+  });
+  (primary || []).forEach(function(c){
+    c = _cloneContactRef(c);
+    if (!c.contactId) c.contactId = 'CT-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
+    map[c.contactId] = c;
+  });
+  return Object.keys(map).map(function(k){ return map[k]; }).sort(function(a,b){
+    return _parseContactTs(b.updatedAt) - _parseContactTs(a.updatedAt);
+  });
+}
+function _getContactsRefs() {
+  var localRows = lsGet('contacts_refs') || [];
+  return _mergeContactsRefs(LIVE.contactsRefs || [], localRows || []);
+}
+function _findContactByType(type, includeInactive) {
+  type = String(type || '').toUpperCase();
+  var rows = _getContactsRefs().filter(function(c){ return c.type === type; });
+  if (!includeInactive) rows = rows.filter(function(c){ return c.actif !== 'NON'; });
+  return rows.length ? rows[0] : null;
+}
+function _ensureContactDraft(type) {
+  type = String(type || 'CNAAS').toUpperCase();
+  if (CONTACT_DRAFTS[type]) return _cloneContactRef(CONTACT_DRAFTS[type]);
+
+  var existing = _findContactByType(type, true);
+  var draft = existing ? _cloneContactRef(existing) : _contactDefault(type);
+  if (type === 'CNAAS') {
+    if (!draft.tel1) draft.tel1 = String(lsGet('cfg_contact_cnaas_tel') || '');
+    if (!draft.referenceCode && CYCLE.numCnaas) draft.referenceCode = String(CYCLE.numCnaas || '');
+  }
+  if (type === 'VETERINAIRE' && !draft.name && CYCLE.veterinaire) {
+    draft.name = String(CYCLE.veterinaire || '');
+  }
+  if (type === 'URGENCE' && !draft.name && CYCLE.contactUrgence) {
+    draft.name = String(CYCLE.contactUrgence || '');
+  }
+  CONTACT_DRAFTS[type] = _cloneContactRef(draft);
+  _saveContactDrafts();
+  return _cloneContactRef(draft);
+}
+function _setContactDraft(type, key, value) {
+  type = String(type || 'CNAAS').toUpperCase();
+  var d = _ensureContactDraft(type);
+  d[key] = String(value || '');
+  CONTACT_DRAFTS[type] = _cloneContactRef(d);
+  _saveContactDrafts();
+  r();
+}
+function _writeContactsHeaders(sid) {
+  if (!sid) return Promise.resolve({ok:false, err:'SID absent'});
+  return getTok().then(function(tk){
+    if (!tk) return {ok:false, err:'Token invalide'};
+    var sheet = 'Contacts_Refs';
+    var title = [['REFERENTIEL CONTACTS OPERATIONNELS', '', '', '', '', 'BOAN', '', '', '', '', '', '', '', '']];
+    var headers = [[
+      'Contact_ID', 'Type_Contact', 'Reference_Code', 'Nom_Reference', 'Organisation',
+      'Telephone_1', 'Telephone_2', 'WhatsApp', 'Email', 'Zone', 'Notes',
+      'Actif', 'Updated_By', 'Updated_At'
+    ]];
+    return fetch('https://sheets.googleapis.com/v4/spreadsheets/' + sid + '/values:batchUpdate?valueInputOption=USER_ENTERED', {
+      method: 'POST',
+      headers: {Authorization:'Bearer ' + tk, 'Content-Type':'application/json'},
+      body: JSON.stringify({data:[
+        {range:sheet + '!A1', values:title},
+        {range:sheet + '!A3', values:headers}
+      ]})
+    }).then(function(res){ return res.json(); })
+    .then(function(data){
+      if (data && data.error) return {ok:false, err:data.error.message || 'Erreur headers Contacts_Refs'};
+      _clearSheetReadCache();
+      return {ok:true};
+    }).catch(function(e){ return {ok:false, err:e.message}; });
+  });
+}
+function _resolveContactRowIndex(contact) {
+  if (!SID.fondateur || !contact || !contact.contactId) return Promise.resolve(null);
+  if (contact.rowIndex) return Promise.resolve(contact.rowIndex);
+  return readSheet(SID.fondateur, 'Contacts_Refs!A4:N500', {force:true, ttlMs:0}).then(function(rows){
+    rows = rows || [];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i] || [];
+      if (String(r[0] || '') === String(contact.contactId || '')) return i + 4;
+    }
+    return null;
+  }).catch(function(){ return null; });
+}
+function _updateContactInSheet(contact) {
+  if (!SID.fondateur || !contact || !contact.contactId) return Promise.resolve({ok:false, err:'SID fondateur absent'});
+  return _resolveContactRowIndex(contact).then(function(rowIndex){
+    if (!rowIndex) return {ok:false, err:'Ligne Contacts_Refs introuvable'};
+    contact.rowIndex = rowIndex;
+    return getTok().then(function(tk){
+      if (!tk) return {ok:false, err:'Token invalide'};
+      var enc = encodeURIComponent('Contacts_Refs');
+      var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + SID.fondateur
+        + '/values/' + enc + '!A' + rowIndex + '?valueInputOption=USER_ENTERED';
+      return fetch(url, {
+        method: 'PUT',
+        headers: {Authorization:'Bearer ' + tk, 'Content-Type':'application/json'},
+        body: JSON.stringify({values:[_contactToRowVals(contact)]})
+      }).then(function(res){ return res.json(); })
+      .then(function(data){
+        if (data && data.error) return {ok:false, err:data.error.message || 'Erreur Sheets'};
+        _clearSheetReadCache();
+        return {ok:true};
+      }).catch(function(e){ return {ok:false, err:e.message}; });
+    });
+  });
+}
+function _persistContactToSheet(contact) {
+  if (!SID.fondateur || !contact || !contact.contactId) return Promise.resolve({ok:false, err:'SID fondateur absent'});
+  return appendRow(SID.fondateur, 'Contacts_Refs!A:N', _contactToRowVals(contact)).then(function(res){
+    _writeContactsHeaders(SID.fondateur).then(function(hres){
+      if (!hres || !hres.ok) console.warn('[contacts] headers non bloquants', hres && hres.err);
+    });
+    if (!res || !res.ok) return res;
+    return _resolveContactRowIndex(contact).then(function(idx){
+      if (idx) contact.rowIndex = idx;
+      return {ok:true};
+    });
+  });
+}
+function _upsertContactInMemory(contact) {
+  contact = _cloneContactRef(contact);
+  var rows = _getContactsRefs();
+  var replaced = false;
+  rows = rows.map(function(c){
+    if (c.contactId !== contact.contactId) return c;
+    replaced = true;
+    return _cloneContactRef(contact);
+  });
+  if (!replaced) rows.unshift(_cloneContactRef(contact));
+  LIVE.contactsRefs = _mergeContactsRefs(rows, []);
+  _saveContactsLocal(LIVE.contactsRefs);
+}
+function _syncContactBridge(contact) {
+  var t = String((contact && contact.type) || '').toUpperCase();
+  if (t === 'CNAAS') {
+    if (contact && contact.tel1) lsSet('cfg_contact_cnaas_tel', contact.tel1);
+    CYCLE.numCnaas = contact && contact.actif !== 'NON' ? (contact.referenceCode || '') : '';
+  }
+  if (t === 'VETERINAIRE') {
+    CYCLE.veterinaire = contact && contact.actif !== 'NON' ? (contact.name || contact.organisation || '') : '';
+  }
+  if (t === 'URGENCE') {
+    CYCLE.contactUrgence = contact && contact.actif !== 'NON' ? (contact.name || CYCLE.contactUrgence || 'Direction') : (CYCLE.contactUrgence || 'Direction');
+  }
+  lsSet('cycle', CYCLE);
+  _syncConfigApp().catch(function(){});
+}
+function _saveContactType(type) {
+  if (!_isContactEditable()) return;
+  type = String(type || '').toUpperCase();
+  var d = _ensureContactDraft(type);
+  if (!d.name && !d.organisation && !d.tel1 && !d.referenceCode) {
+    setStatusMsg('err:Renseigner au moins un nom, une organisation, un telephone ou une reference', 4000);
+    return;
+  }
+  d.type = type;
+  d.actif = 'OUI';
+  d.updatedBy = S.user || '';
+  d.updatedAt = _contactsNowLabel();
+  if (!d.contactId) d.contactId = 'CT-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
+  CONTACT_DRAFTS[type] = _cloneContactRef(d);
+  _saveContactDrafts();
+
+  var done = function(ok, errMsg) {
+    if (ok) {
+      _upsertContactInMemory(d);
+      _syncContactBridge(d);
+      addHistory('marche', 'Contact ' + _contactTypeLabel(type) + ' enregistre', {_id:d.contactId});
+      setStatusMsg('ok:Contact ' + _contactTypeLabel(type) + ' enregistre', 3200);
+      r();
+    } else {
+      setStatusMsg('err:Contact sauvegarde locale, echec sync Sheets (' + (errMsg || 'inconnu') + ')', 5500);
+      _upsertContactInMemory(d);
+      r();
+    }
+  };
+
+  if (!SID.fondateur) {
+    done(false, 'SID fondateur absent');
+    return;
+  }
+  var p = d.rowIndex ? _updateContactInSheet(d) : _persistContactToSheet(d);
+  p.then(function(res){ done(!!(res && res.ok), res && res.err); }).catch(function(e){ done(false, e && e.message); });
+}
+function _disableContactType(type) {
+  if (!_isContactEditable()) return;
+  type = String(type || '').toUpperCase();
+  var contact = _findContactByType(type, false);
+  if (!contact) {
+    setStatusMsg('err:Aucune fiche active a desactiver pour ' + _contactTypeLabel(type), 3500);
+    return;
+  }
+  contact = _cloneContactRef(contact);
+  contact.actif = 'NON';
+  contact.updatedBy = S.user || '';
+  contact.updatedAt = _contactsNowLabel();
+
+  var applyDone = function(ok, errMsg) {
+    _upsertContactInMemory(contact);
+    CONTACT_DRAFTS[type] = _cloneContactRef(contact);
+    _saveContactDrafts();
+    _syncContactBridge(contact);
+    if (ok) setStatusMsg('ok:Fiche ' + _contactTypeLabel(type) + ' desactivee', 3200);
+    else setStatusMsg('err:Desactivation locale uniquement (' + (errMsg || 'echec sync Sheets') + ')', 5500);
+    addHistory('marche', 'Contact ' + _contactTypeLabel(type) + ' desactive', {_id:contact.contactId});
+    r();
+  };
+
+  if (!SID.fondateur) { applyDone(false, 'SID fondateur absent'); return; }
+  _updateContactInSheet(contact).then(function(res){ applyDone(!!(res && res.ok), res && res.err); }).catch(function(e){ applyDone(false, e && e.message); });
+}
+function _reactivateContactType(type) {
+  if (!_isContactEditable()) return;
+  type = String(type || '').toUpperCase();
+  var contact = _findContactByType(type, true);
+  if (!contact) {
+    setStatusMsg('err:Aucune fiche disponible pour ' + _contactTypeLabel(type), 3500);
+    return;
+  }
+  contact = _cloneContactRef(contact);
+  contact.actif = 'OUI';
+  contact.updatedBy = S.user || '';
+  contact.updatedAt = _contactsNowLabel();
+
+  var applyDone = function(ok, errMsg) {
+    _upsertContactInMemory(contact);
+    CONTACT_DRAFTS[type] = _cloneContactRef(contact);
+    _saveContactDrafts();
+    _syncContactBridge(contact);
+    if (ok) setStatusMsg('ok:Fiche ' + _contactTypeLabel(type) + ' reactivee', 3200);
+    else setStatusMsg('err:Reactivation locale uniquement (' + (errMsg || 'echec sync Sheets') + ')', 5500);
+    addHistory('marche', 'Contact ' + _contactTypeLabel(type) + ' reactive', {_id:contact.contactId});
+    r();
+  };
+
+  if (!SID.fondateur) { applyDone(false, 'SID fondateur absent'); return; }
+  var p = contact.rowIndex ? _updateContactInSheet(contact) : _persistContactToSheet(contact);
+  p.then(function(res){ applyDone(!!(res && res.ok), res && res.err); }).catch(function(e){ applyDone(false, e && e.message); });
+}
 // Affecte en toute sécurité une valeur à un chemin d'état de la forme "S.fsa.id"
 // sans passer inp.value dans eval (protection XSS client)
 function _setPath(path, val) {
@@ -1027,7 +1394,8 @@ function _venteCnaasBannerHtml() {
   if (S.user !== 'rga') return '';
   var tasks = _getVenteCnaasTasks().filter(function(t){ return t.status !== 'DONE'; });
   if (!tasks.length) return '';
-  var cnaasTelRaw = lsGet('cfg_contact_cnaas_tel') || '';
+  var cnaasContact = _findContactByType('CNAAS', false);
+  var cnaasTelRaw = (cnaasContact && (cnaasContact.tel1 || cnaasContact.whatsapp || cnaasContact.tel2)) || lsGet('cfg_contact_cnaas_tel') || '';
   var cnaasTel = String(cnaasTelRaw).replace(/\D/g, '');
   var rows = tasks.slice(0, 3).map(function(t){
     var h = Math.floor((Date.now() - (t.createdAt || Date.now())) / 3600000);
@@ -1646,7 +2014,8 @@ var TABLE_RANGES = {
   'Historique_Cycles':  { start: 2, end: 200 },  // ligne 1 = en-têtes, données à partir de 2
   'SOP_Protocol':       { start: 5, end: 50  },  // vitrine SOP : structure + statut auto
   'Ventes_Betes':       { start: 4, end: 500 },  // log ventes — auto-créé si absent
-  'Ventes_CNAAS':       { start: 4, end: 500 }   // suivi assurance post-vente — auto-créé si absent
+  'Ventes_CNAAS':       { start: 4, end: 500 },  // suivi assurance post-vente — auto-créé si absent
+  'Contacts_Refs':      { start: 4, end: 500 }   // référentiel des contacts opérationnels
 };
 
 function appendRow(sid, range, vals) {
@@ -1957,6 +2326,7 @@ function loadLiveData() {
       sidDataSource  ? readSheet(sidDataSource,  'Sante_Mortalite!A4:G200')  : Promise.resolve(null),
       sidVentes      ? readSheet(sidVentes,       'Ventes_Betes!A4:K200')     : Promise.resolve(null),
       sidFondateur   ? readSheet(sidFondateur,   'Ventes_CNAAS!A4:I500')     : Promise.resolve(null),
+      sidFondateur   ? readSheet(sidFondateur,   'Contacts_Refs!A4:N500')    : Promise.resolve(null),
       // ── Wave 2 : historique pour la sidebar (lancé en parallèle) ──
       sidHisto ? readSheet(sidHisto, 'Fiche_Quotidienne!A4:G500')  : Promise.resolve(null),
       sidHisto ? readSheet(sidHisto, 'Incidents!A4:G200')          : Promise.resolve(null),
@@ -1972,10 +2342,11 @@ function loadLiveData() {
       var rowsSante  = results[3];
       var rowsVentes = results[4];
       var rowsVentesCnaas = results[5];
-      var fiches     = (results[6] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
-      var incidents  = (results[7] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
-      var bilans     = (results[8] || []).filter(function(r){ return r[0]; });
-      var sops       = (results[9] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
+      var rowsContactsRefs = results[6];
+      var fiches     = (results[7] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
+      var incidents  = (results[8] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
+      var bilans     = (results[9] || []).filter(function(r){ return r[0]; });
+      var sops       = (results[10] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
 
       // Sante_Mortalite → MOCK.betes + SPARK.betes (filtré par début de cycle)
       if (rowsSante && rowsSante.length) {
@@ -2050,6 +2421,22 @@ function loadLiveData() {
         });
       }).filter(_taskBelongsToCurrentCycle);
       _saveVenteCnaasTasks(_mergeVenteCnaasTasks(LIVE.venteCnaas, lsGet('vente_cnaas_tasks') || []));
+
+      LIVE.contactsRefs = (rowsContactsRefs || []).map(function(r, idx){
+        return _rowToContactRef(r, idx + 4);
+      }).filter(function(c){ return CONTACT_TYPES.indexOf(c.type) >= 0; });
+      LIVE.contactsRefs = _mergeContactsRefs(LIVE.contactsRefs, lsGet('contacts_refs') || []);
+      _saveContactsLocal(LIVE.contactsRefs);
+
+      var _cnaasLoaded = _findContactByType('CNAAS', false);
+      if (_cnaasLoaded) {
+        if (_cnaasLoaded.tel1) lsSet('cfg_contact_cnaas_tel', _cnaasLoaded.tel1);
+        if (_cnaasLoaded.referenceCode) CYCLE.numCnaas = _cnaasLoaded.referenceCode;
+      }
+      var _vetLoaded = _findContactByType('VETERINAIRE', false);
+      if (_vetLoaded && _vetLoaded.name) CYCLE.veterinaire = _vetLoaded.name;
+      var _urgLoaded = _findContactByType('URGENCE', false);
+      if (_urgLoaded && _urgLoaded.name) CYCLE.contactUrgence = _urgLoaded.name;
 
       // Pesées → MOCK.gmq + SPARK.gmq + LIVE.pesees (mis à jour à chaque refresh)
       if (rowsPesees && rowsPesees.length) {
@@ -3070,6 +3457,7 @@ var LIVE = {
   sold:      (function(){ var _s=lsGet('sold')||[]; if(!_s.length) return _s; var _sd=lsGet('sold_debut'); if(_sd&&CYCLE.dateDebut&&_sd!==CYCLE.dateDebut) return []; return _s; })(),  // IDs vendues (persisté)
   ventes:    [],   // [{date, id, race, poids, prixKg, total, acheteur, tel, mode, ctx, notes}]
   venteCnaas: [],  // [{dateVente,id,race,acheteur,total,status,cnaasCalledAt,cnaasAgent,cycleDebut,rowIndex}]
+  contactsRefs: lsGet('contacts_refs') || [], // [{contactId,type,referenceCode,name,...}]
   alimPrix:  lsGet('alimPrix') || [],  // [{date, type, prix}] depuis Suivi_Aliments (persisté)
   prix:      [],  // [{date, foi, bas, moy, haut}] depuis Suivi_Marche
   incidents: [],  // { date, id, type, grav, desc, act, clos } — chargées depuis Vague 2
@@ -3430,8 +3818,10 @@ function msgHtml(){
 function pageResetPwd(){
   var goChecked = !!S._resetGoCheck;
   var gg = CYCLE.gonogo||{};
-  var c1 = !!(CYCLE.veterinaire&&CYCLE.veterinaire.trim());
-  var c2 = !!(CYCLE.numCnaas&&CYCLE.numCnaas.trim());
+  var _vetoRef = _findContactByType('VETERINAIRE', false);
+  var _cnaasRef = _findContactByType('CNAAS', false);
+  var c1 = !!((_vetoRef && (_vetoRef.name || _vetoRef.tel1 || _vetoRef.organisation)) || (CYCLE.veterinaire&&CYCLE.veterinaire.trim()));
+  var c2 = !!((_cnaasRef && (_cnaasRef.referenceCode || _cnaasRef.tel1 || _cnaasRef.organisation)) || (CYCLE.numCnaas&&CYCLE.numCnaas.trim()));
   var _incOuverts = (LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';}).length;
   // Si aucun cycle en cours, il ne peut pas y avoir d'incidents — c3 passe automatiquement
   var c3 = !CYCLE.initialized || _incOuverts === 0;
@@ -3443,8 +3833,8 @@ function pageResetPwd(){
       +'<span style="color:'+(ok?'#4caf50':'#ff9800')+'">'+detail+'</span></div>';
   }
   var condHtml = ''
-    +cRow('Vétérinaire', c1, c1 ? ('ok '+CYCLE.veterinaire) : 'Non renseigné')
-    +cRow('Assurance CNAAS', c2, c2 ? ('Réf. '+CYCLE.numCnaas) : 'Non confirmée')
+    +cRow('Vétérinaire', c1, c1 ? ('ok '+((_vetoRef&&_vetoRef.name)||CYCLE.veterinaire||'Référence active')) : 'Non renseigné')
+    +cRow('Assurance CNAAS', c2, c2 ? ('Réf. '+((_cnaasRef&&_cnaasRef.referenceCode)||CYCLE.numCnaas||'Active')) : 'Non confirmée')
     +cRow('Incidents cycle actuel', c3, c3 ? 'ok — aucun ouvert' : _incOuverts+' ouvert(s) — à fermer')
     +cRow('Trésorerie suffisante', c4, c4 ? 'Valide' : 'Non valide')
     +cRow('Bêtes disponibles', c5, c5 ? 'Valide' : 'Non valide')
@@ -6235,8 +6625,12 @@ function buildSidebar(){
         +'<div class="sb-section-title">Activité récente</div>'
         +(function(){
           var gg2=CYCLE.gonogo||{};
-          var goOk2=!!(CYCLE.veterinaire&&CYCLE.veterinaire.trim())&&!!(CYCLE.numCnaas&&CYCLE.numCnaas.trim())&&(LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';}).length===0&&!!gg2.cash&&!!gg2.betes&&!!gg2.contrats&&!!gg2.infra&&!!gg2.securite;
-          var score2=[!!(CYCLE.veterinaire&&CYCLE.veterinaire.trim()),!!(CYCLE.numCnaas&&CYCLE.numCnaas.trim()),(LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';}).length===0,!!gg2.cash,!!gg2.betes,!!gg2.contrats,!!gg2.infra,!!gg2.securite].filter(Boolean).length;
+          var _veto2 = _findContactByType('VETERINAIRE', false);
+          var _cnaas2 = _findContactByType('CNAAS', false);
+          var _okVeto2 = !!((_veto2 && (_veto2.name || _veto2.tel1 || _veto2.organisation)) || (CYCLE.veterinaire&&CYCLE.veterinaire.trim()));
+          var _okCnaas2 = !!((_cnaas2 && (_cnaas2.referenceCode || _cnaas2.tel1 || _cnaas2.organisation)) || (CYCLE.numCnaas&&CYCLE.numCnaas.trim()));
+          var goOk2=_okVeto2&&_okCnaas2&&(LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';}).length===0&&!!gg2.cash&&!!gg2.betes&&!!gg2.contrats&&!!gg2.infra&&!!gg2.securite;
+          var score2=[_okVeto2,_okCnaas2,(LIVE.incidents||[]).filter(function(i){return i.clos!=='OUI';}).length===0,!!gg2.cash,!!gg2.betes,!!gg2.contrats,!!gg2.infra,!!gg2.securite].filter(Boolean).length;
           return '<div class="sb-shortcut" style="margin-top:10px;border-color:#2a3a2a" onclick="verifyAndReset()">'            +'<div class="sb-shortcut-ico" style="background:#2a2a1a">'+(goOk2?'🚀':'⚙️')+'</div>'            +'<div>'            +'<div style="font-size:13px;font-weight:600">Nouveau cycle</div>'            +'<div class="sb-sub">Go/No-Go : '+score2+'/8'+(goOk2?' ✓':'')+'</div>'            +'</div>'            +'</div>'            +'<div class="sb-shortcut" style="margin-top:8px;border-color:#2a2a3a" onclick="closeSB();openPwdManager()">'            +'<div class="sb-shortcut-ico" style="background:#1a1a2e">🔑</div>'            +'<div>'            +'<div style="font-size:13px;font-weight:600">Mots de passe</div>'            +'<div class="sb-sub">Gérer les accès équipe</div>'            +'</div>'            +'</div>';
         })()
         +histHtml2;
@@ -7773,7 +8167,7 @@ function saveObjectifs(){
 function viewLiv(){
   var _canObj=(S.user==='fondateur'||S.user==='rga');
   var subs=[['treso','Trésorerie'],['kpi','KPI'],['betes','Bêtes'],['incidents','Incidents']];
-  if(_canObj) subs.push(['ventes','💰 Ventes'],['objectifs','Objectifs'],['sopvet','📅 SOP Véto'],['cycles','📜 Cycles']);
+  if(_canObj) subs.push(['ventes','💰 Ventes'],['objectifs','Objectifs'],['contacts','📞 Contacts'],['sopvet','📅 SOP Véto'],['cycles','📜 Cycles']);
   subs.push(['gonogo','Go/No-Go']);
   var stabs=subs.map(function(s){return'<div class="stab '+(S.sub===s[0]?'on':'')+'" onclick="chSub(\''+s[0]+'\')">'+s[1]+'</div>';}).join('');
   var view='';
@@ -8309,9 +8703,99 @@ function viewLiv(){
         }).join('')
         +'</tbody></table></div>'
       );
+  } else if(S.sub==='contacts'){
+    if (!_canObj) {
+      view = '<div class="card" style="text-align:center;color:#88aa88;padding:22px">Accès réservé au Fondateur et au RGA.</div>';
+    } else {
+      var _canEditContact = _isContactEditable();
+      var _cards = [
+        {type:'CNAAS', ico:'🛡️', hint:'Clôture de garantie après vente et suivi contrat.'},
+        {type:'VETERINAIRE', ico:'🩺', hint:'Contact clinique et suivi sanitaire du troupeau.'},
+        {type:'GENDARMERIE', ico:'👮', hint:'Référence sécurité pour vol/sinistre/urgence terrain.'},
+        {type:'URGENCE', ico:'🚨', hint:'Point focal interne pour escalade rapide.'}
+      ];
+
+      function _inputField(type, label, key, placeholder) {
+        var d = _ensureContactDraft(type);
+        var v = _escHtml(d[key] || '');
+        return '<div class="fg">'
+          +'<label>'+label+'</label>'
+          +'<input placeholder="'+_escHtml(placeholder || '')+'" value="'+v+'" '
+          +(_canEditContact ? 'oninput="_setContactDraft(\''+type+'\',\''+key+'\',this.value)"' : 'disabled')
+          +'>'
+          +'</div>';
+      }
+      function _textareaField(type, label, key, placeholder) {
+        var d = _ensureContactDraft(type);
+        var v = _escHtml(d[key] || '');
+        return '<div class="fg">'
+          +'<label>'+label+'</label>'
+          +'<textarea placeholder="'+_escHtml(placeholder || '')+'" '
+          +(_canEditContact ? 'oninput="_setContactDraft(\''+type+'\',\''+key+'\',this.value)"' : 'disabled')
+          +'>'+v+'</textarea>'
+          +'</div>';
+      }
+      function _contactCard(spec) {
+        var type = spec.type;
+        var d = _ensureContactDraft(type);
+        var active = _findContactByType(type, false);
+        var latest = _findContactByType(type, true);
+        var isActive = !!active;
+        var statusCol = isActive ? '#4caf50' : (latest ? '#ff9800' : '#7a9a7a');
+        var statusTxt = isActive ? 'Active' : (latest ? 'Inactive' : 'Non renseignée');
+        var updatedTxt = latest && latest.updatedAt ? ('Mise à jour: ' + _escHtml(latest.updatedAt) + (latest.updatedBy ? (' · par ' + _escHtml(latest.updatedBy)) : '')) : 'Aucune fiche enregistrée';
+        return '<div class="card" style="margin-bottom:12px">'
+          +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">'
+            +'<div>'
+              +'<div class="stitle" style="margin-bottom:2px">'+spec.ico+' '+_contactTypeLabel(type)+'</div>'
+              +'<div style="font-size:11px;color:#7a9a7a">'+_escHtml(spec.hint || '')+'</div>'
+            +'</div>'
+            +'<div style="font-size:11px;color:'+statusCol+';font-weight:700;background:#0a1a0a;border:1px solid '+statusCol+';padding:4px 8px;border-radius:999px">'+statusTxt+'</div>'
+          +'</div>'
+          +'<div style="font-size:10px;color:#7a9a7a;margin-bottom:10px">'+updatedTxt+'</div>'
+          +'<div class="frow">'
+            +_inputField(type, _contactReferenceLabel(type), 'referenceCode', type==='CNAAS'?'Ex: CNAAS-2026-00045':'Code/Ref interne')
+            +_inputField(type, 'Nom référence', 'name', type==='VETERINAIRE'?'Ex: Dr Ndiaye':'Ex: Mme Fall')
+          +'</div>'
+          +'<div class="frow">'
+            +_inputField(type, 'Organisation', 'organisation', type==='GENDARMERIE'?'Ex: Brigade Thiès':'Ex: CNAAS Thiès')
+            +_inputField(type, 'Zone', 'zone', 'Ex: Thiès / Keur Moussa')
+          +'</div>'
+          +'<div class="frow">'
+            +_inputField(type, 'Téléphone principal', 'tel1', 'Ex: +221771234567')
+            +_inputField(type, 'Téléphone secondaire', 'tel2', 'Ex: +221701234567')
+          +'</div>'
+          +'<div class="frow">'
+            +_inputField(type, 'WhatsApp', 'whatsapp', 'Ex: +221781234567')
+            +_inputField(type, 'Email', 'email', 'Ex: contact@service.sn')
+          +'</div>'
+          +_textareaField(type, 'Notes opérationnelles', 'notes', 'Procédure d\'appel, horaires, documents requis...')
+          +(_canEditContact
+            ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
+                +'<button class="btn" onclick="_saveContactType(\''+type+'\')">💾 Enregistrer</button>'
+                +(isActive
+                  ? '<button class="btn-sec" onclick="_disableContactType(\''+type+'\')" style="border-color:#8a0000;color:#ff9090">🗑 Désactiver</button>'
+                  : (latest ? '<button class="btn-sec" onclick="_reactivateContactType(\''+type+'\')">♻️ Réactiver</button>' : '')
+                )
+              +'</div>'
+            : '<div style="font-size:11px;color:#7a9a7a;margin-top:8px">Lecture seule</div>'
+          )
+          +'</div>';
+      }
+
+      view = '<div class="card" style="margin-bottom:12px">'
+        +'<div class="stitle">Référentiel Contacts</div>'
+        +'<div style="font-size:12px;color:#88aa88;line-height:1.6">'
+          +'Modifiez les contacts à tout moment sans réinitialiser le cycle. Ces fiches alimentent les alertes CNAAS et les actions d\'urgence.'
+        +'</div>'
+        +'</div>'
+        +_cards.map(_contactCard).join('');
+    }
   } else if(S.sub==='gonogo'){
-    var ggVeto  = !!(CYCLE.veterinaire && CYCLE.veterinaire.trim());
-    var ggAssur = !!(CYCLE.numCnaas && CYCLE.numCnaas.trim());
+    var _ggVetoRef  = _findContactByType('VETERINAIRE', false);
+    var _ggAssurRef = _findContactByType('CNAAS', false);
+    var ggVeto  = !!((_ggVetoRef && (_ggVetoRef.name || _ggVetoRef.tel1 || _ggVetoRef.organisation)) || (CYCLE.veterinaire && CYCLE.veterinaire.trim()));
+    var ggAssur = !!((_ggAssurRef && (_ggAssurRef.referenceCode || _ggAssurRef.tel1 || _ggAssurRef.organisation)) || (CYCLE.numCnaas && CYCLE.numCnaas.trim()));
     var ggInc   = LIVE.loaded ? (LIVE.incidents||[]).filter(function(i){ return i.clos !== 'OUI'; }).length === 0 : false;
     var gg = CYCLE.gonogo || {cash:false,betes:false,contrats:false,infra:false,securite:false};
     var canEdit = (S.user==='fondateur'||S.user==='rga');
@@ -8340,8 +8824,8 @@ function viewLiv(){
       +'</div>'
       +'<div class="card">'
       +'<div class="stitle">⚙️ Automatique</div>'
-      +ggRow('veto',  'Vétérinaire référent confirmé',  ggVeto,  true, CYCLE.veterinaire?'Contact : '+CYCLE.veterinaire:'Non renseigné dans l\'init')
-      +ggRow('assur', 'Assurance CNAAS activée',         ggAssur, true, ggAssur?'Réf. : '+CYCLE.numCnaas:'Saisissez le N° contrat ci-dessous')
+      +ggRow('veto',  'Vétérinaire référent confirmé',  ggVeto,  true, ggVeto?'Contact : '+((_ggVetoRef&&_ggVetoRef.name)||CYCLE.veterinaire||'Actif'):'Non renseigné dans Contacts')
+      +ggRow('assur', 'Assurance CNAAS activée',         ggAssur, true, ggAssur?'Réf. : '+((_ggAssurRef&&_ggAssurRef.referenceCode)||CYCLE.numCnaas||'Active'):'Saisissez le contact CNAAS')
       +ggRow('inc',   'Aucun incident ouvert',            ggInc,   true, !LIVE.loaded?'⏳ Chargement des incidents en cours...':ggInc?'✓ Aucun incident en cours':'⚠️ Clôturer tous les incidents avant de lancer le cycle')
       +'</div>'
       +(canEdit&&!ggAssur?'<div class="card" style="padding:10px 14px">'
