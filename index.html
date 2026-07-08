@@ -2785,7 +2785,23 @@ function _submitActual(type) {
               total: _vTotal,
               cycleDebut: CYCLE.dateDebut || ''
             }).then(function(nres){
-              if (!nres || !nres.ok) console.warn('[notify] vente_bete non bloquant', nres && (nres.error || nres.reason));
+              if (!nres || !nres.ok) {
+                var _err = (nres && (nres.details || nres.error || nres.reason)) || 'erreur inconnue';
+                console.warn('[notify] vente_bete non bloquant', _err);
+                setStatusMsg('ok:Vente enregistrée, mais notification CNAAS non envoyée (' + _err + ')', 6500);
+                addHistory('marche', 'Alerte CNAAS non envoyée — ' + f.id, {_id: f.id});
+                return;
+              }
+
+              if (nres.simulated) {
+                var _why = nres.reason || 'mode simulation';
+                setStatusMsg('ok:Vente enregistrée — notification CNAAS en simulation (' + _why + ')', 5500);
+                addHistory('marche', 'Alerte CNAAS simulée — ' + f.id, {_id: f.id});
+                return;
+              }
+
+              setStatusMsg('ok:Vente enregistrée et notification CNAAS envoyée', 4500);
+              addHistory('marche', 'Alerte CNAAS envoyée — ' + f.id, {_id: f.id});
             });
             // Écrire la nouvelle tréso dans KPI_Mensuels (non-critique — échec ignoré)
             return kpiAppend([td,'VENTE_'+f.id,'1','','','','',MOCK.treso,'','','Vente '+f.id+' '+fmt(_vTotal)+' FCFA'])
