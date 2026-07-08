@@ -6083,7 +6083,7 @@ function submitCloseInc() {
         setStatusMsg('ok:✅ Incident clôturé (sync partielle: '+oks.length+'/'+(results||[]).length+')', 5500);
         console.warn('[inc-close] sync partielle', errs);
       } else {
-        setStatusMsg('✅ Incident clôturé', 3000);
+        setStatusMsg('ok:✅ Incident clôturé', 3000);
       }
     }).catch(function(e) {
       S.sending = false;
@@ -8830,6 +8830,9 @@ function viewLiv(){
       view = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
         +'<div class="stitle" style="margin-bottom:0">Incidents du cycle</div>'
         +(LIVE.loaded?'<span style="font-size:10px;color:#4caf50">🟢 Live</span>':'')+'</div>';
+      if (S.msg) {
+        view += '<div style="margin-bottom:10px">'+msgHtml()+'</div>';
+      }
 
       if (LIVE.incidents.length === 0) {
         view += '<div class="card"><div style="color:#66aa66;font-size:13px;padding:8px 0;text-align:center">✓ Aucun incident enregistré ce cycle</div></div>';
