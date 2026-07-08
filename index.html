@@ -753,6 +753,32 @@ function _toggleContactSection(type) {
   lsSet('contacts_open', st);
   r();
 }
+function _ensureSimOpenState() {
+  if (!S._simOpen || typeof S._simOpen !== 'object') {
+    S._simOpen = lsGet('sim_open') || {
+      vente:true,
+      achat:true,
+      alim:false,
+      ops:false,
+      extra:false,
+      imprev:false,
+      result:true
+    };
+  }
+  var defs = {vente:true,achat:true,alim:false,ops:false,extra:false,imprev:false,result:true};
+  Object.keys(defs).forEach(function(k){
+    if (typeof S._simOpen[k] !== 'boolean') S._simOpen[k] = defs[k];
+  });
+  return S._simOpen;
+}
+function _toggleSimPanel(key) {
+  key = String(key || 'vente');
+  var st = _ensureSimOpenState();
+  st[key] = !st[key];
+  S._simOpen = st;
+  lsSet('sim_open', st);
+  r();
+}
 function _saveContactsLocal(rows) {
   lsSet('contacts_refs', rows || []);
 }
@@ -1780,6 +1806,7 @@ var S = {
   _clotureOpen: false, _clotureData: null,
   _cycleExpanded: {},
   _contactsOpen: lsGet('contacts_open') || {CNAAS:true, VETERINAIRE:false, GENDARMERIE:false, URGENCE:false},
+  _simOpen: lsGet('sim_open') || {vente:true,achat:true,alim:false,ops:false,extra:false,imprev:false,result:true},
   selectedBete: null,
   _donePesee:[], _doneSante:[], _doneInc:[],
   _sopSyncDone: false,
@@ -9665,6 +9692,39 @@ function viewMarche(){
         + '</div>';
     }
 
+    var _simOpen = _ensureSimOpenState();
+    function simPanel(key, icon, title, body, tone) {
+      var open = !!_simOpen[key];
+      var _tone = tone || '#2a4a2a';
+      return '<div class="card" style="padding:0;overflow:hidden;margin-bottom:12px;border:1px solid '+_tone+'44">'
+        +'<button type="button" onclick="_toggleSimPanel(\''+key+'\')" style="width:100%;border:none;background:linear-gradient(135deg,#0f1f0f,#0b180f);padding:12px 14px;cursor:pointer;text-align:left;color:#eee">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+            +'<div class="stitle" style="margin:0">'+icon+' '+title+'</div>'
+            +'<span style="font-size:16px;color:#88aa88;transform:'+(open?'rotate(90deg)':'rotate(0deg)')+';display:inline-block;transition:transform .22s ease">▸</span>'
+          +'</div>'
+        +'</button>'
+        +'<div style="max-height:'+(open?'2200px':'0')+';opacity:'+(open?'1':'0')+';overflow:hidden;transition:max-height .3s ease,opacity .22s ease;background:#0a150a;border-top:1px solid #1a2e1a">'
+          +'<div style="padding:12px 14px">'+body+'</div>'
+        +'</div>'
+        +'</div>';
+    }
+
+    var _simHeader = '<div style="background:linear-gradient(135deg,#111f11,#0b180f);border:1px solid #2a4a2a;border-radius:12px;padding:12px 14px;margin-bottom:12px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">'
+        +'<div>'
+          +'<div style="font-size:11px;color:#88aa88;text-transform:uppercase;letter-spacing:.06em">Vue rapide</div>'
+          +'<div style="font-size:18px;color:#eee;font-weight:800">Simulateur de rentabilité</div>'
+          +'<div style="font-size:11px;color:#7a9a7a;margin-top:2px">Interface allégée, logique de calcul inchangée</div>'
+        +'</div>'
+        +'<button onclick="event.stopPropagation();S.simMois=null;S.sn=null;S.sp=null;S.spx=null;S.sveau=undefined;S.salim=undefined;S.svet=undefined;S.ssec=undefined;S.seau=undefined;S.smdo=undefined;S.sassur=undefined;S.strans=undefined;S.smat=undefined;S.sterrain=undefined;S.sprospect=undefined;S.sfoirail=undefined;S.sgestion=undefined;S.simpMode=undefined;S.simpPct=undefined;S.simpFix=undefined;r()" style="font-size:11px;padding:7px 11px;border-radius:8px;background:#0a150a;border:1px solid #2a4a2a;color:#88aa88;cursor:pointer">↺ Réinitialiser</button>'
+      +'</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px">'
+        +'<div style="background:#0a150a;border:1px solid #1a2e1a;border-radius:8px;padding:8px 10px"><div style="font-size:10px;color:#88aa88">Bénéfice net</div><div style="font-size:16px;font-weight:800;color:'+(benNet>=0?'#4caf50':'#f44336')+'">'+sign(benNet)+fmt(benNet)+'</div></div>'
+        +'<div style="background:#0a150a;border:1px solid #1a2e1a;border-radius:8px;padding:8px 10px"><div style="font-size:10px;color:#88aa88">Marge nette</div><div style="font-size:16px;font-weight:800;color:'+(margeNet>=30?'#4caf50':margeNet>=20?'#ff9800':margeNet>=10?'#ffa040':'#f44336')+'">'+margeNet+'%</div></div>'
+        +'<div style="background:#0a150a;border:1px solid #1a2e1a;border-radius:8px;padding:8px 10px"><div style="font-size:10px;color:#88aa88">Seuil rentabilité</div><div style="font-size:16px;font-weight:800;color:#C8A06A">'+fmt(pxSeuil)+'</div></div>'
+      +'</div>'
+      +'</div>';
+
     view = _depRealBanner
 
     // Badge bêtes vendues (si applicable)
@@ -9689,102 +9749,47 @@ function viewMarche(){
     +   '</div>'
     + '</div>'
 
-    // ── Bloc Vente ──
-    + '<div class="card">'
-    +   '<div class="stitle">💰 Paramètres de vente</div>'
-    +   simField('Nombre de bêtes',   'sn',    nb,   1,    200,      1,      'têtes',     false)
-    +   simField('Poids moyen vente', 'sp',    sp,   250,  1300,     5,      'kg / bête', false)
-    +   simField('Prix de vente',     'spx',   px,   1600, 2600,     50,     'FCFA / kg', false)
-    +   '<div style="padding:8px;background:#0f1f0f;border-radius:7px;font-size:13px;color:#88aa88">CA estimé : <strong style="color:#eee;font-size:15px">' + fmt(ca) + ' FCFA</strong></div>'
-    + '</div>'
-
-    // ── Bloc Achat veaux ──
-    + '<div class="card">'
-    +   '<div class="stitle">🐄 Achat des veaux</div>'
-    +   simField("Prix d'achat / veau", 'sveau', pveau, 300000, 2000000, 10000, 'FCFA / tête', false)
-    +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Total lot : <strong style="color:#eee">' + fmt(cVeau) + ' FCFA</strong> pour ' + nb + ' bête' + (nb>1?'s':'') + '</div>'
-    + '</div>'
-
-    // ── Bloc Alimentation ──
-    + '<div class="card">'
-    +   '<div class="stitle">🌾 Alimentation</div>'
-    +   simField('Coût mensuel total (tout le troupeau)', 'salim', calim, 10000, 2000000, 5000, 'FCFA / mois', false)
-    +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Sur ' + cycleMois + ' mois → <strong style="color:#eee">' + fmt(cAlim) + ' FCFA</strong></div>'
-    + '</div>'
-
-    // ── Bloc Vétérinaire ──
-    + '<div class="card">'
-    +   '<div class="stitle">💊 Vétérinaire & Santé</div>'
-    +   simField('Frais vét. / bête / cycle', 'svet', cvet, 0, 200000, 5000, 'FCFA / bête', false)
-    +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Total vét. : <strong style="color:#eee">' + fmt(cVet) + ' FCFA</strong></div>'
-    + '</div>'
-
-    // ── Bloc Sécurité ──
-    + '<div class="card">'
-    +   '<div class="stitle">🔒 Sécurité</div>'
-    +   simField('Salaire gardien / mois', 'ssec', csec, 0, 300000, 5000, 'FCFA / mois', false)
-    +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Sur ' + cycleMois + ' mois → <strong style="color:#eee">' + fmt(cSec) + ' FCFA</strong></div>'
-    + '</div>'
-
-    // ── Bloc Transport ──
-    + '<div class="card">'
-    +   '<div class="stitle">🚚 Transport</div>'
-    +   simField('Coût transport total (foirail ↔ ferme + vente)', 'strans', ctrans, 0, 2000000, 10000, 'FCFA (forfait)', false)
-    +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Coût unique (achat + livraison finale)</div>'
-    + '</div>'
-
-    // ── Bloc Eau ──
-    + '<div class="card">'
-    +   '<div class="stitle">💧 Eau</div>'
-    +   simField('Coût de l\'eau / mois', 'seau', ceau, 0, 200000, 1000, 'FCFA / mois', false)
-    +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Sur ' + cycleMois + ' mois → <strong style="color:#eee">' + fmt(cEau) + ' FCFA</strong></div>'
-    + '</div>'
-    + '<div class="card">'
-    +   '<div class="stitle">👷 Main d\'œuvre gérant</div>'
-    +   simField('Salaire / rémunération par mois', 'smdo', cmdo, 0, 500000, 5000, 'FCFA / mois', false)
-    +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Sur ' + cycleMois + ' mois → <strong style="color:#eee">' + fmt(cMdo) + ' FCFA</strong></div>'
-    + '</div>'
-
-    + '<div class="card">'
-    +   '<div class="stitle">🛡️ Assurance CNAAS</div>'
-    +   simField('Prime assurance (forfait cycle)', 'sassur', cassur, 0, 500000, 5000, 'FCFA (one-shot)', false)
-    +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Cotisation unique — si 0 : non souscrite ou incluse dans imprévus</div>'
-    + '</div>'
-
-
-    // -- Bloc couts one-shot complementaires --
-    + '<div class="card">'
-    +   '<div class="stitle">💰 Coûts one-shot complémentaires</div>'
-    +   simField('Matériels / équipements démarrage', 'smat', cmat, 0, 5000000, 10000, 'FCFA', false)
-    +   simField('Droits foirail (achat + vente)', 'sfoirail', cfoirail, 0, 200000, 1000, 'FCFA', false)
-    +   simField('Prospection / info marché (forfait)', 'sprospect', cprospect, 0, 500000, 5000, 'FCFA', false)
-    + '</div>'
-
-    // -- Bloc charges fixes mensuelles --
-    + '<div class="card">'
-    +   '<div class="stitle">🏡 Charges fixes mensuelles</div>'
-    +   simField('Loyer terrain / parc / mois', 'sterrain', cterrain, 0, 500000, 5000, 'FCFA/m', false)
-    +   simField('Gestion / applis / téléphone / mois', 'sgestion', cgestion, 0, 200000, 1000, 'FCFA/m', false)
-    +   '<div style="font-size:11px;color:#88aa88;margin-top:-4px">× ' + cycleMois + ' m → <strong style="color:#eee">' + fmt(cTerrain + cGestion) + ' FCFA</strong></div>'
-    + '</div>'
-    // ── Bloc Imprévus ──
-    + '<div class="card">'
-    +   '<div class="stitle">⚡ Imprévus documentés</div>'
-    +   '<div style="background:#1a1500;border:1px solid #4a3a00;border-radius:8px;padding:6px 10px;font-size:10px;color:#ff9800;margin-bottom:10px">📋 Plafond 10% max — accord écrit requis au-delà</div>'
-    +   '<div style="display:flex;gap:8px;margin-bottom:12px">'
-    +     '<button onclick="S.simpMode=\'pct\';r()" style="flex:1;padding:8px;font-size:12px;border-radius:8px;border:1px solid ' + (simpMode==='pct'?'#2d6a2d':'#2a4a2a') + ';background:' + (simpMode==='pct'?'#2d6a2d':'transparent') + ';color:#eee">% max 10%</button>'
-    +     '<button onclick="S.simpMode=\'fixe\';r()" style="flex:1;padding:8px;font-size:12px;border-radius:8px;border:1px solid ' + (simpMode==='fixe'?'#2d6a2d':'#2a4a2a') + ';background:' + (simpMode==='fixe'?'#2d6a2d':'transparent') + ';color:#eee">Montant fixe</button>'
-    +   '</div>'
-    +   (simpMode === 'pct'
-      ? simField('Pourcentage imprévus (plafonné 10%)', 'simpPct', _simpPctCapped, 0, 10, 1, '% du coût total', false)
-      : simField('Montant imprévus',     'simpFix', simpFix, 0, 5000000, 10000, 'FCFA', false))
-    +   '<div style="font-size:12px;color:#88aa88;margin-top:-6px">→ <strong style="color:#eee">' + fmt(cImprev) + ' FCFA</strong></div>'
-    + '</div>'
-
-    // ── Résultats ──
-    + '<div class="card">'
-    +   '<div class="stitle">📊 Résultats</div>'
-    +   simRow("Chiffre d'Affaires",          fmt(ca)     + ' FCFA', '#eee')
+    + _simHeader
+    + simPanel('vente', '💰', 'Paramètres de vente',
+        simField('Nombre de bêtes',   'sn',    nb,   1,    200,      1,      'têtes',     false)
+      + simField('Poids moyen vente', 'sp',    sp,   250,  1300,     5,      'kg / bête', false)
+      + simField('Prix de vente',     'spx',   px,   1600, 2600,     50,     'FCFA / kg', false)
+      + '<div style="padding:8px;background:#0f1f0f;border-radius:7px;font-size:13px;color:#88aa88">CA estimé : <strong style="color:#eee;font-size:15px">' + fmt(ca) + ' FCFA</strong></div>', '#2d6a2d')
+    + simPanel('achat', '🐄', 'Achat des veaux',
+        simField("Prix d'achat / veau", 'sveau', pveau, 300000, 2000000, 10000, 'FCFA / tête', false)
+      + '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Total lot : <strong style="color:#eee">' + fmt(cVeau) + ' FCFA</strong> pour ' + nb + ' bête' + (nb>1?'s':'') + '</div>', '#5a6330')
+    + simPanel('alim', '🌾', 'Alimentation',
+        simField('Coût mensuel total (tout le troupeau)', 'salim', calim, 10000, 2000000, 5000, 'FCFA / mois', false)
+      + '<div style="font-size:12px;color:#88aa88;margin-top:-6px">Sur ' + cycleMois + ' mois → <strong style="color:#eee">' + fmt(cAlim) + ' FCFA</strong></div>', '#6a5a20')
+    + simPanel('ops', '⚙️', 'Opérations (santé, sécurité, transport, eau, main d\'œuvre, assurance)',
+        simField('Frais vét. / bête / cycle', 'svet', cvet, 0, 200000, 5000, 'FCFA / bête', false)
+      + simField('Salaire gardien / mois', 'ssec', csec, 0, 300000, 5000, 'FCFA / mois', false)
+      + simField('Coût transport total (foirail ↔ ferme + vente)', 'strans', ctrans, 0, 2000000, 10000, 'FCFA (forfait)', false)
+      + simField('Coût de l\'eau / mois', 'seau', ceau, 0, 200000, 1000, 'FCFA / mois', false)
+      + simField('Salaire / rémunération par mois', 'smdo', cmdo, 0, 500000, 5000, 'FCFA / mois', false)
+      + simField('Prime assurance (forfait cycle)', 'sassur', cassur, 0, 500000, 5000, 'FCFA (one-shot)', false)
+      + '<div style="font-size:11px;color:#88aa88;line-height:1.7;background:#0f1f0f;border-radius:7px;padding:8px 10px">'
+      + 'Santé: <strong style="color:#eee">'+fmt(cVet)+'</strong> · Sécurité: <strong style="color:#eee">'+fmt(cSec)+'</strong> · Eau: <strong style="color:#eee">'+fmt(cEau)+'</strong> · MdO: <strong style="color:#eee">'+fmt(cMdo)+'</strong>'
+      + '</div>', '#2a4a5a')
+    + simPanel('extra', '🧰', 'Coûts complémentaires',
+        simField('Matériels / équipements démarrage', 'smat', cmat, 0, 5000000, 10000, 'FCFA', false)
+      + simField('Droits foirail (achat + vente)', 'sfoirail', cfoirail, 0, 200000, 1000, 'FCFA', false)
+      + simField('Prospection / info marché (forfait)', 'sprospect', cprospect, 0, 500000, 5000, 'FCFA', false)
+      + simField('Loyer terrain / parc / mois', 'sterrain', cterrain, 0, 500000, 5000, 'FCFA/m', false)
+      + simField('Gestion / applis / téléphone / mois', 'sgestion', cgestion, 0, 200000, 1000, 'FCFA/m', false)
+      + '<div style="font-size:11px;color:#88aa88;margin-top:-4px">One-shot + fixes mensuelles: <strong style="color:#eee">' + fmt(cMat + cProspect + cFoirail + cTerrain + cGestion) + ' FCFA</strong></div>', '#5a2a5a')
+    + simPanel('imprev', '⚡', 'Imprévus documentés',
+        '<div style="background:#1a1500;border:1px solid #4a3a00;border-radius:8px;padding:6px 10px;font-size:10px;color:#ff9800;margin-bottom:10px">📋 Plafond 10% max — accord écrit requis au-delà</div>'
+      + '<div style="display:flex;gap:8px;margin-bottom:12px">'
+      +   '<button onclick="S.simpMode=\'pct\';r()" style="flex:1;padding:8px;font-size:12px;border-radius:8px;border:1px solid ' + (simpMode==='pct'?'#2d6a2d':'#2a4a2a') + ';background:' + (simpMode==='pct'?'#2d6a2d':'transparent') + ';color:#eee">% max 10%</button>'
+      +   '<button onclick="S.simpMode=\'fixe\';r()" style="flex:1;padding:8px;font-size:12px;border-radius:8px;border:1px solid ' + (simpMode==='fixe'?'#2d6a2d':'#2a4a2a') + ';background:' + (simpMode==='fixe'?'#2d6a2d':'transparent') + ';color:#eee">Montant fixe</button>'
+      + '</div>'
+      + (simpMode === 'pct'
+        ? simField('Pourcentage imprévus (plafonné 10%)', 'simpPct', _simpPctCapped, 0, 10, 1, '% du coût total', false)
+        : simField('Montant imprévus',     'simpFix', simpFix, 0, 5000000, 10000, 'FCFA', false))
+      + '<div style="font-size:12px;color:#88aa88;margin-top:-6px">→ <strong style="color:#eee">' + fmt(cImprev) + ' FCFA</strong></div>', '#8a5a00')
+    + simPanel('result', '📊', 'Résultats détaillés',
+        simRow("Chiffre d'Affaires",          fmt(ca)     + ' FCFA', '#eee')
     +   '<div style="height:1px;background:#1a2a1a;margin:6px 0"></div>'
     +   simRow('− Achat veaux',               fmt(cVeau)  + ' FCFA', '#ff9090')
     +   simRow('− Alimentation (' + cycleMois + 'm)', fmt(cAlim) + ' FCFA', '#ff9090')
@@ -9828,7 +9833,7 @@ function viewMarche(){
       +   '<span style="font-size:11px;color:#88aa88">Marché actuel vs seuil</span>'
       +   '<span style="font-size:12px;font-weight:700;color:'+(_vsSeuilMkt>=0?'#4caf50':'#f44336')+'">'+(_vsSeuilMkt>=0?'+':'')+_vsSeuilMkt+'%</span>'
       + '</div>' : '')
-    + '</div>'
+      , '#2a4a2a')
 
     // ── Verdict ──
     + '<div style="background:' + bg + ';border:1px solid ' + bc + ';color:' + tc + ';border-radius:12px;padding:18px;text-align:center;margin-bottom:16px">'
