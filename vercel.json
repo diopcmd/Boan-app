@@ -1,5 +1,8 @@
 {
   "version": 2,
+  "crons": [
+    { "path": "/api/cron", "schedule": "0 7 * * *" }
+  ],
   "rewrites": [
     { "source": "/((?!api/|guides/|manifest\\.json|sw\\.js).*)", "destination": "/index.html" }
   ]

@@ -157,7 +157,10 @@ Boan-app/
 │   ├── token.js            Service Account → Google OAuth2 access token
 │   ├── sheets.js           Proxy lecture/écriture Google Sheets
 │   ├── change-password.js  Modification credentials (fondateur)
-│   └── ai.js               Proxy Anthropic Claude
+│   ├── ai.js               Proxy Anthropic Claude
+│   ├── notify-immediate.js Notification immédiate (vente -> alerte CNAAS)
+│   ├── cron.js             Cron sécurisé (rappels CNAAS)
+│   └── _notify.js          Helpers email SendGrid
 │
 ├── guides/
 │   ├── fondateur.html      Guide PDF imprimable — Direction
@@ -218,6 +221,16 @@ SA_CLIENT_EMAIL   Email du Service Account Google
 SESSION_SECRET    Secret HMAC session (>= 32 caractères aléatoires)
 ALLOWED_ORIGINS   Optionnel: liste CSV d'origines additionnelles autorisées (ex: https://boan.example.com,https://staging.example.com)
 ANTHROPIC_API_KEY Clé Anthropic (optionnel — IA fondateur)
+
+CRON_SECRET         Secret de protection de /api/cron (>= 32 caractères aléatoires)
+SENDGRID_API_KEY    Clé API SendGrid (optionnel en simulation)
+SENDGRID_FROM_EMAIL Expéditeur vérifié SendGrid (Single Sender ou domaine)
+SENDGRID_TO_FONDATEUR Email destinataire fondateur (ou liste CSV)
+SENDGRID_TO_RGA       Email destinataire RGA (ou liste CSV)
+NOTIFY_TO             Optionnel: liste CSV additionnelle de destinataires
+
+# Optionnel: alias destinataires global
+SENDGRID_TO         Optionnel: liste CSV de destinataires
 ```
 
 ---

@@ -822,6 +822,243 @@ function addHistory(type, label, meta) {
   lsSet('history', HISTORY);
 }
 
+function _notifyImmediate(eventType, payload) {
+  if (!S.sessionToken) return Promise.resolve({ok:false, skipped:true, reason:'session_missing'});
+  return fetch('/api/notify-immediate', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Session-Token': S.sessionToken || ''
+    },
+    body: JSON.stringify({ eventType: eventType, payload: payload || {} })
+  }).then(function(res){ return res.json(); })
+    .then(function(data){ return data || {ok:false}; })
+    .catch(function(err){ return {ok:false, error: err && err.message ? err.message : 'notify fetch failed'}; });
+}
+
+function _venteCnaasTaskKey(t) {
+  if (!t) return '';
+  return [String(t.id||''), String(t.dateVente||''), String(t.cycleDebut||'')].join('||');
+}
+function _taskBelongsToCurrentCycle(t) {
+  if (!t) return false;
+  var cycleDebut = CYCLE.dateDebut || '';
+  if (!cycleDebut) return true;
+  return !t.cycleDebut || t.cycleDebut === cycleDebut;
+}
+function _cloneVenteCnaasTask(data) {
+  return {
+    id: data.id || '',
+    dateVente: data.dateVente || today(),
+    race: data.race || '',
+    acheteur: data.acheteur || '',
+    total: parseFloat(data.total) || 0,
+    cycleDebut: data.cycleDebut || (CYCLE.dateDebut || ''),
+    createdAt: data.createdAt || Date.now(),
+    status: data.status || 'PENDING',
+    cnaasCalledAt: data.cnaasCalledAt || '',
+    cnaasAgent: data.cnaasAgent || '',
+    rowIndex: data.rowIndex || null
+  };
+}
+function _taskToRowVals(task) {
+  return [
+    task.dateVente || '',
+    task.id || '',
+    task.race || '',
+    task.acheteur || '',
+    task.total || 0,
+    task.status || 'PENDING',
+    task.cnaasCalledAt || '',
+    task.cnaasAgent || '',
+    task.cycleDebut || ''
+  ];
+}
+function _writeVentesCnaasHeaders(sid) {
+  if (!sid) return Promise.resolve({ok:false, err:'SID absent'});
+  return getTok().then(function(tk){
+    if (!tk) return {ok:false, err:'Token invalide'};
+    var sheet = 'Ventes_CNAAS';
+    var title = [['SUIVI CNAAS — VENTES DE BÊTES', '', '', '', '', 'BOAN', '', '', '']];
+    var headers = [[
+      'Date_Vente', 'ID_Animal', 'Race', 'Acheteur', 'Montant_FCFA',
+      'Statut_CNAAS', 'Appel_RGA_Le', 'Agent_CNAAS', 'Cycle_Debut'
+    ]];
+    return fetch('https://sheets.googleapis.com/v4/spreadsheets/' + sid + '/values:batchUpdate?valueInputOption=USER_ENTERED', {
+      method: 'POST',
+      headers: {Authorization:'Bearer ' + tk, 'Content-Type':'application/json'},
+      body: JSON.stringify({data:[
+        {range:sheet + '!A1', values:title},
+        {range:sheet + '!A3', values:headers}
+      ]})
+    }).then(function(res){ return res.json(); })
+    .then(function(data){
+      if (data && data.error) return {ok:false, err:data.error.message || 'Erreur headers Ventes_CNAAS'};
+      _clearSheetReadCache();
+      return {ok:true};
+    }).catch(function(e){ return {ok:false, err:e.message}; });
+  });
+}
+function _mergeVenteCnaasTasks(primary, secondary) {
+  var map = {};
+  (secondary || []).forEach(function(t){
+    if (!t || !_taskBelongsToCurrentCycle(t)) return;
+    map[_venteCnaasTaskKey(t)] = _cloneVenteCnaasTask(t);
+  });
+  (primary || []).forEach(function(t){
+    if (!t || !_taskBelongsToCurrentCycle(t)) return;
+    map[_venteCnaasTaskKey(t)] = _cloneVenteCnaasTask(t);
+  });
+  return Object.keys(map).map(function(k){ return map[k]; }).sort(function(a,b){
+    return (b.createdAt||0) - (a.createdAt||0);
+  });
+}
+
+function _getVenteCnaasTasks() {
+  var localTasks = (lsGet('vente_cnaas_tasks') || []).filter(_taskBelongsToCurrentCycle);
+  var liveTasks = (LIVE.venteCnaas || []).filter(_taskBelongsToCurrentCycle);
+  return _mergeVenteCnaasTasks(liveTasks, localTasks);
+}
+function _saveVenteCnaasTasks(tasks) {
+  lsSet('vente_cnaas_tasks', tasks || []);
+}
+function _persistVenteCnaasTask(task) {
+  if (!SID.fondateur || !task || !task.id) return Promise.resolve({ok:false, err:'SID fondateur absent'});
+  return appendRow(SID.fondateur, 'Ventes_CNAAS!A:I', _taskToRowVals(task)).then(function(res){
+    _writeVentesCnaasHeaders(SID.fondateur).then(function(hres){
+      if (!hres || !hres.ok) console.warn('[vente_cnaas] headers non bloquants', hres && hres.err);
+    });
+    return res;
+  });
+}
+function _resolveVenteCnaasTaskRowIndex(task) {
+  if (!SID.fondateur || !task || !task.id) return Promise.resolve(null);
+  if (task.rowIndex) return Promise.resolve(task.rowIndex);
+  return readSheet(SID.fondateur, 'Ventes_CNAAS!A4:I500', {force:true, ttlMs:0}).then(function(rows){
+    rows = rows || [];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i] || [];
+      if (String(r[0]||'') === String(task.dateVente||'')
+          && String(r[1]||'') === String(task.id||'')
+          && String(r[8]||'') === String(task.cycleDebut||'')) {
+        return i + 4;
+      }
+    }
+    return null;
+  }).catch(function(){ return null; });
+}
+function _updateVenteCnaasTaskInSheet(task) {
+  if (!SID.fondateur || !task || !task.id) return Promise.resolve({ok:false, err:'SID fondateur absent'});
+  return _resolveVenteCnaasTaskRowIndex(task).then(function(rowIndex){
+    if (!rowIndex) return {ok:false, err:'Ligne Ventes_CNAAS introuvable'};
+    task.rowIndex = rowIndex;
+    return getTok().then(function(tk){
+      if (!tk) return {ok:false, err:'Token invalide'};
+      var enc = encodeURIComponent('Ventes_CNAAS');
+      var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + SID.fondateur
+        + '/values/' + enc + '!A' + rowIndex + '?valueInputOption=USER_ENTERED';
+      return fetch(url, {
+        method: 'PUT',
+        headers: {Authorization:'Bearer ' + tk, 'Content-Type':'application/json'},
+        body: JSON.stringify({values:[_taskToRowVals(task)]})
+      }).then(function(res){ return res.json(); })
+      .then(function(data){
+        if (data && data.error) return {ok:false, err:data.error.message || 'Erreur Sheets'};
+        _clearSheetReadCache();
+        return {ok:true};
+      }).catch(function(e){ return {ok:false, err:e.message}; });
+    });
+  });
+}
+function _queueVenteCnaasTask(data) {
+  if (!data || !data.id) return;
+  var tasks = (lsGet('vente_cnaas_tasks') || []).filter(_taskBelongsToCurrentCycle);
+  var existing = tasks.filter(function(t){
+    return t.id === data.id && t.dateVente === data.dateVente;
+  })[0];
+  if (existing) return;
+  var task = _cloneVenteCnaasTask({
+    id: data.id,
+    dateVente: data.dateVente || today(),
+    race: data.race || '',
+    acheteur: data.acheteur || '',
+    total: data.total || 0,
+    cycleDebut: CYCLE.dateDebut || '',
+    createdAt: Date.now(),
+    status: 'PENDING',
+    cnaasCalledAt: '',
+    cnaasAgent: ''
+  });
+  tasks.unshift(task);
+  if (tasks.length > 50) tasks = tasks.slice(0, 50);
+  _saveVenteCnaasTasks(tasks);
+  _persistVenteCnaasTask(task).then(function(res){
+    if (!res || !res.ok) console.warn('[vente_cnaas] persist non bloquant', res && res.err);
+  });
+}
+function _markVenteCnaasDone(id, dateVente) {
+  var tasks = _getVenteCnaasTasks();
+  var task = tasks.filter(function(t){ return t.id === id && t.dateVente === dateVente; })[0];
+  if (!task) return;
+  var agent = window.prompt('Nom de l\'agent CNAAS contacté (optionnel) :', task.cnaasAgent || '');
+  if (agent === null) return;
+  var n = _nowDakar();
+  task.status = 'DONE';
+  task.cnaasAgent = String(agent || '').trim();
+  task.cnaasCalledAt = today() + ' ' + (n.hour<10?'0':'') + n.hour + ':' + (n.minute<10?'0':'') + n.minute;
+  _saveVenteCnaasTasks(_mergeVenteCnaasTasks(tasks, []));
+  _updateVenteCnaasTaskInSheet(task).then(function(res){
+    if (!res || !res.ok) console.warn('[vente_cnaas] update non bloquant', res && res.err);
+    if (!LIVE.venteCnaas) LIVE.venteCnaas = [];
+    var key = _venteCnaasTaskKey(task);
+    var replaced = false;
+    LIVE.venteCnaas = LIVE.venteCnaas.map(function(t){
+      if (_venteCnaasTaskKey(t) !== key) return t;
+      replaced = true;
+      return _cloneVenteCnaasTask(task);
+    });
+    if (!replaced) LIVE.venteCnaas.unshift(_cloneVenteCnaasTask(task));
+    addHistory('marche', 'CNAAS vente traitée — ' + task.id, {_id: task.id});
+    setStatusMsg('ok:CNAAS vente marquée comme traitée pour ' + task.id, 3500);
+    r();
+  });
+}
+function _venteCnaasBannerHtml() {
+  if (S.user !== 'rga') return '';
+  var tasks = _getVenteCnaasTasks().filter(function(t){ return t.status !== 'DONE'; });
+  if (!tasks.length) return '';
+  var cnaasTelRaw = lsGet('cfg_contact_cnaas_tel') || '';
+  var cnaasTel = String(cnaasTelRaw).replace(/\D/g, '');
+  var rows = tasks.slice(0, 3).map(function(t){
+    var h = Math.floor((Date.now() - (t.createdAt || Date.now())) / 3600000);
+    var overdue = h >= 24;
+    return '<div style="background:' + (overdue?'#2a0a0a':'#1a1500') + ';border:1px solid ' + (overdue?'#8a0000':'#8a5a00') + ';border-radius:8px;padding:10px;margin-top:8px">'
+      + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'
+      + '<div style="flex:1">'
+      + '<div style="font-size:13px;font-weight:700;color:' + (overdue?'#ff8080':'#C8A06A') + '">📞 Vente ' + _escHtml(t.id) + ' — appeler CNAAS</div>'
+      + '<div style="font-size:11px;color:#ccc;margin-top:3px">'
+      + _escHtml(t.dateVente || '') + (t.acheteur ? ' · ' + _escHtml(t.acheteur) : '')
+      + (t.total ? ' · ' + fmt(t.total) + ' FCFA' : '')
+      + '</div>'
+      + '<div style="font-size:10px;color:' + (overdue?'#ff9090':'#ffb74d') + ';margin-top:4px">'
+      + (overdue ? 'En attente depuis ' + h + 'h — priorité haute' : 'À traiter sous 24h')
+      + '</div>'
+      + '</div>'
+      + '<div style="display:flex;flex-direction:column;gap:6px;min-width:118px">'
+      + (cnaasTel ? '<a href="tel:+' + cnaasTel + '" style="background:#7a3a10;color:#fff;text-decoration:none;padding:6px 8px;border-radius:6px;font-size:11px;text-align:center">Appeler CNAAS</a>' : '')
+      + '<button type="button" onclick="_markVenteCnaasDone(\'' + t.id.replace(/'/g,"\\'") + '\',\'' + t.dateVente.replace(/'/g,"\\'") + '\')" style="background:#1a3a1a;color:#88dd88;border:1px solid #2d6a2d;padding:6px 8px;border-radius:6px;font-size:11px;cursor:pointer">✓ Appel fait</button>'
+      + '</div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+  var more = tasks.length > 3 ? '<div style="font-size:10px;color:#7a9a7a;margin-top:6px;text-align:right">+' + (tasks.length - 3) + ' autre(s) vente(s) en attente</div>' : '';
+  return '<div class="al al-o" style="border-left-color:#C8A06A">'
+    + '<strong>Assurance CNAAS — ventes à traiter</strong><br>'
+    + '<span style="font-size:12px;color:#ccc">Chaque bête vendue doit être retirée de la garantie CNAAS. La RGA appelle et trace l\'action.</span>'
+    + rows + more
+    + '</div>';
+}
+
 // Anti-doublon fiche du jour
 // Retourne le numéro de semaine ISO d'une date
 function semaineISO(date) {
@@ -1408,7 +1645,8 @@ var TABLE_RANGES = {
   'KPI_Hebdo':          { start: 4, end: 50  },
   'Historique_Cycles':  { start: 2, end: 200 },  // ligne 1 = en-têtes, données à partir de 2
   'SOP_Protocol':       { start: 5, end: 50  },  // vitrine SOP : structure + statut auto
-  'Ventes_Betes':       { start: 4, end: 500 }   // log ventes — auto-créé si absent
+  'Ventes_Betes':       { start: 4, end: 500 },  // log ventes — auto-créé si absent
+  'Ventes_CNAAS':       { start: 4, end: 500 }   // suivi assurance post-vente — auto-créé si absent
 };
 
 function appendRow(sid, range, vals) {
@@ -1718,6 +1956,7 @@ function loadLiveData() {
       sidFondateur   ? readSheet(sidFondateur,   'KPI_Mensuels!A4:K50')      : Promise.resolve(null),
       sidDataSource  ? readSheet(sidDataSource,  'Sante_Mortalite!A4:G200')  : Promise.resolve(null),
       sidVentes      ? readSheet(sidVentes,       'Ventes_Betes!A4:K200')     : Promise.resolve(null),
+      sidFondateur   ? readSheet(sidFondateur,   'Ventes_CNAAS!A4:I500')     : Promise.resolve(null),
       // ── Wave 2 : historique pour la sidebar (lancé en parallèle) ──
       sidHisto ? readSheet(sidHisto, 'Fiche_Quotidienne!A4:G500')  : Promise.resolve(null),
       sidHisto ? readSheet(sidHisto, 'Incidents!A4:G200')          : Promise.resolve(null),
@@ -1732,10 +1971,11 @@ function loadLiveData() {
       var rowsKpi    = results[2];
       var rowsSante  = results[3];
       var rowsVentes = results[4];
-      var fiches     = (results[5] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
-      var incidents  = (results[6] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
-      var bilans     = (results[7] || []).filter(function(r){ return r[0]; });
-      var sops       = (results[8] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
+      var rowsVentesCnaas = results[5];
+      var fiches     = (results[6] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
+      var incidents  = (results[7] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
+      var bilans     = (results[8] || []).filter(function(r){ return r[0]; });
+      var sops       = (results[9] || []).filter(function(r){ return r[0] && apresDebut(r[0]); });
 
       // Sante_Mortalite → MOCK.betes + SPARK.betes (filtré par début de cycle)
       if (rowsSante && rowsSante.length) {
@@ -1793,6 +2033,23 @@ function loadLiveData() {
       if (!rowsVentes && (LIVE.sold||[]).length > 0) {
         MOCK.betes = Math.max(0, MOCK.betes - LIVE.sold.length);
       }
+
+      LIVE.venteCnaas = (rowsVentesCnaas || []).map(function(r, idx){
+        return _cloneVenteCnaasTask({
+          dateVente: r[0] || '',
+          id: (r[1] || '').toString().trim(),
+          race: r[2] || '',
+          acheteur: r[3] || '',
+          total: parseFloat(r[4]) || 0,
+          status: r[5] || 'PENDING',
+          cnaasCalledAt: r[6] || '',
+          cnaasAgent: r[7] || '',
+          cycleDebut: r[8] || '',
+          rowIndex: idx + 4,
+          createdAt: Date.now() - ((rowsVentesCnaas.length - idx) * 1000)
+        });
+      }).filter(_taskBelongsToCurrentCycle);
+      _saveVenteCnaasTasks(_mergeVenteCnaasTasks(LIVE.venteCnaas, lsGet('vente_cnaas_tasks') || []));
 
       // Pesées → MOCK.gmq + SPARK.gmq + LIVE.pesees (mis à jour à chaque refresh)
       if (rowsPesees && rowsPesees.length) {
@@ -2514,10 +2771,22 @@ function _submitActual(type) {
             lsSet('sold', LIVE.sold); lsSet('sold_debut', CYCLE.dateDebut); // persistance immédiate
             MOCK.betes = Math.max(0, MOCK.betes-1);
             MOCK.treso += _vTotal;
+            _queueVenteCnaasTask({id:f.id, dateVente:td, race:_vRace, acheteur:f.acheteur, total:_vTotal});
             // Mémoriser l'acheteur en localStorage
             _saveAcheteur(f.acheteur, f.tel||'');
             // Rebuild la datalist pour exclure la bête vendue
             rebuildBeteList();
+            addHistory('marche', 'Vente ' + f.id + ' enregistrée — appel CNAAS à faire', {_id: f.id});
+            _notifyImmediate('vente_bete', {
+              id: f.id,
+              dateVente: td,
+              race: _vRace,
+              acheteur: f.acheteur,
+              total: _vTotal,
+              cycleDebut: CYCLE.dateDebut || ''
+            }).then(function(nres){
+              if (!nres || !nres.ok) console.warn('[notify] vente_bete non bloquant', nres && (nres.error || nres.reason));
+            });
             // Écrire la nouvelle tréso dans KPI_Mensuels (non-critique — échec ignoré)
             return kpiAppend([td,'VENTE_'+f.id,'1','','','','',MOCK.treso,'','','Vente '+f.id+' '+fmt(_vTotal)+' FCFA'])
               .then(function(kpiRes){
@@ -2784,6 +3053,7 @@ var LIVE = {
   deceased:  (function(){ var _d=lsGet('deceased')||[]; if(!_d.length) return _d; var _dd=lsGet('deceased_debut'); if(_dd && CYCLE.dateDebut && _dd!==CYCLE.dateDebut) return []; return _d; })(),  // IDs des bêtes décédées ce cycle (invalidé si cycle changé)
   sold:      (function(){ var _s=lsGet('sold')||[]; if(!_s.length) return _s; var _sd=lsGet('sold_debut'); if(_sd&&CYCLE.dateDebut&&_sd!==CYCLE.dateDebut) return []; return _s; })(),  // IDs vendues (persisté)
   ventes:    [],   // [{date, id, race, poids, prixKg, total, acheteur, tel, mode, ctx, notes}]
+  venteCnaas: [],  // [{dateVente,id,race,acheteur,total,status,cnaasCalledAt,cnaasAgent,cycleDebut,rowIndex}]
   alimPrix:  lsGet('alimPrix') || [],  // [{date, type, prix}] depuis Suivi_Aliments (persisté)
   prix:      [],  // [{date, foi, bas, moy, haut}] depuis Suivi_Marche
   incidents: [],  // { date, id, type, grav, desc, act, clos } — chargées depuis Vague 2
@@ -6544,6 +6814,7 @@ function viewDash(){
       :MOCK.treso>(CYCLE.alerteSeuilTreso||100000)
       ?'<div class="al al-o">⚠️ Trésorerie '+Math.round(MOCK.treso/1000)+'k — en baisse'+(_budgetJour!==null&&_budgetJourCible?' · '+fmt(_budgetJour)+' FCFA/j brûlés':'')+'</div>'
       :'<div class="al al-r">🔴 Trésorerie '+Math.round(MOCK.treso/1000)+'k — SOUS LE PLANCHER ('+Math.round((CYCLE.alerteSeuilTreso||100000)/1000)+'k)'+(_budgetJour!==null&&_budgetJourCible?' · '+fmt(_budgetJour)+' FCFA/j brûlés':'')+'</div>')
+    +_venteCnaasBannerHtml()
     +(_alertGmqChute ? '<div class="al al-r">📉 Alerte : GMQ en chute 2 semaines consécutives — vérifier alimentation et état de santé.</div>' : '')
     +(_alertFinCycle ? '<div class="al al-o">⏰ Fin de cycle dans '+_semRest+' sem. — préparer la vente dès maintenant.</div>' : '')
     +(_alertMeteo ? '<div class="al al-o">🌡️ Chaleur extrême '+METEO.temp+'°C — Augmenter les points d\'eau et l\'ombrage.</div>' : '')
@@ -9404,8 +9675,20 @@ function viewMarche(){
         }).join('')
         +'</div>'
       : '';
+    var _pendingVenteTasks = _getVenteCnaasTasks().filter(function(t){ return t.status !== 'DONE'; });
+    var _venteCnaasInfo = _pendingVenteTasks.length
+      ? '<div class="card" style="margin-bottom:12px;background:#1a1500;border-color:#8a5a00">'
+        +'<div style="font-size:11px;color:#C8A06A;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Assurance CNAAS</div>'
+        +'<div style="font-size:12px;color:#ccc;line-height:1.6">'
+        +_pendingVenteTasks.length+' vente(s) enregistrée(s) attendent encore l\'appel RGA à la CNAAS pour retrait de garantie.'
+        +'</div>'
+        +'</div>'
+      : '<div class="card" style="margin-bottom:12px;background:#0f1f0f;border-color:#2d6a2d">'
+        +'<div style="font-size:11px;color:#88aa88;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Assurance CNAAS</div>'
+        +'<div style="font-size:12px;color:#ccc;line-height:1.6">Chaque vente crée une action RGA: appeler la CNAAS pour retirer la bête vendue du contrat.</div>'
+        +'</div>';
 
-    view = _histVentes
+    view = _histVentes + _venteCnaasInfo
       +'<div class="card">'
       +'<div style="font-size:13px;color:#88aa88;margin-bottom:14px;display:flex;align-items:center;gap:8px"><span style="font-size:18px">💚</span> Enregistrer une vente</div>'
       +(_bActV.length === 0
