@@ -6054,22 +6054,37 @@ function submitCloseInc() {
           +'/values/'+enc+'!A'+rowIdx+':G'+rowIdx+'?valueInputOption=USER_ENTERED';
         return fetch(url, { method:'PUT',
           headers:{ Authorization:'Bearer '+tk, 'Content-Type':'application/json' },
-          body: JSON.stringify({ values:[newRow] }) });
-      }).map(function(req){
-        return req.then(function(res){
-          return res.json().catch(function(){ return {}; });
-        }).then(function(d){
-          if (d && d.error) throw new Error(d.error.message || 'Échec écriture Sheets');
-          return d;
-        });
+          body: JSON.stringify({ values:[newRow] }) })
+          .then(function(res){
+            return res.json().catch(function(){ return {}; }).then(function(d){
+              if (d && d.error) {
+                return { ok:false, sid:sid, err:String(d.error.message || 'Échec écriture Sheets') };
+              }
+              return { ok:true, sid:sid };
+            });
+          })
+          .catch(function(e){
+            return { ok:false, sid:sid, err:String((e && e.message) || e || 'Erreur réseau') };
+          });
       });
       return Promise.all(ps);
-    }).then(function() {
+    }).then(function(results) {
+      var oks = (results || []).filter(function(x){ return x && x.ok; });
+      var errs = (results || []).filter(function(x){ return !x || !x.ok; });
+      if (!oks.length) {
+        var errMsg = errs.length ? (errs[0].err || 'Erreur sync Sheets') : 'Erreur sync Sheets';
+        throw new Error(errMsg);
+      }
       LIVE.incidents[ci.idx].act  = actNote;
       LIVE.incidents[ci.idx].clos = 'OUI';
       S.sending = false;
       S._closeInc = null;
-      setStatusMsg('✅ Incident clôturé', 3000);
+      if (errs.length) {
+        setStatusMsg('ok:✅ Incident clôturé (sync partielle: '+oks.length+'/'+(results||[]).length+')', 5500);
+        console.warn('[inc-close] sync partielle', errs);
+      } else {
+        setStatusMsg('✅ Incident clôturé', 3000);
+      }
     }).catch(function(e) {
       S.sending = false;
       S.msg = '❌ ' + (e.message || 'Erreur réseau');
