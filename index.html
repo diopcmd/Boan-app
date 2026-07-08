@@ -213,18 +213,20 @@ body.light .act div div[style*="color:#555"]{color:#778877 !important}
 .step-dot{width:8px;height:8px;border-radius:50%;background:#2a4a2a;transition:background .2s}
 .step-dot.on{background:#C8A06A}
 /* SWIPE TRANSITIONS */
-.tab-wrap{overflow:hidden;position:relative}
-.tab-content{will-change:transform}
-.slide-left{animation:slideLeft .28s cubic-bezier(.4,0,.2,1) forwards}
-.slide-right{animation:slideRight .28s cubic-bezier(.4,0,.2,1) forwards}
-.slide-in-left{animation:slideInLeft .28s cubic-bezier(.4,0,.2,1) forwards}
-.slide-in-right{animation:slideInRight .28s cubic-bezier(.4,0,.2,1) forwards}
-.tab-fade-in{animation:tabFadeIn .22s ease both}
-@keyframes tabFadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
-@keyframes slideLeft{to{transform:translateX(-100%);opacity:0}}
-@keyframes slideRight{to{transform:translateX(100%);opacity:0}}
-@keyframes slideInLeft{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
-@keyframes slideInRight{from{transform:translateX(-100%);opacity:0}to{transform:translateX(0);opacity:1}}
+.tab-wrap{overflow:hidden;position:relative;perspective:900px}
+.tab-content{will-change:transform,opacity,filter;transform-origin:50% 50%}
+.slide-left{animation:slideLeft .32s cubic-bezier(.22,.75,.2,1) forwards}
+.slide-right{animation:slideRight .32s cubic-bezier(.22,.75,.2,1) forwards}
+.slide-in-left{animation:slideInLeft .34s cubic-bezier(.22,.8,.2,1) both}
+.slide-in-right{animation:slideInRight .34s cubic-bezier(.22,.8,.2,1) both}
+.tab-fade-in{animation:tabFadeIn .26s cubic-bezier(.22,.8,.2,1) both}
+.tab-fade-soft{animation:tabFadeSoft .24s cubic-bezier(.22,.8,.2,1) both}
+@keyframes tabFadeIn{from{opacity:0;transform:translateY(8px) scale(.994);filter:blur(1.2px)}to{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}}
+@keyframes tabFadeSoft{from{opacity:0;transform:translateY(4px) scale(.996);filter:blur(.8px)}to{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}}
+@keyframes slideLeft{to{transform:translateX(-22%) scale(.992);opacity:0;filter:blur(1.5px)}}
+@keyframes slideRight{to{transform:translateX(22%) scale(.992);opacity:0;filter:blur(1.5px)}}
+@keyframes slideInLeft{from{transform:translateX(24%) scale(.994);opacity:0;filter:blur(1.8px)}to{transform:translateX(0) scale(1);opacity:1;filter:blur(0)}}
+@keyframes slideInRight{from{transform:translateX(-24%) scale(.994);opacity:0;filter:blur(1.8px)}to{transform:translateX(0) scale(1);opacity:1;filter:blur(0)}}
 /* PROGRESS BAR SAISIE */
 .form-progress{height:3px;background:#1a3a1a;border-radius:2px;margin-bottom:14px;overflow:hidden}
 .form-progress-fill{height:3px;background:linear-gradient(90deg,#2d6a2d,#C8A06A);border-radius:2px;transition:width .3s ease}
@@ -3923,6 +3925,22 @@ function chTabSwipe(t, dir) {
   }, 290);
 }
 
+function _animateTabContent(kind) {
+  setTimeout(function(){
+    var wrap = document.getElementById('tab-content');
+    if (!wrap) { initSwipe(); return; }
+    if (kind === 'sub') {
+      wrap.classList.add('tab-fade-soft');
+    } else if (SWIPE.dir !== 0) {
+      wrap.classList.add(SWIPE.dir===-1 ? 'slide-in-left' : 'slide-in-right');
+      SWIPE.dir = 0;
+    } else {
+      wrap.classList.add('tab-fade-in');
+    }
+    initSwipe();
+  }, 10);
+}
+
 function chTab(t){
   S.tab=t; S.msg=''; S.dd=false;
   S.sub=t==='saisie'?'fiche':t==='livrables'?'treso':t==='marche'?'prix':'';
@@ -3931,23 +3949,11 @@ function chTab(t){
   if(t==='marche' && !S.falim.date) S.falim.date = todayISO();
   if(t==='marche' && !S.fm.date)    S.fm.date    = todayISO();
   r();
-  // Animer entrée après rendu
-  setTimeout(function(){
-    var wrap = document.getElementById('tab-content');
-    if (wrap) {
-      if (SWIPE.dir !== 0) {
-        wrap.classList.add(SWIPE.dir===-1 ? 'slide-in-left' : 'slide-in-right');
-        SWIPE.dir = 0;
-      } else {
-        wrap.classList.add('tab-fade-in');
-      }
-    }
-    initSwipe();
-  }, 10);
+  _animateTabContent('tab');
 }
 function chSub(s){
   if (s==='protocole' && S.user !== 'fondateur') return;
-  S.sub=s; S.msg=''; r(); setTimeout(initSwipe,10);
+  S.sub=s; S.msg=''; r(); _animateTabContent('sub');
   _saveNavState();
   // Auto-sync SOP_Protocol sheet à la première ouverture de l'onglet SOP Véto
   if ((s==='sopvet'||s==='protocole') && !S._sopSyncDone) {
