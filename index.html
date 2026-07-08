@@ -155,6 +155,14 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 .sb-tab.on{background:#1a3a1a;color:#fff;border-color:#2a4a2a}
 .sb-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 16px}
 .sb-body::-webkit-scrollbar{display:none}
+@keyframes sbSwapInRight{from{opacity:0;transform:translateX(18px) scale(.992)}to{opacity:1;transform:translateX(0) scale(1)}}
+@keyframes sbSwapInLeft{from{opacity:0;transform:translateX(-18px) scale(.992)}to{opacity:1;transform:translateX(0) scale(1)}}
+@keyframes sbSwapInFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.sb-body.sb-swap-left{animation:sbSwapInLeft .26s cubic-bezier(.22,.8,.2,1) both}
+.sb-body.sb-swap-right{animation:sbSwapInRight .26s cubic-bezier(.22,.8,.2,1) both}
+.sb-body.sb-swap-fade{animation:sbSwapInFade .24s ease both}
+.sb-body.sb-swap-left .sb-card,.sb-body.sb-swap-right .sb-card,.sb-body.sb-swap-fade .sb-card{animation:fadeInUp .24s ease both}
+.sb-body.sb-swap-left .sb-shortcut,.sb-body.sb-swap-right .sb-shortcut,.sb-body.sb-swap-fade .sb-shortcut{animation:fadeInUp .28s ease both}
 .sb-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #0f1f0f;font-size:13px}
 .sb-row:last-child{border-bottom:none}
 .stock-item{display:flex;align-items:center;padding:10px 12px;border-radius:8px;border:1px solid #2a4a2a;margin-bottom:6px;background:#1a2e1a}
@@ -1508,9 +1516,12 @@ function _maybeNotifyRgaVenteMessage() {
   if (!pending.length) return;
   var latest = pending[0];
   var key = _venteCnaasTaskKey(latest);
-  var seenKey = lsGet('rga_last_vente_notice_key') || '';
-  if (key === seenKey) return;
-  lsSet('rga_last_vente_notice_key', key);
+  var nowMs = Date.now();
+  var sameKey = S._rgaLastVenteNoticeKey === key;
+  var tooSoon = S._rgaLastVenteNoticeTs && (nowMs - S._rgaLastVenteNoticeTs) < (45 * 60 * 1000);
+  if (sameKey && tooSoon) return;
+  S._rgaLastVenteNoticeKey = key;
+  S._rgaLastVenteNoticeTs = nowMs;
   setStatusMsg('ok:🔔 Nouvelle vente '+(latest.id||'')+' enregistrée — action CNAAS requise', 6500);
 }
 
@@ -1862,7 +1873,22 @@ function gc(t,v) {
   return '#4caf50';
 }
 
-function openSB() { SB.open=true; SB.closing=false; SB.tab='today'; METEO.loaded=false; r(); }
+function _sbAnimClass() {
+  if (!SB || !SB._animUntil) return '';
+  return Date.now() < SB._animUntil ? (SB._animClass || '') : '';
+}
+function sbSetTab(tab) {
+  if (!SB || !tab) return;
+  if (SB.tab === tab) return;
+  var order = {today:0, week:1, month:2, cycle:3};
+  var from = order[SB.tab];
+  var to = order[tab];
+  SB._animClass = (typeof from === 'number' && typeof to === 'number' && to >= from) ? 'sb-swap-right' : 'sb-swap-left';
+  SB._animUntil = Date.now() + 360;
+  SB.tab = tab;
+  r();
+}
+function openSB() { SB.open=true; SB.closing=false; SB.tab='today'; SB._animClass='sb-swap-fade'; SB._animUntil=Date.now()+320; METEO.loaded=false; r(); }
 function closeSB() {
   SB.closing=true; r();
   setTimeout(function(){ SB.open=false; SB.closing=false; r(); }, 200);
@@ -6409,7 +6435,7 @@ function buildSidebar(){
   // Tabs sidebar
   var tabs=[['today',"Auj."],['week','Semaine'],['month','Mois'],['cycle','Cycle']];
   var tabsHtml=tabs.map(function(t){
-    return'<div class="sb-tab'+(SB.tab===t[0]?' on':'')+'" onclick="SB.tab=\''+t[0]+'\';r()">'+t[1]+'</div>';
+    return'<div class="sb-tab'+(SB.tab===t[0]?' on':'')+'" onclick="sbSetTab(\''+t[0]+'\')">'+t[1]+'</div>';
   }).join('');
 
   var body = '';
@@ -6856,6 +6882,7 @@ function buildSidebar(){
       body='<div class="sb-card">'
         +(function(){ var td2=today(); var _nd48h=_nowDakar();var _y48h=new Date(_nd48h.year,_nd48h.month-1,_nd48h.day-1);var _yest48=(_y48h.getDate()<10?'0':'')+_y48h.getDate()+'/'+((_y48h.getMonth()+1)<10?'0':'')+(_y48h.getMonth()+1)+'/'+_y48h.getFullYear(); var ok=HISTORY.some(function(h){return (h.type==='fiche'||h.type==='pesee'||h.type==='sante'||h.type==='inc')&&(h.date===td2||h.date===_yest48);}); return '<div class="sb-row"><span class="sb-lbl">Données reçues</span><span class="'+(ok?'sb-ok':'sb-ko')+'">'+(ok?'reçues ✓':'en attente ✗')+'</span></div>'; })()
         +(function(){ var gmqOk=MOCK.gmq>=(CYCLE.gmqCible||1); var stkOk=(MOCK.stock>0?MOCK.stock:calcStockLocal())>=6; var ok=gmqOk&&stkOk; return '<div class="sb-row"><span class="sb-lbl">KPI cycle</span><span class="sb-val '+(ok?'kval-ok':'kval-crit')+'">'+(ok?'conforme ✓':'à revoir ✗')+'</span></div>'; })()
+        +(function(){ var _pv=_getVenteCnaasTasks().filter(function(t){ return t.status!=='DONE'; }).length; return '<div class="sb-row" onclick="chTab(\'livrables\');chSub(\'ventes\');closeSB()" style="cursor:pointer"><span class="sb-lbl">📞 Ventes CNAAS</span><span class="sb-val '+(_pv>0?'sb-ko':'sb-ok')+'">'+(_pv>0?_pv+' à traiter →':'aucune ✓')+'</span></div>'; })()
         +'</div>'
         +'<div class="sb-shortcut" onclick="chTab(\'livrables\');chSub(\'kpi\');closeSB()">'
         +'<div class="sb-shortcut-ico" style="background:#1a3a1a">📊</div>'
@@ -6910,7 +6937,7 @@ function buildSidebar(){
     +'</div></div>'
     +'</div>'
     +'<div class="sb-tabs">'+tabsHtml+'</div>'
-    +'<div class="sb-body">'+body
+    +'<div class="sb-body'+(_sbAnimClass()?' '+_sbAnimClass():'')+'">'+body
     +'<div style="margin-top:14px;padding-top:12px;border-top:1px solid #1a3a1a">'
     +((u==='fondateur'||u==='commerciale'||u==='rga')
       ? '<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0 8px">'
