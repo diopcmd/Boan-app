@@ -5996,6 +5996,41 @@ function closeIncident(i) {
   r();
 }
 
+function _normCell(v) {
+  return String(v || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function _frDateLoose(v) {
+  var s = String(v || '').trim();
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return isoToFr(s);
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
+  return s;
+}
+
+function _resolveIncidentRowIdx(rows, inc, startRow) {
+  var fallback = -1;
+  var targetDate = _frDateLoose(inc.date);
+  var targetId = _normCell(inc.id);
+  var targetType = _normCell(inc.type);
+  var targetGrav = _normCell(inc.grav);
+  var targetDesc = _normCell(inc.desc);
+  for (var i = 0; i < (rows || []).length; i++) {
+    var row = rows[i] || [];
+    var sameCore = _frDateLoose(row[0]) === targetDate
+      && _normCell(row[1]) === targetId
+      && _normCell(row[2]) === targetType;
+    if (!sameCore) continue;
+
+    var rowIsOpen = _normCell(row[6]) !== 'oui';
+    if (fallback < 0 && rowIsOpen) fallback = startRow + i;
+
+    var sameStrong = _normCell(row[3]) === targetGrav && _normCell(row[4]) === targetDesc;
+    if (sameStrong && rowIsOpen) return startRow + i;
+  }
+  return fallback;
+}
+
 // Écrit la clôture dans Google Sheets (gérant + fondateur + rga) en trouvant la ligne exacte
 function submitCloseInc() {
   var ci = S._closeInc;
@@ -6008,14 +6043,8 @@ function submitCloseInc() {
   S.sending = true; r();
   getTok().then(function(tk) {
     if (!tk) { S.sending = false; S.msg = '❌ Token invalide'; r(); return; }
-    readSheet(sidHisto, 'Incidents!A4:G200').then(function(rows) {
-      var rowIdx = -1;
-      (rows || []).forEach(function(row, i) {
-        if (rowIdx >= 0) return;
-        if (row[0] === inc.date && (row[1]||'') === inc.id && (row[2]||'') === inc.type) {
-          rowIdx = 4 + i;
-        }
-      });
+    readSheet(sidHisto, 'Incidents!A4:G500').then(function(rows) {
+      var rowIdx = _resolveIncidentRowIdx(rows, inc, 4);
       if (rowIdx < 0) { S.sending = false; S.msg = '❌ Ligne introuvable dans Sheets'; r(); return; }
       var newRow = [inc.date, inc.id, inc.type, inc.grav, inc.desc, actNote, 'OUI'];
       var enc = encodeURIComponent('Incidents');
@@ -6026,6 +6055,13 @@ function submitCloseInc() {
         return fetch(url, { method:'PUT',
           headers:{ Authorization:'Bearer '+tk, 'Content-Type':'application/json' },
           body: JSON.stringify({ values:[newRow] }) });
+      }).map(function(req){
+        return req.then(function(res){
+          return res.json().catch(function(){ return {}; });
+        }).then(function(d){
+          if (d && d.error) throw new Error(d.error.message || 'Échec écriture Sheets');
+          return d;
+        });
       });
       return Promise.all(ps);
     }).then(function() {
@@ -7682,7 +7718,7 @@ function viewSaisie(){
               +'<span style="font-weight:700;color:#cfc">'+inc.id+'</span>'
               +'<span style="flex:1;color:#bbb;font-size:12px">'+inc.type+'</span>'
               +'<span class="sb-val '+gCl+'" style="font-size:11px">G'+inc.grav+'</span>'
-              +(closing ? '' : '<button onclick="closeIncident('+origIdx+')" style="font-size:11px;padding:4px 10px;background:#1a2e1a;color:#8bc98b;border:1px solid #3a5a3a;border-radius:5px;cursor:pointer">Clôturer</button>')
+              +(closing ? '' : '<button onclick="closeIncident('+origIdx+')" style="width:auto;white-space:nowrap;font-size:11px;padding:4px 10px;background:#1a2e1a;color:#8bc98b;border:1px solid #3a5a3a;border-radius:5px;cursor:pointer">Clôturer</button>')
               +'</div>'
               +(inc.desc ? '<div style="font-size:12px;color:#99aa88;margin-top:3px;padding-left:2px">'+inc.desc+'</div>' : '')
               +(closing
@@ -7692,7 +7728,7 @@ function viewSaisie(){
                   +'oninput="S._closeInc.act=this.value">'+((ci&&ci.act)||'')+'</textarea>'
                   +'<div style="display:flex;gap:8px;margin-top:6px">'
                   +'<button onclick="submitCloseInc()" '+(S.sending?'disabled':'')+' style="flex:1;font-size:12px;padding:7px 0;background:#2e5a1e;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700">✓ Confirmer clôture</button>'
-                  +'<button onclick="S._closeInc=null;r()" style="padding:7px 12px;font-size:12px;background:#201414;color:#cc7777;border:1px solid #6a3a3a;border-radius:6px;cursor:pointer">Annuler</button>'
+                  +'<button onclick="S._closeInc=null;r()" style="width:auto;white-space:nowrap;padding:7px 10px;font-size:11px;background:#201414;color:#cc7777;border:1px solid #6a3a3a;border-radius:6px;cursor:pointer">Annuler</button>'
                   +'</div>'
                   +'</div>'
                 : '')
@@ -8759,7 +8795,7 @@ function viewLiv(){
           +'<span style="font-weight:700;color:#cfc;font-size:13px">'+inc.id+'</span>'
           +'<span style="flex:1;color:#bbb;font-size:12px">'+inc.type+'</span>'
           +'<span class="sb-val '+gCl2+'" style="font-size:11px">G'+inc.grav+' '+gravLbl[inc.grav]+'</span>'
-          +(inc.clos!=='OUI' ? '<button onclick="closeIncident('+origIdx+')" style="font-size:11px;padding:4px 10px;background:#1a2e1a;color:#8bc98b;border:1px solid #3a5a3a;border-radius:5px;cursor:pointer">Clôturer</button>' : '<span style="font-size:11px;color:#4caf50">✓ Clôturé</span>')
+          +(inc.clos!=='OUI' ? '<button onclick="closeIncident('+origIdx+')" style="width:auto;white-space:nowrap;font-size:11px;padding:4px 10px;background:#1a2e1a;color:#8bc98b;border:1px solid #3a5a3a;border-radius:5px;cursor:pointer">Clôturer</button>' : '<span style="font-size:11px;color:#4caf50">✓ Clôturé</span>')
           +'</div>'
           +(inc.desc ? '<div style="font-size:12px;color:#99aa88;margin-top:3px">'+inc.desc+'</div>' : '')
           +(inc.act  ? '<div style="font-size:11px;color:#6a8a6a;margin-top:2px">→ '+inc.act+'</div>' : '')
@@ -8770,7 +8806,7 @@ function viewLiv(){
               +'oninput="S._closeInc.act=this.value">'+(ci2&&ci2.act||'')+'</textarea>'
               +'<div style="display:flex;gap:8px;margin-top:6px">'
               +'<button onclick="submitCloseInc()" '+(S.sending?'disabled':'')+' style="flex:1;font-size:12px;padding:7px 0;background:#2e5a1e;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700">✓ Confirmer clôture</button>'
-              +'<button onclick="S._closeInc=null;r()" style="padding:7px 12px;font-size:12px;background:#201414;color:#cc7777;border:1px solid #6a3a3a;border-radius:6px;cursor:pointer">Annuler</button>'
+              +'<button onclick="S._closeInc=null;r()" style="width:auto;white-space:nowrap;padding:7px 10px;font-size:11px;background:#201414;color:#cc7777;border:1px solid #6a3a3a;border-radius:6px;cursor:pointer">Annuler</button>'
               +'</div></div>'
             : '')
           +'</div>';
