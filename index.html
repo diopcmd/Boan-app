@@ -1370,6 +1370,38 @@ function _getVenteCnaasTasks() {
   var liveTasks = (LIVE.venteCnaas || []).filter(_taskBelongsToCurrentCycle);
   return _mergeVenteCnaasTasks(liveTasks, localTasks);
 }
+function _getVenteCnaasPendingTasks() {
+  var tasks = _getVenteCnaasTasks();
+  var pending = tasks.filter(function(t){ return t.status !== 'DONE'; });
+  if (pending.length) return pending;
+
+  var ventes = (LIVE.ventes || []).filter(function(v){ return !!(v && v.id && v.date); });
+  if (!ventes.length) return [];
+
+  var doneMap = {};
+  tasks.filter(function(t){ return t.status === 'DONE'; }).forEach(function(t){
+    doneMap[(t.id||'') + '|' + (t.dateVente||'')] = 1;
+  });
+
+  var synth = ventes.filter(function(v){
+    return !doneMap[(v.id||'') + '|' + (v.date||'')];
+  }).map(function(v){
+    return _cloneVenteCnaasTask({
+      dateVente: v.date || '',
+      id: v.id || '',
+      race: v.race || '',
+      acheteur: v.acheteur || '',
+      total: v.total || 0,
+      status: 'PENDING',
+      cnaasCalledAt: '',
+      cnaasAgent: '',
+      cycleDebut: CYCLE.dateDebut || '',
+      createdAt: Date.now() - 1000,
+      _fallback: true
+    });
+  });
+  return synth;
+}
 function _saveVenteCnaasTasks(tasks) {
   lsSet('vente_cnaas_tasks', tasks || []);
 }
@@ -1476,7 +1508,7 @@ function _markVenteCnaasDone(id, dateVente) {
 }
 function _venteCnaasBannerHtml() {
   if (S.user !== 'rga') return '';
-  var tasks = _getVenteCnaasTasks().filter(function(t){ return t.status !== 'DONE'; });
+  var tasks = _getVenteCnaasPendingTasks();
   if (!tasks.length) return '';
   var cnaasContact = _findContactByType('CNAAS', false);
   var cnaasTelRaw = (cnaasContact && (cnaasContact.tel1 || cnaasContact.whatsapp || cnaasContact.tel2)) || lsGet('cfg_contact_cnaas_tel') || '';
@@ -1496,11 +1528,14 @@ function _venteCnaasBannerHtml() {
       + (overdue ? 'En attente depuis ' + h + 'h — priorité haute' : 'À traiter sous 24h')
       + '</div>'
       + '</div>'
-      + '<div style="display:flex;flex-direction:column;gap:6px;min-width:118px">'
+        + '<div style="display:flex;flex-direction:column;gap:6px;min-width:118px">'
       + (cnaasTel ? '<a href="tel:+' + cnaasTel + '" style="background:#7a3a10;color:#fff;text-decoration:none;padding:6px 8px;border-radius:6px;font-size:11px;text-align:center">Appeler CNAAS</a>' : '')
-      + '<button type="button" onclick="_markVenteCnaasDone(\'' + t.id.replace(/'/g,"\\'") + '\',\'' + t.dateVente.replace(/'/g,"\\'") + '\')" style="background:#1a3a1a;color:#88dd88;border:1px solid #2d6a2d;padding:6px 8px;border-radius:6px;font-size:11px;cursor:pointer">✓ Appel fait</button>'
+        + (t._fallback
+          ? '<button type="button" disabled style="opacity:.55;background:#1a3a1a;color:#88dd88;border:1px solid #2d6a2d;padding:6px 8px;border-radius:6px;font-size:11px;cursor:not-allowed">✓ Appel fait</button>'
+          : '<button type="button" onclick="_markVenteCnaasDone(\'' + t.id.replace(/'/g,"\\'") + '\',\'' + t.dateVente.replace(/'/g,"\\'") + '\')" style="background:#1a3a1a;color:#88dd88;border:1px solid #2d6a2d;padding:6px 8px;border-radius:6px;font-size:11px;cursor:pointer">✓ Appel fait</button>')
       + '</div>'
       + '</div>'
+        + (t._fallback ? '<div style="font-size:10px;color:#ffb74d;margin-top:6px">Suivi CNAAS non synchronisé: alerte basée sur les ventes enregistrées.</div>' : '')
       + '</div>';
   }).join('');
   var more = tasks.length > 3 ? '<div style="font-size:10px;color:#7a9a7a;margin-top:6px;text-align:right">+' + (tasks.length - 3) + ' autre(s) vente(s) en attente</div>' : '';
@@ -1513,7 +1548,7 @@ function _venteCnaasBannerHtml() {
 
 function _maybeNotifyRgaVenteMessage() {
   if (S.user !== 'rga') return;
-  var pending = _getVenteCnaasTasks().filter(function(t){ return t.status !== 'DONE'; });
+  var pending = _getVenteCnaasPendingTasks();
   if (!pending.length) return;
   var latest = pending[0];
   var key = _venteCnaasTaskKey(latest);
@@ -1523,7 +1558,7 @@ function _maybeNotifyRgaVenteMessage() {
   if (sameKey && tooSoon) return;
   S._rgaLastVenteNoticeKey = key;
   S._rgaLastVenteNoticeTs = nowMs;
-  setStatusMsg('ok:🔔 Nouvelle vente '+(latest.id||'')+' enregistrée — action CNAAS requise', 6500);
+  setStatusMsg('ok:🔔 Vente '+(latest.id||'')+' à traiter — appeler la CNAAS', 6500);
 }
 
 // Anti-doublon fiche du jour
@@ -6894,7 +6929,7 @@ function buildSidebar(){
       body='<div class="sb-card">'
         +(function(){ var td2=today(); var _nd48h=_nowDakar();var _y48h=new Date(_nd48h.year,_nd48h.month-1,_nd48h.day-1);var _yest48=(_y48h.getDate()<10?'0':'')+_y48h.getDate()+'/'+((_y48h.getMonth()+1)<10?'0':'')+(_y48h.getMonth()+1)+'/'+_y48h.getFullYear(); var ok=HISTORY.some(function(h){return (h.type==='fiche'||h.type==='pesee'||h.type==='sante'||h.type==='inc')&&(h.date===td2||h.date===_yest48);}); return '<div class="sb-row"><span class="sb-lbl">Données reçues</span><span class="'+(ok?'sb-ok':'sb-ko')+'">'+(ok?'reçues ✓':'en attente ✗')+'</span></div>'; })()
         +(function(){ var gmqOk=MOCK.gmq>=(CYCLE.gmqCible||1); var stkOk=(MOCK.stock>0?MOCK.stock:calcStockLocal())>=6; var ok=gmqOk&&stkOk; return '<div class="sb-row"><span class="sb-lbl">KPI cycle</span><span class="sb-val '+(ok?'kval-ok':'kval-crit')+'">'+(ok?'conforme ✓':'à revoir ✗')+'</span></div>'; })()
-        +(function(){ var _pv=_getVenteCnaasTasks().filter(function(t){ return t.status!=='DONE'; }).length; return '<div class="sb-row" onclick="chTab(\'livrables\');chSub(\'ventes\');closeSB()" style="cursor:pointer"><span class="sb-lbl">📞 Ventes CNAAS</span><span class="sb-val '+(_pv>0?'sb-ko':'sb-ok')+'">'+(_pv>0?_pv+' à traiter →':'aucune ✓')+'</span></div>'; })()
+        +(function(){ var _pv=_getVenteCnaasPendingTasks().length; return '<div class="sb-row" onclick="chTab(\'livrables\');chSub(\'ventes\');closeSB()" style="cursor:pointer"><span class="sb-lbl">📞 Ventes CNAAS</span><span class="sb-val '+(_pv>0?'sb-ko':'sb-ok')+'">'+(_pv>0?_pv+' à traiter →':'aucune ✓')+'</span></div>'; })()
         +'</div>'
         +'<div class="sb-shortcut" onclick="chTab(\'livrables\');chSub(\'kpi\');closeSB()">'
         +'<div class="sb-shortcut-ico" style="background:#1a3a1a">📊</div>'
