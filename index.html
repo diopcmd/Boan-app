@@ -731,6 +731,28 @@ function _parseContactTs(s) {
 function _saveContactDrafts() {
   lsSet('contacts_drafts', CONTACT_DRAFTS || {});
 }
+function _ensureContactsOpenState() {
+  if (!S._contactsOpen || typeof S._contactsOpen !== 'object') {
+    S._contactsOpen = lsGet('contacts_open') || {CNAAS:true, VETERINAIRE:false, GENDARMERIE:false, URGENCE:false};
+  }
+  CONTACT_TYPES.forEach(function(type){
+    if (typeof S._contactsOpen[type] !== 'boolean') S._contactsOpen[type] = (type === 'CNAAS');
+  });
+  return S._contactsOpen;
+}
+function _isContactSectionOpen(type) {
+  type = String(type || 'CNAAS').toUpperCase();
+  var st = _ensureContactsOpenState();
+  return !!st[type];
+}
+function _toggleContactSection(type) {
+  type = String(type || 'CNAAS').toUpperCase();
+  var st = _ensureContactsOpenState();
+  st[type] = !st[type];
+  S._contactsOpen = st;
+  lsSet('contacts_open', st);
+  r();
+}
 function _saveContactsLocal(rows) {
   lsSet('contacts_refs', rows || []);
 }
@@ -789,7 +811,6 @@ function _setContactDraft(type, key, value) {
   d[key] = String(value || '');
   CONTACT_DRAFTS[type] = _cloneContactRef(d);
   _saveContactDrafts();
-  r();
 }
 function _writeContactsHeaders(sid) {
   if (!sid) return Promise.resolve({ok:false, err:'SID absent'});
@@ -1758,6 +1779,7 @@ var S = {
   _aiOpen:false, _aiLoading:false, _aiResult:'', _aiError:'', _aiQuestion:'',
   _clotureOpen: false, _clotureData: null,
   _cycleExpanded: {},
+  _contactsOpen: lsGet('contacts_open') || {CNAAS:true, VETERINAIRE:false, GENDARMERIE:false, URGENCE:false},
   selectedBete: null,
   _donePesee:[], _doneSante:[], _doneInc:[],
   _sopSyncDone: false,
@@ -8741,45 +8763,55 @@ function viewLiv(){
         var active = _findContactByType(type, false);
         var latest = _findContactByType(type, true);
         var isActive = !!active;
+        var isOpen = _isContactSectionOpen(type);
         var statusCol = isActive ? '#4caf50' : (latest ? '#ff9800' : '#7a9a7a');
         var statusTxt = isActive ? 'Active' : (latest ? 'Inactive' : 'Non renseignée');
         var updatedTxt = latest && latest.updatedAt ? ('Mise à jour: ' + _escHtml(latest.updatedAt) + (latest.updatedBy ? (' · par ' + _escHtml(latest.updatedBy)) : '')) : 'Aucune fiche enregistrée';
-        return '<div class="card" style="margin-bottom:12px">'
-          +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">'
-            +'<div>'
-              +'<div class="stitle" style="margin-bottom:2px">'+spec.ico+' '+_contactTypeLabel(type)+'</div>'
-              +'<div style="font-size:11px;color:#7a9a7a">'+_escHtml(spec.hint || '')+'</div>'
-            +'</div>'
-            +'<div style="font-size:11px;color:'+statusCol+';font-weight:700;background:#0a1a0a;border:1px solid '+statusCol+';padding:4px 8px;border-radius:999px">'+statusTxt+'</div>'
-          +'</div>'
-          +'<div style="font-size:10px;color:#7a9a7a;margin-bottom:10px">'+updatedTxt+'</div>'
-          +'<div class="frow">'
-            +_inputField(type, _contactReferenceLabel(type), 'referenceCode', type==='CNAAS'?'Ex: CNAAS-2026-00045':'Code/Ref interne')
-            +_inputField(type, 'Nom référence', 'name', type==='VETERINAIRE'?'Ex: Dr Ndiaye':'Ex: Mme Fall')
-          +'</div>'
-          +'<div class="frow">'
-            +_inputField(type, 'Organisation', 'organisation', type==='GENDARMERIE'?'Ex: Brigade Thiès':'Ex: CNAAS Thiès')
-            +_inputField(type, 'Zone', 'zone', 'Ex: Thiès / Keur Moussa')
-          +'</div>'
-          +'<div class="frow">'
-            +_inputField(type, 'Téléphone principal', 'tel1', 'Ex: +221771234567')
-            +_inputField(type, 'Téléphone secondaire', 'tel2', 'Ex: +221701234567')
-          +'</div>'
-          +'<div class="frow">'
-            +_inputField(type, 'WhatsApp', 'whatsapp', 'Ex: +221781234567')
-            +_inputField(type, 'Email', 'email', 'Ex: contact@service.sn')
-          +'</div>'
-          +_textareaField(type, 'Notes opérationnelles', 'notes', 'Procédure d\'appel, horaires, documents requis...')
-          +(_canEditContact
-            ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
-                +'<button class="btn" onclick="_saveContactType(\''+type+'\')">💾 Enregistrer</button>'
-                +(isActive
-                  ? '<button class="btn-sec" onclick="_disableContactType(\''+type+'\')" style="border-color:#8a0000;color:#ff9090">🗑 Désactiver</button>'
-                  : (latest ? '<button class="btn-sec" onclick="_reactivateContactType(\''+type+'\')">♻️ Réactiver</button>' : '')
-                )
+        return '<div class="card" style="margin-bottom:12px;padding:0;overflow:hidden;border-color:'+statusCol+'22">'
+          +'<button type="button" onclick="_toggleContactSection(\''+type+'\')" style="width:100%;background:linear-gradient(135deg,#0c170c,#111f11);border:none;color:inherit;padding:14px 14px 12px;cursor:pointer;text-align:left">'
+            +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
+              +'<div style="min-width:0">'
+                +'<div class="stitle" style="margin-bottom:2px">'+spec.ico+' '+_contactTypeLabel(type)+'</div>'
+                +'<div style="font-size:11px;color:#7a9a7a">'+_escHtml(spec.hint || '')+'</div>'
               +'</div>'
-            : '<div style="font-size:11px;color:#7a9a7a;margin-top:8px">Lecture seule</div>'
-          )
+              +'<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">'
+                +'<div style="font-size:11px;color:'+statusCol+';font-weight:700;background:#0a1a0a;border:1px solid '+statusCol+';padding:4px 8px;border-radius:999px">'+statusTxt+'</div>'
+                +'<span style="font-size:16px;color:#88aa88;transform:'+(isOpen?'rotate(90deg)':'rotate(0deg)')+';display:inline-block;transition:transform .22s ease">▶</span>'
+              +'</div>'
+            +'</div>'
+            +'<div style="font-size:10px;color:#7a9a7a;margin-top:6px">'+updatedTxt+'</div>'
+          +'</button>'
+          +'<div style="max-height:'+(isOpen?'1400px':'0')+';overflow:hidden;opacity:'+(isOpen?'1':'0')+';transition:max-height .28s ease, opacity .22s ease;background:#0a120a;border-top:1px solid #1a2e1a">'
+            +'<div style="padding:12px 14px">'
+              +'<div class="frow">'
+                +_inputField(type, _contactReferenceLabel(type), 'referenceCode', type==='CNAAS'?'Ex: CNAAS-2026-00045':'Code/Ref interne')
+                +_inputField(type, 'Nom référence', 'name', type==='VETERINAIRE'?'Ex: Dr Ndiaye':'Ex: Mme Fall')
+              +'</div>'
+              +'<div class="frow">'
+                +_inputField(type, 'Organisation', 'organisation', type==='GENDARMERIE'?'Ex: Brigade Thiès':'Ex: CNAAS Thiès')
+                +_inputField(type, 'Zone', 'zone', 'Ex: Thiès / Keur Moussa')
+              +'</div>'
+              +'<div class="frow">'
+                +_inputField(type, 'Téléphone principal', 'tel1', 'Ex: +221771234567')
+                +_inputField(type, 'Téléphone secondaire', 'tel2', 'Ex: +221701234567')
+              +'</div>'
+              +'<div class="frow">'
+                +_inputField(type, 'WhatsApp', 'whatsapp', 'Ex: +221781234567')
+                +_inputField(type, 'Email', 'email', 'Ex: contact@service.sn')
+              +'</div>'
+              +_textareaField(type, 'Notes opérationnelles', 'notes', 'Procédure d\'appel, horaires, documents requis...')
+              +(_canEditContact
+                ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
+                    +'<button class="btn" onclick="_saveContactType(\''+type+'\')">💾 Enregistrer</button>'
+                    +(isActive
+                      ? '<button class="btn-sec" onclick="_disableContactType(\''+type+'\')" style="border-color:#8a0000;color:#ff9090">🗑 Désactiver</button>'
+                      : (latest ? '<button class="btn-sec" onclick="_reactivateContactType(\''+type+'\')">♻️ Réactiver</button>' : '')
+                    )
+                  +'</div>'
+                : '<div style="font-size:11px;color:#7a9a7a;margin-top:8px">Lecture seule</div>'
+              )
+            +'</div>'
+          +'</div>'
           +'</div>';
       }
 
