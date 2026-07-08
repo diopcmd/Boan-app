@@ -63,11 +63,21 @@ button{width:100%;background:linear-gradient(135deg,#2d6a2d,#3a7a3a);color:#fff;
 button:hover{background:linear-gradient(135deg,#3a7a3a,#4a8a4a);box-shadow:0 4px 14px rgba(45,106,45,0.35)}
 button:disabled{background:#1a3a1a;color:#7a9a7a;box-shadow:none}
 @keyframes tapPop{0%{transform:scale(1)}40%{transform:scale(.965)}100%{transform:scale(1)}}
+@keyframes tapGlowAction{0%{box-shadow:0 1px 8px rgba(45,106,45,0.30)}55%{box-shadow:0 2px 18px rgba(76,175,80,0.55)}100%{box-shadow:0 1px 8px rgba(45,106,45,0.40)}}
+@keyframes tapShakeDanger{0%{transform:translateX(0) scale(1)}30%{transform:translateX(-1px) scale(.97)}60%{transform:translateX(1px) scale(.975)}100%{transform:translateX(0) scale(1)}}
+@keyframes tapSoftNeutral{0%{filter:brightness(1)}45%{filter:brightness(1.08)}100%{filter:brightness(1.02)}}
+@keyframes tapWaveNav{0%{box-shadow:0 0 0 rgba(90,120,90,0)}50%{box-shadow:0 0 0 6px rgba(90,120,90,0.16)}100%{box-shadow:0 0 0 rgba(90,120,90,0)}}
+@keyframes saveSweep{0%{transform:translateX(-140%) rotate(10deg);opacity:0}20%{opacity:.25}80%{opacity:.5}100%{transform:translateX(145%) rotate(10deg);opacity:0}}
+@keyframes saveTickPulse{0%{transform:translate(-50%,-50%) scale(.7);opacity:0}35%{transform:translate(-50%,-50%) scale(1.05);opacity:.95}100%{transform:translate(-50%,-50%) scale(1);opacity:.25}}
 .tap-fx{animation:tapPop .22s cubic-bezier(.2,.7,.2,1);filter:brightness(1.08)}
-.tap-fx-action{box-shadow:0 1px 8px rgba(45,106,45,0.45)!important;filter:brightness(1.12) saturate(1.06)}
-.tap-fx-danger{box-shadow:0 1px 8px rgba(180,40,40,0.42)!important;filter:brightness(1.06) saturate(1.08)}
-.tap-fx-neutral{box-shadow:0 1px 8px rgba(120,140,120,0.32)!important;filter:brightness(1.05)}
-.tap-fx-nav{box-shadow:0 1px 6px rgba(90,120,90,0.25)!important;filter:brightness(1.04)}
+.tap-fx-action{box-shadow:0 1px 8px rgba(45,106,45,0.45)!important;filter:brightness(1.12) saturate(1.06);animation:tapPop .22s cubic-bezier(.2,.7,.2,1),tapGlowAction .34s ease-out}
+.tap-fx-danger{box-shadow:0 1px 8px rgba(180,40,40,0.42)!important;filter:brightness(1.06) saturate(1.08);animation:tapShakeDanger .3s ease-out}
+.tap-fx-neutral{box-shadow:0 1px 8px rgba(120,140,120,0.32)!important;filter:brightness(1.05);animation:tapPop .2s cubic-bezier(.2,.7,.2,1),tapSoftNeutral .28s ease-out}
+.tap-fx-nav{box-shadow:0 1px 6px rgba(90,120,90,0.25)!important;filter:brightness(1.04);animation:tapPop .2s cubic-bezier(.2,.7,.2,1),tapWaveNav .32s ease-out}
+.tap-fx-save{box-shadow:0 2px 16px rgba(76,175,80,0.50)!important;filter:brightness(1.14) saturate(1.1)}
+button.tap-fx-save{position:relative;overflow:hidden;isolation:isolate}
+button.tap-fx-save::before{content:'';position:absolute;left:-25%;top:-35%;width:45%;height:170%;background:linear-gradient(90deg,rgba(200,160,106,0),rgba(200,160,106,.25),rgba(255,235,180,.55),rgba(200,160,106,.2),rgba(200,160,106,0));transform:translateX(-140%) rotate(10deg);pointer-events:none;animation:saveSweep .56s cubic-bezier(.22,.8,.2,1) both}
+button.tap-fx-save::after{content:'✓';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:1.06em;line-height:1;color:#f2ffe9;pointer-events:none;animation:saveTickPulse .52s cubic-bezier(.22,.8,.2,1) both}
 @keyframes resetSpinMid{0%{transform:translate(-50%,-50%) rotate(0deg) scale(1)}68%{transform:translate(-50%,-50%) rotate(250deg) scale(1.05)}100%{transform:translate(-50%,-50%) rotate(280deg) scale(1)}}
 button.tap-fx-reset-spin{position:relative}
 button.tap-fx-reset-spin::after{content:'↺';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:1.05em;line-height:1;pointer-events:none;opacity:.96;animation:resetSpinMid .46s cubic-bezier(.22,.8,.2,1) both}
@@ -3501,6 +3511,14 @@ function _tapFxType(el) {
   if (el.tagName === 'BUTTON') return 'action';
   return 'nav';
 }
+function _tapFxFlavor(el, fxType, txt) {
+  if (fxType === 'danger') return 'danger';
+  if ((el.tagName === 'BUTTON') && /réinitial|reinitial|reset/.test(txt)) return 'reset';
+  if (fxType === 'action' && /enregistrer|sauvegard|valider|soumettre|submit|confirmer|appel fait/.test(txt)) return 'save';
+  if (fxType === 'action') return 'action';
+  if (fxType === 'neutral') return 'neutral';
+  return 'nav';
+}
 function _wireTapFeedback() {
   if (_tapFxBound) return;
   _tapFxBound = true;
@@ -3513,21 +3531,25 @@ function _wireTapFeedback() {
 
     var fxType = _tapFxType(el);
     var txt = _tapControlText(el);
-    var isResetButton = (el.tagName === 'BUTTON') && /réinitial|reinitial|reset/.test(txt);
+    var fxFlavor = _tapFxFlavor(el, fxType, txt);
+    var isResetButton = fxFlavor === 'reset';
+    var isSaveButton = fxFlavor === 'save';
 
     el.classList.remove('tap-fx');
-    el.classList.remove('tap-fx-action','tap-fx-danger','tap-fx-neutral','tap-fx-nav','tap-fx-reset-spin');
+    el.classList.remove('tap-fx-action','tap-fx-danger','tap-fx-neutral','tap-fx-nav','tap-fx-save','tap-fx-reset-spin');
     // Force restart animation on rapid taps.
     void el.offsetWidth;
     el.classList.add('tap-fx');
     el.classList.add('tap-fx-' + fxType);
+    if (isSaveButton) el.classList.add('tap-fx-save');
     if (isResetButton) el.classList.add('tap-fx-reset-spin');
     setTimeout(function(){
-      try { el.classList.remove('tap-fx','tap-fx-action','tap-fx-danger','tap-fx-neutral','tap-fx-nav','tap-fx-reset-spin'); } catch(e) {}
-    }, isResetButton ? 500 : 230);
+      try { el.classList.remove('tap-fx','tap-fx-action','tap-fx-danger','tap-fx-neutral','tap-fx-nav','tap-fx-save','tap-fx-reset-spin'); } catch(e) {}
+    }, isResetButton ? 500 : (isSaveButton ? 560 : 230));
 
     if (el.tagName === 'BUTTON') {
       if (fxType === 'danger') haptic('error');
+      else if (isSaveButton) haptic('success');
       else if (fxType === 'action') haptic('confirm');
       else haptic();
     }
