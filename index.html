@@ -2392,7 +2392,7 @@ function loadLiveData() {
     // → Aucune dépendance entre les waves (cache est isolé par clé)
     // → Fusion = gain ~500-1000ms de latence
     var sidDataSource = sidGerant || sidFondateur;
-    var sidVentes = sidFondateur || SID.commerciale || sidDataSource;
+    var sidVentes = sidFondateur || SID.commerciale || SID.rga || sidDataSource;
     var sidHisto = sidGerant || sidFondateur;
     
     return Promise.all([
@@ -3226,7 +3226,7 @@ function _submitActual(type) {
         return _b ? (_b.race||'') : '';
       })();
       var _vRow = [td, f.id, _vRace, _vPoids, _vPxKg, _vTotal, f.acheteur, f.tel||'', f.mode||'CASH', f.ctx||'DIRECT', f.notes||''];
-      p = writeAll([SID.commerciale, SID.fondateur], 'Ventes_Betes!A:K', _vRow)
+      p = writeAll([SID.commerciale, SID.fondateur, SID.rga], 'Ventes_Betes!A:K', _vRow)
         .then(function(res){
           if(res.ok){
             // Mise à jour optimiste en mémoire
@@ -5939,8 +5939,8 @@ function saveCycle(){
         clearPromises.push(fetch(url, {method:'POST', headers:{Authorization:'Bearer '+tk, 'Content-Type':'application/json'}}));
       });
     }
-    // [fix] Vider Ventes_Betes dans fondateur + commerciale (ventes cycle précédent)
-    [SID.fondateur, SID.commerciale].filter(Boolean).forEach(function(sid) {
+    // [fix] Vider Ventes_Betes dans fondateur + commerciale + rga (ventes cycle précédent)
+    [SID.fondateur, SID.commerciale, SID.rga].filter(Boolean).forEach(function(sid) {
       var _vEnc = encodeURIComponent('Ventes_Betes') + '!A4:Z500';
       var _vUrl = 'https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+_vEnc+':clear';
       clearPromises.push(fetch(_vUrl, {method:'POST', headers:{Authorization:'Bearer '+tk, 'Content-Type':'application/json'}}));
