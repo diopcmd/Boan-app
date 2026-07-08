@@ -1502,6 +1502,18 @@ function _venteCnaasBannerHtml() {
     + '</div>';
 }
 
+function _maybeNotifyRgaVenteMessage() {
+  if (S.user !== 'rga') return;
+  var pending = _getVenteCnaasTasks().filter(function(t){ return t.status !== 'DONE'; });
+  if (!pending.length) return;
+  var latest = pending[0];
+  var key = _venteCnaasTaskKey(latest);
+  var seenKey = lsGet('rga_last_vente_notice_key') || '';
+  if (key === seenKey) return;
+  lsSet('rga_last_vente_notice_key', key);
+  setStatusMsg('ok:🔔 Nouvelle vente '+(latest.id||'')+' enregistrée — action CNAAS requise', 6500);
+}
+
 // Anti-doublon fiche du jour
 // Retourne le numéro de semaine ISO d'une date
 function semaineISO(date) {
@@ -2498,6 +2510,7 @@ function loadLiveData() {
         });
       }).filter(_taskBelongsToCurrentCycle);
       _saveVenteCnaasTasks(_mergeVenteCnaasTasks(LIVE.venteCnaas, lsGet('vente_cnaas_tasks') || []));
+      _maybeNotifyRgaVenteMessage();
 
       LIVE.contactsRefs = (rowsContactsRefs || []).map(function(r, idx){
         return _rowToContactRef(r, idx + 4);
