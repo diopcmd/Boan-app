@@ -6407,8 +6407,40 @@ function pageLogin(){
     +'</div></div>';
 }
 
+function renderRapports(){
+  var role=S.user;
+  var entrants=RAPPORTS.entrants[role]||[];
+  var sortants=RAPPORTS.sortants[role]||[];
+  var html='<div class="cnt"><h2 style="margin-bottom:16px;color:#fff">📊 Mes Rapports</h2>';
+  
+  html+='<div class="rapports-section"><div class="rapports-section-title">📥 À Recevoir</div>';
+  if(entrants.length===0){
+    html+='<div style="color:#88aa88;padding:12px">Aucun rapport entrant</div>';
+  }else{
+    entrants.forEach(function(r){
+      html+='<div class="rapport-card"><div class="rapport-title">'+r.titre+'</div>'
+        +'<div class="rapport-meta"><span>'+r.frequence+'</span><span>De: '+r.source+'</span></div>'
+        +'<div class="rapport-actions"><button onclick="alert(\'Télécharger: '+r.titre+'\')">📥 Télécharger</button></div></div>';
+    });
+  }
+  html+='</div>';
+  
+  html+='<div class="rapports-section"><div class="rapports-section-title">📤 À Envoyer</div>';
+  if(sortants.length===0){
+    html+='<div style="color:#88aa88;padding:12px">Aucun rapport à envoyer</div>';
+  }else{
+    sortants.forEach(function(r){
+      html+='<div class="rapport-card"><div class="rapport-title">'+r.titre+'</div>'
+        +'<div class="rapport-meta"><span>'+r.frequence+'</span><span>Vers: '+r.cible+'</span></div>'
+        +'<div class="rapport-actions"><button onclick="alert(\'Créer: '+r.titre+'\')">✏️ Créer</button></div></div>';
+    });
+  }
+  html+='</div></div>';
+  return html;
+}
+
 function pageApp(){
-  var tnames={dashboard:'Dashboard',saisie:'Saisie',livrables:'Livrables',marche:'Marché',guide:'❓ Guide'};
+  var tnames={dashboard:'Dashboard',saisie:'Saisie',livrables:'Livrables',marche:'Marché',rapports:'📊 Rapports',guide:'❓ Guide'};
   var utabs=USERS[S.user].tabs;
   var tabsHtml=utabs.map(function(t){
     return'<div class="tab '+(S.tab===t?'on':'')+'" onclick="chTab(\''+t+'\')">'+tnames[t]+'</div>';
@@ -6431,6 +6463,7 @@ function pageApp(){
   if(S.tab==='dashboard')content=viewDash();
   else if(S.tab==='saisie')content=viewSaisie();
   else if(S.tab==='livrables')content=viewLiv();
+  else if(S.tab==='rapports')content=renderRapports();
   else content=S.tab==='guide'?viewGuide():viewMarche();
 
   // Sidebar
@@ -11081,35 +11114,55 @@ function renderRapports() {
   var role = S.user;
   var entrants = RAPPORTS.entrants[role] || [];
   var sortants = RAPPORTS.sortants[role] || [];
-  var html = '<div class="cnt"><h2 style="margin-bottom:16px;color:#fff">📊 Mes Rapports</h2>';
+  var html = '<div class="cnt" style="background:#0f1a0f;padding:16px;"><h2 style="margin-bottom:16px;color:#fff">📊 Mes Rapports</h2>';
   
   // Entrants
   html += '<div class="rapports-section">';
   html += '<div class="rapports-section-title">📥 À Recevoir</div>';
-  entrants.forEach(function(r) {
-    html += '<div class="rapport-card">';
-    html += '<div class="rapport-title">'+r.titre+'</div>';
-    html += '<div class="rapport-meta"><span class="freq">'+r.frequence+'</span><span class="source">De: '+r.source+'</span></div>';
-    html += '<div class="rapport-actions"><button onclick="alert(\'Télécharger: '+r.titre+'\')">📥 Télécharger</button></div>';
-    html += '</div>';
-  });
+  if (entrants.length === 0) {
+    html += '<div style="color:#88aa88;padding:12px">Aucun rapport entrant pour '+role+'</div>';
+  } else {
+    entrants.forEach(function(r) {
+      html += '<div class="rapport-card">';
+      html += '<div class="rapport-title">'+r.titre+'</div>';
+      html += '<div class="rapport-meta"><span class="freq">'+r.frequence+'</span><span class="source">De: '+r.source+'</span></div>';
+      html += '<div class="rapport-actions"><button onclick="alert(\'Télécharger: '+r.titre+'\')">📥 Télécharger</button></div>';
+      html += '</div>';
+    });
+  }
   html += '</div>';
   
   // Sortants
   html += '<div class="rapports-section">';
   html += '<div class="rapports-section-title">📤 À Envoyer</div>';
-  sortants.forEach(function(r) {
-    html += '<div class="rapport-card">';
-    html += '<div class="rapport-title">'+r.titre+'</div>';
-    html += '<div class="rapport-meta"><span class="freq">'+r.frequence+'</span><span class="source">Vers: '+r.cible+'</span></div>';
-    html += '<div class="rapport-actions"><button onclick="alert(\'Créer: '+r.titre+'\')">✏️ Créer</button></div>';
-    html += '</div>';
-  });
+  if (sortants.length === 0) {
+    html += '<div style="color:#88aa88;padding:12px">Aucun rapport à envoyer pour '+role+'</div>';
+  } else {
+    sortants.forEach(function(r) {
+      html += '<div class="rapport-card">';
+      html += '<div class="rapport-title">'+r.titre+'</div>';
+      html += '<div class="rapport-meta"><span class="freq">'+r.frequence+'</span><span class="source">Vers: '+r.cible+'</span></div>';
+      html += '<div class="rapport-actions"><button onclick="alert(\'Créer: '+r.titre+'\')">✏️ Créer</button></div>';
+      html += '</div>';
+    });
+  }
   html += '</div>';
   
   html += '</div>';
   return html;
 }
+// Override render pour le tab rapports
+var _originalRender = _renderNow;
+_renderNow = function() {
+  if (S.page === 'app' && S.tab === 'rapports') {
+    var el = document.getElementById('app');
+    if (el) {
+      el.innerHTML = renderRapports();
+      return;
+    }
+  }
+  _originalRender.apply(this, arguments);
+};
 (function(){
   var sp = document.getElementById('splash');
   if (!sp) return;
