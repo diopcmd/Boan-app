@@ -6433,12 +6433,11 @@ function renderRapports(){
   function navBtn(r, label, icon){
     var nav=rapNav[r.id];
     if(r.id==='rapport_wa'){
-      // Générer le message WhatsApp depuis les données LIVE
       return '<button onclick="_sendRapportWA()">'+icon+' '+label+'</button>';
     }
     if(nav){
-      var sub=nav.sub?'\''+nav.sub+'\'':\'\'';
-      return '<button onclick="chTab(\''+nav.tab+'\');'+(nav.sub?'chSub(\''+nav.sub+'\');':'')+'r()">'+icon+' '+label+'</button>';
+      var onclick='chTab('+JSON.stringify(nav.tab)+');'+(nav.sub?'chSub('+JSON.stringify(nav.sub)+');':'')+'r()';
+      return '<button onclick="'+onclick+'">'+icon+' '+label+'</button>';
     }
     return '';
   }
