@@ -1,5 +1,5 @@
 ﻿# BOAN — Roadmap Notifications & Sinistres
-> **Version 3.4 — Distribution des rôles + Email J+0 + Idempotence + Stock validation — 07 Juillet 2026**
+> **Version 3.6 — Circuits revus panel experts: décès / vol / SOP / vente — 08 Juillet 2026**
 > Statut : **BLOQUÉ — Prérequis métier non satisfaits** (voir section 0)
 > 
 > **Panel d'experts confirmant cette version** :
@@ -20,7 +20,7 @@
 > Email J+0 immédiat (Option 1 < 1s fire-and-forget) + Idempotence Reference_ID prévient double-send.
 >
 > **Référence code** : `index.html` ~9 600 lignes, ES5 strict (`var`, pas `const`/`let`/arrow).
-> Commit HEAD : `e8f5026`. App en prod : `https://boan-app-9u5e.vercel.app`
+> Commit HEAD : `3890d8a`. App en prod : `https://boan-app-9u5e.vercel.app`
 
 ---
 
@@ -30,7 +30,7 @@
 |---|---|---|---|
 | 0 | [Prérequis métier](#0-prérequis-métier---bloquants-avant-tout-code) | Ce qu'il faut avoir **avant** tout code | Fondateur |
 | 1 | [Schémas de données](#1-schémas-de-données-google-sheets) | Structure `Notifications_Log` + `Sinistres_CNAAS` | Développeur |
-| 2 | [Processus métier](#2-processus-métier-bout-en-bout) | Flux complets décès / VOL / SOP vétérinaire | Tous |
+| 2 | [Processus métier](#2-processus-métier-bout-en-bout) | Flux complets décès / VOL / SOP vétérinaire / vente | Tous |
 | 3 | [Interface utilisateur](#3-interface-utilisateur---modifications-indexhtml) | Modifications `index.html` | Développeur |
 | 4 | [API serveur](#4-api-serveur) | Code `/api/cron.js` + `/api/notify.js` | Développeur |
 | 5 | [Templates emails](#5-templates-emails-plain-text-strict) | Textes emails prêts à intégrer | Développeur |
@@ -78,6 +78,9 @@ Contacter CNAAS (siège Dakar ou agence Thiès) et obtenir :
   - Sinistre déclaré hors délai 48h
 - **Contrat** : 1 an, renouvellement manuel (email J-30 requis), modif cheptel possible (déclaration obligatoire)
 - **Vente animal** : déclaration obligatoire CNAAS (transfert assurance ou suppression)
+  - **RGA appelle la CNAAS dès la saisie de vente dans l'app** pour demander la **clôture du contrat / retrait de garantie** de la bête vendue
+  - Délai cible BOAN : **J+0, max 24h** après la vente pour éviter un cheptel assuré incohérent
+  - Si la vente est annulée ou corrigée : la RGA rappelle la CNAAS pour rectification immédiate
 - **VOL** : extension garantie (surprime), preuves = PV police/gendarmerie, descente terrain CNAAS
 
 > **Déjà dans l'app** : `CYCLE.numCnaas` (clé `numCnaas` dans `Config_App` — modal init step 2 + Go/No-Go, commit `9766040`). Ne pas recréer.
@@ -222,7 +225,7 @@ La CNAAS exige que l'animal décédé reste intact jusqu'au passage de leur expe
 | Col | Nom | Valeurs |
 |---|---|---|
 | A | Date_Envoi | YYYY-MM-DD HH:MM |
-| B | Type | `SOP_VET_J-3` `SOP_VET_J-2` `SOP_VET_J-1` `VET_DECES_J0` `VET_DECES_RAPPEL_J1` `CNAAS_DECES_J0` `CNAAS_VOL_J0` `CNAAS_RELANCE_J7` `CNAAS_RELANCE_J14` `VET_ERROR` `VET_SKIPPED` |
+| B | Type | `SOP_VET_J-3` `SOP_VET_J-2` `SOP_VET_J-1` `VET_DECES_J0` `VET_DECES_RAPPEL_J1` `CNAAS_DECES_J0` `CNAAS_VOL_J0` `CNAAS_RELANCE_J7` `CNAAS_RELANCE_J14` `VENTE_DECLARATION_J0` `VET_ERROR` `VET_SKIPPED` |
 | C | Reference_ID | Clé idempotence ex: `SOP_VET_J-1_pesee-j30_2026-04-21` |
 | D | Destinataire | email |
 | E | Canal | `EMAIL` |
@@ -241,16 +244,19 @@ La CNAAS exige que l'animal décédé reste intact jusqu'au passage de leur expe
 | D | 3 | N_Recepisse | VOL — N° récépissé tamponné — **obligatoire J+0** |
 | E | 4 | Statut_CNAAS | `EN_COURS` `DOSSIER_RECU` `EXPERT_ASSIGNE` `EXPERTISE_PASSEE` `CONFIRME` `REJETE` `CLOTURE` `ANNULE` |
 | F | 5 | Date_Email_J0 | YYYY-MM-DD |
-| G | 6 | Appel_Fondateur_J0 | date/heure appel vocal fondateur — **saisi manuellement** |
+| G | 6 | Appel_RGA_J0 | date/heure appel vocal RGA — **saisi manuellement** |
 | H | 7 | Certif_Vet_Recu | `OUI` / vide |
 | I | 8 | Expert_Passe | `OUI` / vide |
 | J | 9 | Relances_Stop | `OUI` / vide |
 | K | 10 | email_pending | `OUI` / `NON` — flag décès offline, lu par le cron |
-| L | 11 | Date_Visite_Vet_Prevue | YYYY-MM-DD — saisi par fondateur après appel J+0 |
-| M | 12 | Date_Visite_Expert_CNAAS_Prevue | YYYY-MM-DD — saisi par fondateur après appel CNAAS J+0 |
+| L | 11 | Date_Visite_Vet_Prevue | YYYY-MM-DD — saisi par RGA après appel J+0 |
+| M | 12 | Date_Visite_Expert_CNAAS_Prevue | YYYY-MM-DD — saisi par RGA après appel CNAAS J+0 |
 | N | 13 | N_PV_Officiel | VOL — N° PV officiel — optionnel J+0, **obligatoire avant clôture** |
 | O | 14 | Heure_Vol | HH:MM — heure supposée du vol (si connue) |
 | P | 15 | Heure_Decouverte | HH:MM — heure constat gérant — **obligatoire pour VOL** |
+| Q | 16 | Heure_Appel_RGA | HH:MM — heure appel RGA → CNAAS |
+| R | 17 | Agent_CNAAS_Contacte | texte libre — nom / agence / téléphone |
+| S | 18 | Autorisation_Inhumation_Urgence | `EN_ATTENTE` `ACCORD_SMS` `ACCORD_EMAIL` `REFUSEE` |
 
 > 🎨 **Convention couleur UI** (appliquée dans tout le code frontend) :
 > | Couleur | Code | Usage |
@@ -270,16 +276,16 @@ La CNAAS exige que l'animal décédé reste intact jusqu'au passage de leur expe
 
 | Trigger | Délai | Action | Destinataire(s) | Contenu clé |
 |---|---|---|---|---|
-| **Décès constaté** | Immédiat (J+0) | Email déclaration CNAAS | CNAAS + Vét + RGA | N° police, ID animal, race, symptômes, traits, engagement NE PAS ENTERRER |
-| **Compte-à-rebours décès** | J+0 immédiat + J+1 cron | Email fondateur J+0 (< 1s) + Bannière ⛔ RGA | Dashboard RGA/gérant | 48h max CNAAS, horodatage email = preuve |
-| **Vol constaté** | Immédiat (J+0) + J+1 cron | Email fondateur J+0 (< 1s) + Email CNAAS | CNAAS + Brigade + RGA + Fondateur | Heure découverte, ID bêtes, N° récépissé, Email J+0 immédiat |
+| **Décès constaté** | Immédiat (J+0) | Email immédiat via endpoint dédié + log | CNAAS + Vét + RGA | N° police, ID animal, race, symptômes, engagement NE PAS ENTERRER |
+| **Compte-à-rebours décès** | J+0 immédiat + J+1 cron retry | Email info + Bannière ⛔ RGA | Dashboard RGA/gérant | 48h max CNAAS, horodatage J+0 = preuve, cron = rattrapage seulement |
+| **Vol constaté** | Immédiat (J+0) + relance J+1 si besoin | Email immédiat CNAAS + alerte RGA | CNAAS + Brigade + RGA + Fondateur | Heure découverte, ID bêtes, N° récépissé, email immédiat + suivi PV |
 | **Fenêtre VOL 48h** | Compte-à-rebours live | Dashboard chronomètre VOL | Gérant (device) | Poursuite chaude 48h, urgence < 6h (CRITIQUE) |
 | **Dossier > 30j** | J+0 email → J+30 | Relance paiement CNAAS | RGA + Agent CNAAS | Délai max paiement 30j après validation dossier |
 | **Fin contrat J-30** | Auto cron | Email renouvellement | RGA + Agent CNAAS | Contrat expire J+X, renouvellement manuel requis |
-| **Vente animal** | J+0 après saisie | Email déclaration CNAAS | CNAAS | Éleveur, ID animal, type (transfert/suppression) |
+| **Vente animal** | J+0 après saisie onglet Vente | Email déclaration CNAAS + tâche RGA < 24h | CNAAS + RGA | ID animal, date vente, type action, demande retrait de garantie, audit appel |
 | **Modification cheptel** | J+0 après saisie | Email déclaration CNAAS | CNAAS | Ajout/retrait animal, impact valeur assuré |
 
-> **Tous ces triggers** réutilisent `/api/cron.js` (section 4.10) + `sendEmailWithLog()` (section 4.6).
+> **Architecture retenue** : les cas critiques J+0 (décès, vol, vente) passent d'abord par un endpoint immédiat, puis `/api/cron.js` sert de rattrapage / relance. `sendEmailWithLog()` reste le point commun de journalisation.
 
 ### 2.1 CAS DÉCÈS
 
@@ -295,31 +301,37 @@ J+0 — Gérant constate le décès
   [Si ONLINE au submit]
   2a. App écrit Sante_Mortalite via writeAll([gerant, fondateur, rga])
   2b. App crée ligne Sinistres_CNAAS (email_pending=OUI) dans sheet fondateur
-  2c. Cron 07h02 du lendemain envoie emails VET + CNAAS
+  2c. App appelle immédiatement `/api/notify-immediate.js?type=deces`
+      → tentative d'email CNAAS + Vét en < 1s
+  2d. Si l'envoi immédiat échoue : `email_pending=OUI` reste en place pour le cron de rattrapage
 
-  [Si OFFLINE au submit]
-  2a. App écrit dans OFFLINE_QUEUE (flushQueue au retour connexion)
-  2b. App stocke lsSet('deces_pending', {id,date,sym,tra,cout,ts})
-  2c. Au retour connexion : flushQueue() + createSinistrePending()
-      → ligne Sinistres_CNAAS email_pending=OUI dans sheet fondateur
-  2d. Cron suivant 07h02 envoie les emails
+    [Si OFFLINE au submit]
+    2a. App écrit dans OFFLINE_QUEUE (source de vérité unique côté client)
+    2b. App stocke lsSet('deces_pending', {id,date,sym,tra,cout,ts,refLocal})
+    2c. État machine autoritaire : `IDLE → OFFLINE_PENDING → SYNCING → SYNCED`
+    2d. Au retour connexion : flushQueue() puis createSinistrePending()
+      → création ligne distante Sinistres_CNAAS + appel immédiat notify-immediate
+    2e. Cron 07h02 ne sert que de rattrapage si `email_pending=OUI`
 
-  3. App affiche post-submit :
-     Modal : "✅ Dossier créé + Email fondateur J+0 immédiat. ⚠️ RGA APPELLE CNAAS + VÉT"
+    3. App affiche post-submit :
+      Modal : "✅ Dossier créé + Tentative email immédiate. ⚠️ RGA APPELLE CNAAS + VÉT"
      Boutons (par priorité) :
        1️⃣ 📞 Appeler CNAAS — tel:[contact_cnaas_tel]
        2️⃣ 📞 Appeler Vétérinaire — tel:[contact_vet_tel]
        3️⃣ 💬 WhatsApp Vétérinaire — wa.me msg 6.1
        ⚠️ Annuler (erreur de saisie) — visible **4 heures** (fenêtre validée panel — ⚖️ Maître Diallo)
 
-J+0 — RGA agit immédiatement (fondateur à distance — notification seulement)
+J+0 — RGA agit immédiatement (fondateur = information seulement)
   4. RGA appelle CNAAS Thiès vocalement
      → Demande coordination date expert APRÈS venue vétérinaire
-     → Note heure appel dans app (Sinistres_CNAAS col G)
+    → Note heure appel dans app (Sinistres_CNAAS col Q) + agent contacté (col R)
   5. RGA appelle vétérinaire pour confirmer date de venue
+  6. Si > 24-36h sans expert et sans vétérinaire : RGA demande une autorisation écrite d'inhumation
+    → statut suivi en col S = EN_ATTENTE / ACCORD_SMS / ACCORD_EMAIL / REFUSEE
 
 J+1 — Cron 07h02 : checkAndSendDecesAlerts()
-  7. Envoie email VET (section 5.2) + email CNAAS (section 5.3) si email_pending=OUI`n     ✅ **Idempotence Reference_ID (Priya panel, section 4.4)** : skip si J+0 email déjà SENT (TTL 2h)
+  7. Envoie email VET (section 5.2) + email CNAAS (section 5.3) uniquement si `email_pending=OUI`
+    ✅ **Idempotence Reference_ID (Priya panel, section 4.4)** : skip si J+0 email déjà SENT (TTL 2h)
   8. Si Date_Confirmation vide dans Notifications_Log : envoie rappel vét (section 5.2b)
   9. Si col M < col L dans Sinistres_CNAAS : notifie RGA "⚠️ Expert avant vét"
 
@@ -371,14 +383,19 @@ J+0 — Gérant constate le vol
      - N° PV définitif — champ optionnel au J+0, obligatoire avant clôture dossier
      - Date/heure dépôt plainte, circonstances
 
-  3. App envoie email CNAAS auto (section 5.4) + affiche :
+  3. App envoie email CNAAS immédiat (section 5.4) + affiche :
      1️⃣ 📞 Appeler CNAAS    2️⃣ 💬 WhatsApp CNAAS (msg 6.5)
+
+J+1 à J+3
+  4. RGA suit l'obtention du N° PV officiel
+     → si N° PV absent à J+3 : relance brigade par téléphone
+     → BOAN garde récépissé comme preuve J+0, mais le PV devient requis avant clôture
 
 Relances automatiques (cron 07h04)
   J+7 + J+14 → Email relance courtois
 
 Clôture
-  4. RGA clique "CNAAS a confirmé réception"
+  5. RGA clique "CNAAS a confirmé réception"
 ```
 
 ### 2.3 SOP VÉTÉRINAIRE — rappels planifiés
@@ -396,6 +413,11 @@ Dashboard gérant (jour J-1)
   Bannière orange : "🔔 Vétérinaire demain — [acte.label]"
   Bouton WhatsApp (msg 6.7) — un tap, message pré-rempli
   → Flag lsSet('boanr_wa_vet_j1_[acteKey]_[YYYY-MM-DD]') après tap
+
+Escalade RGA
+  Si aucun retour vétérinaire sous 24h après rappel J-1 :
+    → RGA appelle vocalement le vétérinaire
+    → note la date de report ou confirme le maintien de l'acte
 ```
 
 ### 2.4 Distribution des rôles — Fondateur MINIMAL
@@ -426,9 +448,44 @@ Dashboard gérant (jour J-1)
 - **Fondateur** : reçoit email alerte J+0, reste informé (aucune action requise)
 
 **SOP VÉTÉRINAIRE** :
-- **Gérant** : valide quand vétérinaire vient (checkbox), photographe actes
-- **RGA** : reçoit rappels cron, envoie WA vét, suit calendrier
-- **Fondateur** : aucune implication (SOP = suivi troupeau)
+- **Gérant** : prépare l'intervention, confirme présence réelle du vétérinaire, photographie actes
+- **RGA** : suit rappels cron, escalade si absence de réponse, valide la traçabilité
+- **Fondateur** : aucune implication opérationnelle
+
+**CAS VENTE** :
+- **Gérant / Commerciale** : saisit la vente dans l'onglet Vente avec l'ID exact de la bête et la date réelle de sortie
+- **RGA** : appelle la CNAAS J+0 pour faire retirer la bête vendue du contrat et demande confirmation de clôture
+- **Fondateur** : reçoit l'information uniquement si BOAN choisit de la mettre en copie email
+
+### 2.5 CAS VENTE — Sortie d'une bête assurée
+
+```
+J+0 — Vente saisie dans BOAN (onglet Vente)
+
+  1. Gérant / Commerciale enregistre la vente de la bête
+    → ID animal exact
+    → date de vente
+    → prix / acheteur / commentaire si disponible
+
+    2. App déclenche une déclaration CNAAS de modification cheptel
+    → email de déclaration "vente animal" à la CNAAS
+    → notification / bannière d'action pour la RGA
+      → enregistrement `VENTE_DECLARATION_J0` dans Notifications_Log
+
+  3. RGA appelle la CNAAS vocalement le même jour
+      → demande par défaut la **suppression de garantie** pour la bête vendue
+      → le **transfert** n'est utilisé que si la CNAAS le confirme explicitement
+      → confirme avec l'agent CNAAS la date d'effet retenue
+      → note l'heure d'appel et le nom de l'agent dans BOAN
+
+  4. RGA vérifie que la bête vendue ne figure plus dans le cheptel assuré
+    → évite prime payée sur animal déjà sorti
+    → évite litige futur sur déclaration de sinistre impossible
+      → BOAN doit aussi exclure cette bête des effectifs actifs utilisés pour le rationnement et les KPI
+
+Clôture
+  5. RGA classe la vente comme traitée après confirmation CNAAS
+```
 
 ---
 
@@ -516,6 +573,25 @@ lsSet('vol_pending', {
 S.fin.beteIds = []; S.fin.noRecepisse = ''; S.fin.noVpOfficiel = '';
 S.fin.heureDecouverte = ''; S.fin.heureVol = '';
 ```
+
+### 3.2bis Onglet Vente — Déclencheur CNAAS
+
+> 💡 **Règle métier** : une bête vendue ne doit pas rester dans le contrat CNAAS. L'onglet Vente devient donc un déclencheur de workflow assurance, pas seulement un suivi commercial.
+
+| Élément | Détail | Obligatoire |
+|---|---|---|
+| Détection vente bête assurée | Si l'ID vendu appartient à `CYCLE.betes` / cheptel actif | ✅ OUI |
+| Déclaration CNAAS auto | Email "vente animal" envoyé J+0 | ✅ OUI |
+| Alerte RGA | Bannière / tâche : `📞 Appeler CNAAS pour clôturer le contrat de la bête vendue` | ✅ OUI |
+| Données minimales | ID animal, date vente, type action `suppression` ou `transfert` | ✅ OUI |
+| Confirmation traitement | Heure appel + agent CNAAS + statut traité | ✅ OUI |
+
+**Comportement attendu** :
+- si vente enregistrée → BOAN pousse une action RGA immédiate
+- si vente saisie hors ligne → BOAN stocke une file `vente_pending` et déclenche l'email dès retour réseau
+- si CNAAS non appelée → la bête reste comptée à tort dans le portefeuille assuré
+- si aucune confirmation RGA sous 24h → bannière rouge dashboard RGA jusqu'à traitement
+- si vente annulée → correction BOAN + appel CNAAS de rectification
 
 ### 3.3 Dashboard gérant — Bannières WhatsApp proactives
 
@@ -1012,7 +1088,7 @@ async function readConfigApp(token, sid) {
   //   contact_vet_email, contact_vet_tel, contact_cnaas_email, contact_cnaas_tel,
   //   contact_cnaas_delai_h, ferme_email_expediteur, ferme_responsable_nom,
   //   ferme_responsable_tel, ferme_email_fondateur, contact_rga_email,
-  //   horaire_vet_dakar, contact_gerant_tel
+  //   horaire_vet_dakar, contact_gerant_tel, date_fin_contrat
 }
 
 async function readConfigCycle(token, sid) {
@@ -1065,14 +1141,15 @@ async function isAlreadySent(token, sid, notifLog, refId) {
 ```
 
 **✅ NOUVEAU : État machine deces_state (Sofia panel)** :
-Élimine race condition offline décès + cron parallèle.
+Source de vérité autoritaire pour le décès offline. `flushQueue()` transporte les données; l'état machine décide si le cron doit reprendre la main.
 ```js
 function getDecessState() {
   return lsGet('deces_state') || 'IDLE'; // IDLE | OFFLINE_PENDING | SYNCING | SYNCED
 }
 // Au retour online : transition OFFLINE_PENDING → SYNCING → SYNCED
-// Cron deces attend state SYNCING < 5s avant de traiter Sinistres_CNAAS
-// createSinistrePending() vérifie pas de doublon row offline vs cron
+// createSinistrePending() crée la row distante + déclenche notify-immediate si possible
+// Cron deces ne traite QUE les rows distantes avec email_pending=OUI
+// Même Reference_ID entre offline sync et cron = zéro doublon logique
 ```
 
 > **Mitigation Sofia panel** : État machine élimine doublon email si cron run pendant sync offline (section 3.1).
@@ -1080,7 +1157,7 @@ function getDecessState() {
 ### 4.5 Validation acte SOP
 
 ```js
-// Identifie un acte validé par {label + date ±7j} — jamais par acte.id (non persisté)
+// Identifie un acte validé seulement si présence vétérinaire confirmée le jour prévu
 function isActeValidated(acte, dateDebut, santeRows) {
   var dateActeMs = new Date(dateDebut + 'T00:00:00Z').getTime() + acte.j * 86400000;
   return (santeRows || []).some(function(row) {
@@ -1088,7 +1165,8 @@ function isActeValidated(acte, dateDebut, santeRows) {
     var parts = String(row[0] || '').split('/');            // col A = DD/MM/YYYY
     if (parts.length !== 3) return false;
     var entryMs = Date.UTC(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-    return Math.abs(entryMs - dateActeMs) / 86400000 <= 7;
+    if (Math.abs(entryMs - dateActeMs) / 86400000 > 0) return false;
+    return String(row[10] || '').toUpperCase() === 'OUI'; // ex: vetPresent / confirmation réelle
   });
 }
 ```
@@ -1389,7 +1467,7 @@ module.exports = async function handler(req, res) {
 
     var notifLog      = await readSheet(token, cfg._sid, 'Notifications_Log!A2:I500');
     var santeRows     = await readSheet(token, cfg._sid, 'Sante_Mortalite!A2:J500');
-    var sinistresRows = await readSheet(token, cfg._sid, 'Sinistres_CNAAS!A2:Q200'); // Range étendue
+    var sinistresRows = await readSheet(token, cfg._sid, 'Sinistres_CNAAS!A2:S200'); // Range étendue
 
     if (type === 'vet')      await checkAndSendVetReminders(token, cfg, cycle, santeRows, notifLog);
     if (type === 'deces')    await checkAndSendDecesAlerts(token, cfg, cycle, santeRows, sinistresRows, notifLog);
@@ -1403,7 +1481,7 @@ module.exports = async function handler(req, res) {
 };
 ```
 
-> **Rate limit (Marcus panel)** : Type validation 400. Throttle 60s localStorage. Range A2:Q200 (16 colonnes).
+> **Rate limit (Marcus panel)** : Type validation 400. Throttle 60s localStorage. Range A2:S200. Sénégal = UTC+0, donc les crons 07h00/07h02/07h04 s'interprètent directement en heure locale Thiès/Dakar.
 
 ### 4.11 /.github/workflows/cron-notifications.yml
 
@@ -1460,11 +1538,11 @@ jobs:
 ```
 À    : [contact_vet_email]
 CC   : [ferme_email_fondateur]
-Objet : BOAN — Rappel acte SOP dans [N] jour(s) — [acte.label]
+Objet : BOAN — Rappel SOP J-[N] — [acte.label]
 
 Bonjour [cycle.veterinaire],
 
-Rappel : acte du protocole SOP planifié dans [N] jour(s).
+Rappel : acte du protocole SOP planifié en J-[N].
 
 Acte       : [acte.label]
 Date prévue: [dateActe DD/MM/YYYY]
@@ -1606,6 +1684,28 @@ Réf : [Type] — [ID_ANIMAL ou N°_PV] — Police n°[CYCLE.numCnaas]
 Nous restons à votre disposition.
 
 [ferme_responsable_nom] — [ferme_responsable_tel]
+```
+
+### 5.6 Déclaration CNAAS — Vente d'une bête J+0
+```
+À    : [contact_cnaas_email]
+CC   : [contact_rga_email], [ferme_email_fondateur]
+Objet : BOAN — Déclaration vente animal — Police n°[CYCLE.numCnaas]
+
+Madame, Monsieur,
+
+Nous vous informons de la vente de l'animal ci-dessous et demandons la mise à jour immédiate du contrat CNAAS.
+
+TYPE D'ACTION     : Vente animal / sortie de cheptel
+N° POLICE         : [CYCLE.numCnaas]
+ID ANIMAL         : [ID_ANIMAL]
+DATE DE VENTE     : [date_vente]
+EFFET DEMANDÉ     : Suppression de garantie ou transfert selon vos règles
+
+Merci de confirmer la prise en compte et la date d'effet de clôture pour cette bête vendue.
+
+[ferme_responsable_nom] — [ferme_responsable_tel]
+Ferme BOAN, Thiès, Sénégal
 ```
 
 ---
@@ -1806,6 +1906,9 @@ Ferme BOAN — [lsGet('cfg_contact_gerant_tel')]
 □ viewSaisie() VOL : beteMultiSelect() (section 3.8) + S.fin.beteIds=[] dans reset (~L1899)
     + champ N° PV bloquant + boutons CNAAS post-submit
     + ✅ NOUVEAU : heure découverte obligatoire (input time) — base compte-à-rebours 48h
+□ Onglet Vente : si bête assurée vendue → email CNAAS J+0 + alerte RGA "Appeler CNAAS pour clôturer la bête vendue"
+  + type action : suppression/transfert
+  + note interne RGA après appel
 □ viewDash() : bannière ⛔ sinistre ouvert (tous rôles)
 □ viewDash() fondateur : _checkDecesUrgenceFondateur() (section 3.4 contexte C)
 □ viewDash() gérant : _checkVolChronoBanner() (section 3.10) + _checkVetJ1Banners() + _checkDecesVetBanners() (section 3.3)
@@ -1874,6 +1977,8 @@ Ferme BOAN — [lsGet('cfg_contact_gerant_tel')]
   □ Email test → text/plain (pas HTML), objet sans crochets, CC présents
   □ safeText() : injection CRLF "test\r\nBcc: evil" → "test Bcc: evil" (safe)
   □ N° police vide → Statut INCOMPLET_POLICE
+  □ Vente d'une bête assurée → email CNAAS J+0 + tâche RGA affichée
+  □ Après vente, RGA appelle CNAAS et marque la clôture / suppression comme traitée
   □ ✅ NOUVEAU : photos obligatoires → validation UI avant submit, erreur si absentes
 
 ✅ UI & localStorage:
@@ -2086,13 +2191,14 @@ Page 5 — Coordonnées & engagement
    - N° de police exact
    - Email officiel de déclaration sinistres
    - Téléphone agent CNAAS Thiès (vocal, pas seulement email)
-   - Délai de déclaration contractuel (standard Code CIMA = 5 jours **ouvrables**)
+  - Délai de déclaration contractuel exact de la police souscrite
+  - Pour BOAN, retenir la règle opérationnelle la plus stricte : **déclaration J+0 immédiate, tolérance max 48h**
    - Grille officielle d'indemnisation par race / classe d'âge
 3. Lire les **exclusions** dans la police :
    - Animaux non vaccinés selon le protocole SOP défini → les enregistrements SOP de BOAN constituent la preuve
    - Maladie non déclarée lors de la souscription
    - Sinistre hors délai contractuel → l'email J+0 de BOAN est la protection contre ce risque
-4. Comprendre la **franchise** (typiquement 10% de la valeur indemnisée) et le **délai réel d'indemnisation (30-60 jours)**
+4. Comprendre la **franchise réelle de la police** (dans notre référence panel : métis 20% puis 60%, local 20% fixe) et le **délai réel d'indemnisation**
 5. Saisir toutes ces infos dans BOAN : **Livrables > Contacts & Assurance**
 
 #### Étape B — Contractualiser un vétérinaire agréé Thiès
@@ -2126,11 +2232,11 @@ Page 5 — Coordonnées & engagement
 3. Horodater les photos (regarder l'heure exacte sur le téléphone)
 4. ⛔ **NE PAS ABATTRE — NE PAS ENTERRER — ne déplacer l'animal qu'en dernier recours**
 
-#### ÉTAPE 2 — Appeler le fondateur VOCALEMENT
+#### ÉTAPE 2 — Appeler la RGA VOCALEMENT
 
 1. Appel téléphonique immédiat — ne pas envoyer un SMS d'abord
 2. Donner : ID de l'animal · heure du constat · état visuel · votre position
-3. Le fondateur se charge des appels CNAAS et vétérinaire — votre rôle est de rester sur place
+3. La RGA se charge des appels CNAAS et vétérinaire — le fondateur reste informé
 
 #### ÉTAPE 3 — Saisir dans BOAN (dans l'heure)
 
@@ -2144,8 +2250,8 @@ Page 5 — Coordonnées & engagement
 
 1. Couvrir l'animal avec une bâche (protection vautours, soleil direct)
 2. Prendre des photos supplémentaires toutes les **6 heures** pour documenter l'état de dégradation
-3. ⚠️ **Chaleur Thiès 35-40°C : décomposition visible dès 6-8h** — si aucun vétérinaire confirmé après 24h, appeler le fondateur
-4. **Ne jamais enterrer sans autorisation écrite** du fondateur (qui aura obtenu l'accord CNAAS par SMS ou email)
+3. ⚠️ **Chaleur Thiès 35-40°C : décomposition visible dès 6-8h** — si aucun vétérinaire confirmé après 24h, appeler la RGA
+4. **Ne jamais enterrer sans autorisation écrite CNAAS** confirmée par la RGA (SMS ou email)
 
 > ⚖️ Maître Diallo : *"Une inhumation sans accord écrit peut être qualifiée de destruction de preuve sous le Code CIMA — pas seulement un risque de rejet de dossier, un risque juridique réel."*
 
@@ -2154,15 +2260,15 @@ Page 5 — Coordonnées & engagement
 1. Être présent lors du passage du vétérinaire
 2. Lui montrer l'animal + les photos prises + votre carnet d'observations
 3. S'assurer qu'il **signe le certificat de constatation** ce jour-là — ne pas repartir sans
-4. Transmettre le certificat au fondateur immédiatement (photo WhatsApp)
+4. Transmettre le certificat à la RGA immédiatement (photo WhatsApp)
 
-> 📋 **Résumé gérant décès** : `📸 Photo → 📞 Fondateur → BOAN → ⛔ Ne pas enterrer → ✅ Certif vét`
+> 📋 **Résumé gérant décès** : `📸 Photo → 📞 RGA → BOAN → ⛔ Ne pas enterrer → ✅ Certif vét`
 
 ---
 
-### 11.2 Guide fondateur — Décès d'un animal
+### 11.2 Guide RGA — Décès d'un animal
 
-> Vous recevez l'appel du gérant ou la notification BOAN. Vous êtes probablement à Dakar.
+> Vous recevez l'appel du gérant ou la notification BOAN. Vous pilotez le dossier à distance.
 
 #### ÉTAPE 1 — Appeler la CNAAS (dans l'heure)
 
@@ -2170,7 +2276,7 @@ Page 5 — Coordonnées & engagement
 2. Déclarer le sinistre à l'oral (à titre conservatoire)
 3. Donner : N° police · ID animal · date/heure · race · poids entrée
 4. ⚠️ **Demander explicitement** : *"Pouvez-vous coordonner la date de passage de votre expert avec la venue de notre vétérinaire Dr [nom] ?"*
-5. Noter dans BOAN : **Livrables > Incidents** → heure de l'appel CNAAS (champ dédié)
+5. Noter dans BOAN : **Livrables > Incidents** → heure de l'appel CNAAS (champ dédié) + agent contacté
 
 #### ÉTAPE 2 — Appeler le vétérinaire
 
@@ -2198,7 +2304,7 @@ Page 5 — Coordonnées & engagement
 #### ÉTAPE 5 — Suivi dossier J+7 / J+14
 
 1. BOAN envoie des relances email automatiques à J+7 et J+14 si statut EN_COURS
-2. À J+14 sans réponse → **appel vocal CNAAS recommandé** (l'app envoie une notification fondateur)
+2. À J+14 sans réponse → **appel vocal CNAAS obligatoire** (l'app alerte la RGA)
 3. Suivre dans **Livrables > Incidents** : timeline dossier · checkboxes · statut CNAAS
 
 #### ÉTAPE 6 — Clôture et capitalisation
@@ -2210,7 +2316,7 @@ Page 5 — Coordonnées & engagement
    - Montant CNAAS reçu FCFA (col AE)
 3. Calculer le taux d'acceptation : **objectif ≥ 80%** (benchmark documenté : 85-95%)
 
-> 📋 **Résumé fondateur décès** : `📞 CNAAS + dates → 📞 Vét → 👁️ Surveillance BOAN → 📝 Autorisation si > 24-36h → Suivi J+7/J+14 → ✅ Clôture + KPIs`
+> 📋 **Résumé RGA décès** : `📞 CNAAS + dates → 📞 Vét → 👁️ Surveillance BOAN → 📝 Autorisation si > 24-36h → Suivi J+7/J+14 → ✅ Clôture`
 
 ---
 
@@ -2228,7 +2334,7 @@ Page 5 — Coordonnées & engagement
 3. Interroger les témoins présents (veilleur, ouvriers) — noter leurs noms
 4. Ne toucher à rien sur la scène avant d'avoir tout photographié
 
-#### ÉTAPE 2 — Appeler le fondateur VOCALEMENT
+#### ÉTAPE 2 — Appeler la RGA VOCALEMENT
 
 1. Appel immédiat
 2. Donner : liste des animaux disparus (IDs) · heure de découverte · état des lieux · témoins
@@ -2254,17 +2360,17 @@ Page 5 — Coordonnées & engagement
 #### ÉTAPE 5 — Suivre le chronomètre 48h dans BOAN
 
 1. Dashboard gérant affiche un compte à rebours 48h dès la saisie du VOL
-2. Si des pistes apparaissent (témoins, traces, informations) → **appeler le fondateur immédiatement**
+2. Si des pistes apparaissent (témoins, traces, informations) → **appeler la RGA immédiatement**
 3. Rester disponible pour la gendarmerie (rappels possibles pour précisions)
 4. À réception du N° PV officiel : mettre à jour dans **Livrables > Incidents**
 
-> 📋 **Résumé gérant vol** : `📸 Photos → 📞 Fondateur → 🚔 Gendarmerie (récépissé) → BOAN → ⏱️ Chrono 48h`
+> 📋 **Résumé gérant vol** : `📸 Photos → 📞 RGA → 🚔 Gendarmerie (récépissé) → BOAN → ⏱️ Chrono 48h`
 
 ---
 
-### 11.4 Guide fondateur — Vol de bétail
+### 11.4 Guide RGA — Vol de bétail
 
-> Vous recevez l'appel du gérant ou la notification BOAN.
+> Vous recevez l'appel du gérant ou la notification BOAN et vous prenez la coordination du dossier.
 
 #### ÉTAPE 1 — Appeler la CNAAS (dans l'heure)
 
@@ -2283,8 +2389,9 @@ Page 5 — Coordonnées & engagement
 #### ÉTAPE 3 — Suivi jusqu'à clôture
 
 1. Ajouter le N° PV officiel dans BOAN dès réception (24-72h après le dépôt)
-2. Relances J+7 et J+14 envoyées automatiquement par BOAN
-3. Clôture : cocher **"CNAAS a confirmé réception"** → statut CLOTURE
+2. Si le N° PV n'est toujours pas disponible à J+3 : rappeler la brigade de Thiès
+3. Relances J+7 et J+14 envoyées automatiquement par BOAN
+4. Clôture : cocher **"CNAAS a confirmé réception"** → statut CLOTURE
 
 ---
 
@@ -2297,15 +2404,16 @@ Page 5 — Coordonnées & engagement
 1. Ouvrir BOAN chaque matin → vérifier **badge numérique** sur l'onglet Livrables
 2. **Livrables > Incidents** → passer en revue les dossiers EN_COURS
 3. Signaux d'alerte à surveiller :
-   - Dossier EN_COURS depuis **> 14 jours** sans mouvement → alerter le fondateur
-   - `Certif_Vet_Recu` vide à J+7 → relancer le fondateur (vétérinaire non passé)
-   - `Expert_Passe` vide à J+10 → relancer le fondateur (coordination CNAAS insuffisante)
-   - Statut VOL avec N° PV manquant depuis > 3j → demander au gérant de vérifier à la brigade
+  - Dossier EN_COURS depuis **> 14 jours** sans mouvement → alerter le fondateur
+  - `Certif_Vet_Recu` vide à J+7 → relancer vétérinaire + gérant
+  - `Expert_Passe` vide à J+10 → relancer CNAAS directement
+  - Statut VOL avec N° PV manquant depuis > 3j → appeler brigade / demander au gérant de vérifier
+  - Vente saisie sans appel CNAAS tracé depuis > 24h → traiter en priorité haute
 
 #### En cas de dossier bloqué
 
 1. Vérifier que tous les champs BOAN sont remplis (N° PV si VOL, dates visite, certif vét)
-2. Si aucune réponse CNAAS à J+14 → recommander un **appel vocal** fondateur → CNAAS Thiès (l'email seul ne suffit plus)
+2. Si aucune réponse CNAAS à J+14 → faire un **appel vocal** RGA → CNAAS Thiès (l'email seul ne suffit plus)
 3. Si dossier REJETE → analyser les raisons avec le fondateur (exclusion ? délai ? certif manquant ?) → corriger pour les prochains cycles
 
 #### En fin de cycle
@@ -2317,7 +2425,7 @@ Page 5 — Coordonnées & engagement
 
 ---
 
-### 11.6 Guide gérant + fondateur — SOP Vétérinaire (actes planifiés)
+### 11.6 Guide gérant + RGA — SOP Vétérinaire (actes planifiés)
 
 > Le flux SOP est **quotidien et fréquent** — c'est la routine la plus visible de BOAN. Bien le maîtriser évite les rappels inutiles et les ratés de vaccination (cause d'exclusion CNAAS).
 
@@ -2338,19 +2446,19 @@ Page 5 — Coordonnées & engagement
 3. Préparer la zone d'intervention : contenir le troupeau, accès libre
 4. Être présent lors de l'acte
 
-#### Rôle fondateur — Email CC reçu (J-3/J-2/J-1)
+#### Rôle RGA — Email CC reçu (J-3/J-2/J-1)
 
 1. Email reçu en CC du rappel SOP (section 5.1) → vérification silencieuse que le cron tourne
 2. Si le vét ne répond pas sous 24h → appel vocal direct + WA
 3. En cas d'absence vét confirmée : noter la date de report dans BOAN (Livrables > SOP Véto)
 
-#### Rôle fondateur — Après l'acte
+#### Rôle RGA — Après l'acte
 
 1. Livrables > SOP Véto → bouton **"✓ Vétérinaire a confirmé"** (dans les 7j suivant l'acte prévu)
 2. Cela remplit `Date_Confirmation` dans `Notifications_Log` → stop automatique des relances
 3. Timeline J-3/J-2/J-1 affichée : ✓ envoyé / 🟢 confirmé / ⏳ en attente
 
-> 📋 **Résumé SOP** : `📱 Bannière J-1 → 💬 WA → ✅ Acte → ☑ Fondateur confirme dans BOAN`
+> 📋 **Résumé SOP** : `📱 Bannière J-1 → 💬 WA → ✅ Acte → ☑ RGA confirme dans BOAN`
 
 ---
 
@@ -2359,25 +2467,27 @@ Page 5 — Coordonnées & engagement
 | Événement | Action immédiate | Qui | Délai max |
 |---|---|---|---|
 | Décès constaté | Photographier l'animal | Gérant | **Immédiat** |
-| Décès constaté | Appeler fondateur vocalement | Gérant | < 30 min |
+| Décès constaté | Appeler RGA vocalement | Gérant | < 30 min |
 | Décès constaté | Saisir dans BOAN | Gérant | < 1h |
-| Décès constaté | Appeler CNAAS vocalement + noter heure | Fondateur | < 1h |
-| Décès constaté | Appeler vétérinaire + fixer date | Fondateur | < 1h |
-| Décès constaté | Email CNAAS J+0 + email vét | **BOAN auto** | J+1 07h02 |
+| Décès constaté | Appeler CNAAS vocalement + noter heure | RGA | < 1h |
+| Décès constaté | Appeler vétérinaire + fixer date | RGA | < 1h |
+| Décès constaté | Email CNAAS J+0 + email vét | **BOAN auto** | Immédiat J+0 |
 | Décès > 24h sans vét confirmé | Relancer vétérinaire (bannière WA) | Gérant (1 tap) | Dès bannière |
-| Décès > 24-36h sans expert | Appeler CNAAS, demander autorisation inhumation **écrite** | Fondateur | Avant inhumation |
+| Décès > 24-36h sans expert | Appeler CNAAS, demander autorisation inhumation **écrite** | RGA | Avant inhumation |
 | Décès — expert non venu à J+7 | Relance email auto CNAAS | **BOAN auto** | J+7 07h04 |
-| Décès — J+14 sans réponse | Appel vocal CNAAS + alerte fondateur | Fondateur | J+14 |
-| Vétérinaire signe le certificat | Transmettre au fondateur (WhatsApp) | Gérant | Jour J |
-| Certificat reçu | Cocher dans BOAN + transmettre CNAAS | Fondateur | Jour J |
-| Expert CNAAS passé | Cocher dans BOAN → bannière ⛔ levée | Fondateur | Jour J |
-| CNAAS confirme indemnisation | Clôturer dans BOAN + noter montant | Fondateur | Jour J |
+| Décès — J+14 sans réponse | Appel vocal CNAAS + alerte fondateur | RGA | J+14 |
+| Vétérinaire signe le certificat | Transmettre à la RGA (WhatsApp) | Gérant | Jour J |
+| Certificat reçu | Cocher dans BOAN + transmettre CNAAS | RGA | Jour J |
+| Expert CNAAS passé | Cocher dans BOAN → bannière ⛔ levée | RGA | Jour J |
+| CNAAS confirme indemnisation | Clôturer dans BOAN + noter montant | RGA | Jour J |
 | Vol constaté | Photographier lieu + animaux restants | Gérant | **Immédiat** |
-| Vol constaté | Appeler fondateur | Gérant | < 30 min |
+| Vol constaté | Appeler RGA | Gérant | < 30 min |
 | Vol constaté | Aller à la gendarmerie (récépissé) | Gérant | < 2h **(fenêtre 48h)** |
 | Vol — récépissé obtenu | Saisir dans BOAN | Gérant | Même jour |
 | Vol — N° PV reçu (J+1-3) | Mettre à jour BOAN | Gérant ou RGA | Dès réception |
-| Vol — photoRef disponibles | Transmettre à la gendarmerie | Fondateur | < 1h |
+| Vol — photoRef disponibles | Transmettre à la gendarmerie | RGA | < 1h |
+| Vente saisie | Appeler CNAAS pour retrait de garantie | RGA | < 24h |
+| Vente saisie | Marquer heure appel + agent CNAAS dans BOAN | RGA | Même jour |
 | Cycle terminé | Renseigner KPIs CNAAS | Fondateur + RGA | Avant archivage |
 
 ---
@@ -2391,9 +2501,9 @@ Page 5 — Coordonnées & engagement
 
 **🩺 Dr Sow (Vétérinaire, Thiès) — Décomposition dès 6-8h à 35-40°C**
 
-> Ne pas attendre 48h. Si le vétérinaire ne peut pas venir dans les **24-36h**, le fondateur doit proactivement appeler CNAAS pour une autorisation d'inhumation d'urgence. Sans cette démarche, l'animal sera dans un état qui compromet à la fois la présentation à l'expert et la dignité de la procédure. L'app doit aider à déclencher cette conversation au bon moment.
+> Ne pas attendre 48h. Si le vétérinaire ne peut pas venir dans les **24-36h**, la RGA doit proactivement appeler CNAAS pour une autorisation d'inhumation d'urgence. Sans cette démarche, l'animal sera dans un état qui compromet à la fois la présentation à l'expert et la dignité de la procédure. L'app doit aider à déclencher cette conversation au bon moment.
 
-**Action BOAN associée** : alerte fondateur dans la bannière ⛔ si > 24h sans confirmation vétérinaire + bouton « Appeler CNAAS urgence » dans l'interface fondateur.
+**Action BOAN associée** : alerte RGA dans la bannière ⛔ si > 24h sans confirmation vétérinaire + bouton « Appeler CNAAS urgence » dans l'interface RGA.
 
 ---
 

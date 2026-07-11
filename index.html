@@ -27,9 +27,12 @@ input,textarea,select,button,a{touch-action:manipulation}
 .splash-dot{width:6px;height:6px;border-radius:50%;background:#C8A06A;margin-top:24px;animation:pulse 1s infinite}
 #app{min-height:100vh}
 .hdr{background:linear-gradient(180deg,rgba(30,74,30,0.95),rgba(26,58,26,0.90));padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;box-shadow:0 2px 10px rgba(0,0,0,0.28);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);transition:transform .28s ease,opacity .28s ease,padding .24s ease,box-shadow .24s ease,border-radius .24s ease,margin .24s ease}.hdr.hdr-hidden{transform:translateY(-120%);opacity:0}
+@media (max-width:480px){.hdr{padding:8px 12px}}
 .logo{display:flex;align-items:center;gap:10px}
 .logo-b{width:36px;height:36px;background:#2d6a2d;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px}
-.tabs{background:rgba(26,58,26,0.92);display:flex;border-bottom:1px solid #2d4a2d;overflow-x:auto;-webkit-overflow-scrolling:touch;-webkit-user-select:none;position:sticky;top:60px;z-index:9;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);transition:transform .28s ease,opacity .28s ease,top .24s ease,padding .24s ease,margin .24s ease,border-radius .24s ease,box-shadow .24s ease}.tabs.tabs-hidden{transform:translateY(calc(-100% - 64px));opacity:0}
+@media (max-width:480px){.logo-b{width:32px;height:32px;font-size:16px}}
+.tabs{background:rgba(26,58,26,0.92);display:flex;border-bottom:1px solid #2d4a2d;overflow-x:auto;-webkit-overflow-scrolling:touch;-webkit-user-select:none;position:sticky;top:48px;z-index:9;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);transition:transform .28s ease,opacity .28s ease,top .24s ease,padding .24s ease,margin .24s ease,border-radius .24s ease,box-shadow .24s ease}.tabs.tabs-hidden{transform:translateY(calc(-100% - 64px));opacity:0}
+@media (max-width:480px){.tabs{top:44px}}
 .hdr.hdr-compact{padding:8px 12px;margin:6px 8px 0;border-radius:12px;border:1px solid rgba(61,122,61,0.45);box-shadow:0 8px 20px rgba(0,0,0,0.24)}
 .tabs.tabs-compact{top:56px;margin:4px 8px 0;padding:0 4px;border:1px solid rgba(45,106,45,0.35);border-radius:12px;box-shadow:0 6px 14px rgba(0,0,0,0.20)}
 .tabs::-webkit-scrollbar{display:none}
@@ -37,7 +40,9 @@ input,textarea,select,button,a{touch-action:manipulation}
 .tab:hover{color:#b8ddb8;background:rgba(255,255,255,.045)}
 .tab.on{color:#fff;border-bottom-color:#fff;background:rgba(255,255,255,0.09);text-shadow:0 0 8px rgba(200,230,200,.22)}
 .cnt{padding:16px;max-width:600px;margin:0 auto;overflow:hidden}
+@media (max-width:480px){.cnt{padding:12px;max-width:100%}}
 .stitle{font-size:11px;font-weight:600;color:#88bb88;letter-spacing:.05em;text-transform:uppercase;margin-bottom:12px;padding-left:9px;border-left:3px solid #2d6a2d}
+@media (max-width:480px){.stitle{font-size:10px}}
 .kgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
 .kcard{background:#1a2e1a;border-radius:10px;padding:14px;border:1px solid #2a4a2a;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
 .kcard:hover{border-color:#3d7a3d;box-shadow:0 4px 16px rgba(45,106,45,0.18)}
@@ -300,6 +305,22 @@ body.light button{background:#2d6a2d}
 body.light .btn-sec{background:#e8f0e8;color:#1a2e1a;border-color:#c8dcc8}
 body.light .ubtn{background:#1e5a1e}
 body.light .hbg{color:#fff}
+/* CONTACTS — Mode clair (thème sombre) */
+body.light [style*="background:linear-gradient(135deg,#0c170c"] {background:linear-gradient(135deg,#e8f5e8,#d4ead4) !important}
+body.light [style*="background:linear-gradient(135deg,#0c170c"] * {color:#1a2e1a !important}
+body.light .sb-section-title {color:#2d6a2d !important}
+body.light [style*="background:#0f1f0f"] .sb-row {color:#1a2e1a !important}
+body.light [style*="background:#0f1f0f"] .sb-lbl {color:#557755 !important}
+body.light [style*="background:#0f1f0f"] label {color:#557755 !important}
+body.light [style*="background:#0f2a0f"] {background:#e8f5e8 !important;color:#1a4a1a !important}
+body.light [style*="background:#0f2a0f"] * {color:#1a4a1a !important}
+/* TABLE VENTES — Scroll horizontal iPhone */
+.tw {overflow-x:auto;-webkit-overflow-scrolling:touch}
+@media (max-width:480px) {.tw {max-width:calc(100vw - 32px);margin:-16px -16px 14px}}
+@media (max-width:480px) {.cnt .tw {margin:-16px -16px 14px;max-width:calc(100vw - 0px)}}
+.tw table {min-width:100%;border-collapse:collapse;font-size:13px}
+@media (max-width:480px) {.tw table {font-size:11px}}
+@media (max-width:480px) {.tw table td, .tw table th {padding:6px 8px}}
 /* LIGHT MODE — fixes textes invisibles */
 body.light{color:#1a2e1a}
 body.light .kgrid .kcard div{color:#1a2e1a}
