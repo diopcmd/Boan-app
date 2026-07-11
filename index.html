@@ -2189,11 +2189,11 @@ function doLogin() {
       SID[role] = data.sid; // rétrocompatibilité
     }
     S.tab = USERS[role].tabs[0];
-    S.sub = S.tab==='saisie'?'fiche':S.tab==='livrables'?'treso':S.tab==='marche'?'prix':S.tab==='guide'?'quick':'';
+    S.sub = S.tab==='saisie'?'fiche':S.tab==='livrables'?'treso':S.tab==='marche'?'prix':S.tab==='rapports'?'entrants':S.tab==='guide'?'quick':'';
     var _nav = _restoreNavState(role);
     if (_nav) {
       S.tab = _nav.tab;
-      S.sub = _nav.sub || (S.tab==='saisie'?'fiche':S.tab==='livrables'?'treso':S.tab==='marche'?'prix':S.tab==='guide'?'quick':'');
+      S.sub = _nav.sub || (S.tab==='saisie'?'fiche':S.tab==='livrables'?'treso':S.tab==='marche'?'prix':S.tab==='rapports'?'entrants':S.tab==='guide'?'quick':'');
     }
     LAST_ACTIVITY = Date.now();
     S.page = 'app';
@@ -11077,6 +11077,39 @@ function pageGuide() {
 }
 
 r();
+function renderRapports() {
+  var role = S.user;
+  var entrants = RAPPORTS.entrants[role] || [];
+  var sortants = RAPPORTS.sortants[role] || [];
+  var html = '<div class="cnt"><h2 style="margin-bottom:16px;color:#fff">📊 Mes Rapports</h2>';
+  
+  // Entrants
+  html += '<div class="rapports-section">';
+  html += '<div class="rapports-section-title">📥 À Recevoir</div>';
+  entrants.forEach(function(r) {
+    html += '<div class="rapport-card">';
+    html += '<div class="rapport-title">'+r.titre+'</div>';
+    html += '<div class="rapport-meta"><span class="freq">'+r.frequence+'</span><span class="source">De: '+r.source+'</span></div>';
+    html += '<div class="rapport-actions"><button onclick="alert(\'Télécharger: '+r.titre+'\')">📥 Télécharger</button></div>';
+    html += '</div>';
+  });
+  html += '</div>';
+  
+  // Sortants
+  html += '<div class="rapports-section">';
+  html += '<div class="rapports-section-title">📤 À Envoyer</div>';
+  sortants.forEach(function(r) {
+    html += '<div class="rapport-card">';
+    html += '<div class="rapport-title">'+r.titre+'</div>';
+    html += '<div class="rapport-meta"><span class="freq">'+r.frequence+'</span><span class="source">Vers: '+r.cible+'</span></div>';
+    html += '<div class="rapport-actions"><button onclick="alert(\'Créer: '+r.titre+'\')">✏️ Créer</button></div>';
+    html += '</div>';
+  });
+  html += '</div>';
+  
+  html += '</div>';
+  return html;
+}
 (function(){
   var sp = document.getElementById('splash');
   if (!sp) return;
