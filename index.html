@@ -303,6 +303,9 @@ body.light .sep{background:#c8dcc8}
 body.light .day-banner{background:#fff8ee;border-color:#c87800;color:#7a4800}
 body.light button{background:#2d6a2d}
 body.light .btn-sec{background:#e8f0e8;color:#1a2e1a;border-color:#c8dcc8}
+body.light .stab{color:#2a6a2a;border-color:#a8c8a8;background:#f0faf0;box-shadow:inset 0 1px 0 rgba(160,200,160,.12)}
+body.light .stab:hover{border-color:#2d6a2d;color:#1a4a1a;background:#e8f5e8}
+body.light .stab.on{background:#2d6a2d;color:#fff;border-color:#1a4a1a;box-shadow:0 4px 12px rgba(45,106,45,.22),inset 0 1px 0 rgba(210,240,210,.16)}
 body.light .ubtn{background:#1e5a1e}
 body.light .hbg{color:#fff}
 /* CONTACTS — Mode clair (thème sombre) */
@@ -327,12 +330,17 @@ body.light [style*="max-height:1400px"][style*="opacity:1"] textarea {background
 body.light [style*="background:#0a120a"] button {background:#2d6a2d !important;color:#fff !important}
 body.light [style*="background:#0a120a"] .btn-sec {background:#d8eed8 !important;color:#1a2e1a !important;border-color:#a8c8a8 !important}
 /* TABLE VENTES — Scroll horizontal iPhone */
-.tw {overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tw {overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
 @media (max-width:480px) {.tw {max-width:calc(100vw - 32px);margin:-16px -16px 14px}}
 @media (max-width:480px) {.cnt .tw {margin:-16px -16px 14px;max-width:calc(100vw - 0px)}}
 .tw table {min-width:100%;border-collapse:collapse;font-size:13px}
-@media (max-width:480px) {.tw table {font-size:11px}}
-@media (max-width:480px) {.tw table td, .tw table th {padding:6px 8px}}
+@media (max-width:480px) {.tw table {font-size:12px}}
+@media (max-width:480px) {.tw table td, .tw table th {padding:8px 10px}}
+/* Light mode — meilleure visibilité table vente */
+body.light .tw table {color:#334433}
+body.light .tw table th {background:#e8f0e8;color:#2d6a2d;font-weight:600}
+body.light .tw table td {color:#334433;border-color:#e8f0e8}
+body.light .tw table tr:nth-child(even) {background:#f8faf8}
 /* LIGHT MODE — fixes textes invisibles */
 body.light{color:#1a2e1a}
 body.light .kgrid .kcard div{color:#1a2e1a}
