@@ -6411,8 +6411,40 @@ function renderRapports(){
   var role=S.user;
   var entrants=RAPPORTS.entrants[role]||[];
   var sortants=RAPPORTS.sortants[role]||[];
-  var html='<div class="cnt"><h2 style="margin-bottom:16px;color:#fff">📊 Mes Rapports</h2>';
-  
+
+  // Mapping id rapport → {tab, sub} pour la navigation
+  var rapNav={
+    rap_jour:      {tab:'dashboard',sub:''},
+    rap_hebdo:     {tab:'livrables',sub:'hebdo'},
+    rap_monthly:   {tab:'livrables',sub:'treso'},
+    rap_ventes:    {tab:'livrables',sub:'vente'},
+    rap_marche:    {tab:'marche',sub:'prix'},
+    rap_feedback:  {tab:'dashboard',sub:''},
+    fiche_insp:    {tab:'saisie',sub:'fiche'},
+    fiche_stock:   {tab:'saisie',sub:'stock'},
+    rapport_wa:    {tab:'saisie',sub:'fiche'},
+    bilan_hebdo:   {tab:'saisie',sub:'hebdo'},
+    p_and_l:       {tab:'livrables',sub:'treso'},
+    suivi_ventes:  {tab:'livrables',sub:'vente'},
+    cours_marche:  {tab:'marche',sub:'prix'},
+    rapport_ventes:{tab:'livrables',sub:'vente'}
+  };
+
+  function navBtn(r, label, icon){
+    var nav=rapNav[r.id];
+    if(r.id==='rapport_wa'){
+      // Générer le message WhatsApp depuis les données LIVE
+      return '<button onclick="_sendRapportWA()">'+icon+' '+label+'</button>';
+    }
+    if(nav){
+      var sub=nav.sub?'\''+nav.sub+'\'':\'\'';
+      return '<button onclick="chTab(\''+nav.tab+'\');'+(nav.sub?'chSub(\''+nav.sub+'\');':'')+'r()">'+icon+' '+label+'</button>';
+    }
+    return '';
+  }
+
+  var html='<div class="cnt"><h2 style="margin-bottom:16px">📊 Mes Rapports</h2>';
+
   html+='<div class="rapports-section"><div class="rapports-section-title">📥 À Recevoir</div>';
   if(entrants.length===0){
     html+='<div style="color:#88aa88;padding:12px">Aucun rapport entrant</div>';
@@ -6420,11 +6452,11 @@ function renderRapports(){
     entrants.forEach(function(r){
       html+='<div class="rapport-card"><div class="rapport-title">'+r.titre+'</div>'
         +'<div class="rapport-meta"><span>'+r.frequence+'</span><span>De: '+r.source+'</span></div>'
-        +'<div class="rapport-actions"><button onclick="alert(\'Télécharger: '+r.titre+'\')">📥 Télécharger</button></div></div>';
+        +'<div class="rapport-actions">'+navBtn(r,'Voir','👁')+'</div></div>';
     });
   }
   html+='</div>';
-  
+
   html+='<div class="rapports-section"><div class="rapports-section-title">📤 À Envoyer</div>';
   if(sortants.length===0){
     html+='<div style="color:#88aa88;padding:12px">Aucun rapport à envoyer</div>';
@@ -6432,15 +6464,29 @@ function renderRapports(){
     sortants.forEach(function(r){
       html+='<div class="rapport-card"><div class="rapport-title">'+r.titre+'</div>'
         +'<div class="rapport-meta"><span>'+r.frequence+'</span><span>Vers: '+r.cible+'</span></div>'
-        +'<div class="rapport-actions"><button onclick="alert(\'Créer: '+r.titre+'\')">✏️ Créer</button></div></div>';
+        +'<div class="rapport-actions">'+navBtn(r,'Ouvrir','✏️')+'</div></div>';
     });
   }
   html+='</div></div>';
   return html;
 }
+function _sendRapportWA(){
+  var nb=CYCLE.nbBetes||4;
+  var gmq=LIVE.gmq||(MOCK.gmq||0);
+  var stock=LIVE.stock!=null?LIVE.stock:MOCK.stock;
+  var inc=LIVE.incidents&&LIVE.incidents.length?LIVE.incidents.filter(function(i){return i.date===today();}).length:0;
+  var msg='*Rapport du jour — BOANR*\n';
+  msg+='📅 '+today()+'\n';
+  msg+='🐄 Bêtes: '+nb+'\n';
+  msg+='📈 GMQ: '+(gmq?gmq+' g/j':'—')+'\n';
+  msg+='🌾 Stock: '+(stock!=null?stock+' jours':'—')+'\n';
+  msg+='⚠️ Incidents: '+inc+'\n';
+  var encoded=encodeURIComponent(msg);
+  window.open('https://wa.me/?text='+encoded,'_blank');
+}
 
 function pageApp(){
-  var tnames={dashboard:'Dashboard',saisie:'Saisie',livrables:'Livrables',marche:'Marché',rapports:'📊 Rapports',guide:'❓ Guide'};
+  var tnames={dashboard:'Dashboard',saisie:'Saisie',livrables:'Livrables',marche:'Marché',rapports:'Rapports',guide:'❓ Guide'};
   var utabs=USERS[S.user].tabs;
   var tabsHtml=utabs.map(function(t){
     return'<div class="tab '+(S.tab===t?'on':'')+'" onclick="chTab(\''+t+'\')">'+tnames[t]+'</div>';
