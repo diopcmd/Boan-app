@@ -549,6 +549,8 @@ body.light [style*="background:rgba(90,180,255,0.08)"]{background:rgba(26,58,122
 .rapport-title{font-weight:600;color:#fff;font-size:14px}
 .rapport-meta{display:flex;gap:12px;font-size:11px;flex-wrap:wrap}
 .rapport-meta span{color:#88aa88}
+.rapport-status{font-size:11px;font-weight:600}
+.rapport-note{font-size:11px;color:#7a9a7a}
 .rapport-actions{display:flex;gap:8px;flex-wrap:wrap}
 .rapport-actions button{padding:8px 14px;font-size:12px;width:auto;flex:1;min-width:90px}
 body.light .rapports-section{background:#fff;border-color:#c8dcc8}
@@ -556,6 +558,7 @@ body.light .rapports-section-title{color:#2d6a2d}
 body.light .rapport-card{background:#f8faf8;border-color:#d8ead8}
 body.light .rapport-title{color:#1a2e1a}
 body.light .rapport-meta span{color:#557755}
+body.light .rapport-note{color:#557755}
 </style>
 </head>
 <body>
@@ -583,35 +586,35 @@ var USERS = {
 var RAPPORTS = {
   entrants: {
     fondateur: [
-      {id:'rap_jour',titre:'Rapport du jour',source:'Gérant',frequence:'QUOTIDIEN 19h',format:'whatsapp,app',status:'ready'},
-      {id:'rap_hebdo',titre:'Bilan Hebdomadaire',source:'RGA',frequence:'LUNDI 9h',format:'pdf,email',status:'ready'},
-      {id:'rap_monthly',titre:'P&L Mensuel',source:'RGA',frequence:'1er mois',format:'pdf,email',status:'ready'},
-      {id:'rap_ventes',titre:'Suivi Livrables',source:'RGA',frequence:'JEUDI 16h',format:'pdf,email',status:'ready'},
-      {id:'rap_marche',titre:'Cours Marché',source:'Commerciale',frequence:'JEUDI 16h',format:'pdf,email',status:'ready'}
+      {id:'rap_jour',titre:'Rapport du jour',source:'Gérant',frequence:'Quotidien · 19h',format:'whatsapp,app',status:'ready'},
+      {id:'rap_hebdo',titre:'Bilan hebdomadaire',source:'RGA',frequence:'Lundi · 9h',format:'pdf,email',status:'ready'},
+      {id:'rap_monthly',titre:'P&L mensuel',source:'RGA',frequence:'1er de chaque mois',format:'pdf,email',status:'ready'},
+      {id:'rap_ventes',titre:'Suivi des livrables',source:'RGA',frequence:'Jeudi · 16h',format:'pdf,email',status:'ready'},
+      {id:'rap_marche',titre:'Cours du marché',source:'Commerciale',frequence:'Jeudi · 16h',format:'pdf,email',status:'ready'}
     ],
     gerant: [
-      {id:'rap_feedback',titre:'Feedback Fiches',source:'Fondateur',frequence:'AU BESOIN',format:'app,notification',status:'ready'}
+      {id:'rap_feedback',titre:'Retour sur fiches',source:'Fondateur',frequence:'Au besoin',format:'app,notification',status:'ready'}
     ],
     rga: [],
     commerciale: [
-      {id:'rap_marche',titre:'Cours Marché soumis',source:'Soi-même',frequence:'JEUDI 16h',format:'app',status:'ready'}
+      {id:'rap_marche',titre:'Cours du marché soumis',source:'Soi-même',frequence:'Jeudi · 16h',format:'app',status:'ready'}
     ]
   },
   sortants: {
     fondateur: [],
     gerant: [
-      {id:'fiche_insp',titre:'Fiche Inspection',cible:'Fondateur',frequence:'QUOTIDIEN',format:'app',status:'draft'},
-      {id:'fiche_stock',titre:'Fiche Stock',cible:'Fondateur',frequence:'QUOTIDIEN',format:'app',status:'draft'},
-      {id:'rapport_wa',titre:'Rapport WhatsApp',cible:'Fondateur',frequence:'QUOTIDIEN 19h',format:'whatsapp',status:'draft'}
+      {id:'fiche_insp',titre:'Fiche d\'inspection',cible:'Fondateur',frequence:'Quotidien',format:'app',status:'draft'},
+      {id:'fiche_stock',titre:'Fiche de stock',cible:'Fondateur',frequence:'Quotidien',format:'app',status:'draft'},
+      {id:'rapport_wa',titre:'Rapport WhatsApp',cible:'Fondateur',frequence:'Quotidien · 19h',format:'whatsapp',status:'draft'}
     ],
     rga: [
-      {id:'bilan_hebdo',titre:'Bilan Hebdomadaire',cible:'Fondateur,Conseil',frequence:'LUNDI 9h',format:'pdf,email',status:'draft'},
-      {id:'p_and_l',titre:'P&L Mensuel',cible:'Fondateur',frequence:'1er mois',format:'pdf,email',status:'draft'},
-      {id:'suivi_ventes',titre:'Suivi Livrables',cible:'Fondateur,Commerciale',frequence:'JEUDI 16h',format:'pdf,email',status:'draft'}
+      {id:'bilan_hebdo',titre:'Bilan hebdomadaire',cible:'Fondateur, Conseil',frequence:'Lundi · 9h',format:'pdf,email',status:'draft'},
+      {id:'p_and_l',titre:'P&L mensuel',cible:'Fondateur',frequence:'1er de chaque mois',format:'pdf,email',status:'draft'},
+      {id:'suivi_ventes',titre:'Suivi des livrables',cible:'Fondateur, Commerciale',frequence:'Jeudi · 16h',format:'pdf,email',status:'draft'}
     ],
     commerciale: [
-      {id:'cours_marche',titre:'Cours Marché',cible:'Fondateur,RGA',frequence:'JEUDI 16h',format:'pdf,email',status:'draft'},
-      {id:'rapport_ventes',titre:'Rapport Ventes Mensuel',cible:'Fondateur,RGA',frequence:'1er mois',format:'pdf,email',status:'draft'}
+      {id:'cours_marche',titre:'Cours du marché',cible:'Fondateur, RGA',frequence:'Jeudi · 16h',format:'pdf,email',status:'draft'},
+      {id:'rapport_ventes',titre:'Rapport mensuel des ventes',cible:'Fondateur, RGA',frequence:'1er de chaque mois',format:'pdf,email',status:'draft'}
     ]
   },
   archive: []
@@ -6539,10 +6542,10 @@ function renderRapports(){
   function _statusLine(ok, text, warn){
     var col=ok?'#4caf50':(warn?'#ff9800':'#f44336');
     var ico=ok?'✅':(warn?'⚠️':'⏳');
-    return '<div style="font-size:11px;color:'+col+'">'+ico+' '+text+'</div>';
+    return '<div class="rapport-status" style="color:'+col+'">'+ico+' '+text+'</div>';
   }
   function _metaLine(text){
-    return '<div style="font-size:11px;color:#7a9a7a">'+text+'</div>';
+    return '<div class="rapport-note">'+text+'</div>';
   }
 
   var _lastFiche = CYCLE._lastFicheDate || ((_latestHistory(['fiche'])||{}).date || '');
@@ -6672,10 +6675,10 @@ function renderRapports(){
     rapport_ventes:{tab:'livrables',sub:'ventes'}
   };
 
-  function navBtn(r, label, icon){
+  function navBtn(r){
     var nav=rapNav[r.id];
     var _idEsc = String(r.id||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-    var act = '<button onclick="_openRapportPreview(\''+_idEsc+'\')">'+icon+' Voir</button>';
+    var act = '<button onclick="_openRapportPreview(\''+_idEsc+'\')">👁 Aperçu</button>';
     if(r.id==='rapport_wa'){
       return act + '<button onclick="_sendRapportWA()">📤 Envoyer</button>';
     }
@@ -6683,12 +6686,13 @@ function renderRapports(){
       var _tabEsc = String(nav.tab||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       var _subEsc = String(nav.sub||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       var onclick='chTab(\''+_tabEsc+'\');'+(nav.sub?'chSub(\''+_subEsc+'\');':'')+'r()';
-      return act + '<button onclick="'+onclick+'">📂 Ouvrir source</button>';
+      return act + '<button onclick="'+onclick+'">📂 Ouvrir le module</button>';
     }
     return act;
   }
 
-  var html='<div class="cnt"><h2 style="margin-bottom:16px">📊 Mes Rapports</h2>';
+  var html='<div class="cnt"><h2 style="margin-bottom:4px">📊 Rapports</h2>'
+    +'<div style="font-size:12px;color:#88aa88;margin-bottom:14px">Vue consolidée des rapports entrants et sortants</div>';
 
   html+='<div class="rapports-section"><div class="rapports-section-title">📥 À Recevoir</div>';
   if(entrants.length===0){
@@ -6706,7 +6710,7 @@ function renderRapports(){
         +'<div class="rapport-meta"><span>'+r.frequence+'</span><span>De: '+r.source+'</span></div>'
         +_rtIn.status
         +_rtIn.meta
-        +'<div class="rapport-actions">'+navBtn(r,'Voir','👁')+'</div></div>';
+        +'<div class="rapport-actions">'+navBtn(r)+'</div></div>';
     });
   }
   html+='</div>';
@@ -6727,7 +6731,7 @@ function renderRapports(){
         +'<div class="rapport-meta"><span>'+r.frequence+'</span><span>Vers: '+r.cible+'</span></div>'
         +_rtOut.status
         +_rtOut.meta
-        +'<div class="rapport-actions">'+navBtn(r,'Ouvrir','✏️')+'</div></div>';
+        +'<div class="rapport-actions">'+navBtn(r)+'</div></div>';
     });
   }
   html+='</div></div>';
@@ -6787,7 +6791,7 @@ function pageRapportPreview(){
     +'<div class="modal">'
     +'<div class="modal-head">'
       +'<div>'
-        +'<div style="font-size:16px;font-weight:700">📄 Aperçu rapport</div>'
+        +'<div style="font-size:16px;font-weight:700">📄 Aperçu du rapport</div>'
         +'<div style="font-size:12px;color:#88aa88;margin-top:2px">'+_escHtml(d.titre||'Rapport')+'</div>'
       +'</div>'
       +'<button onclick="S._rapportOpen=false;S._rapportData=null;r()" style="background:none;border:none;color:#7a9a7a;font-size:24px;line-height:1;cursor:pointer">×</button>'
@@ -6798,13 +6802,13 @@ function pageRapportPreview(){
       +'<div style="font-size:12px;color:#4caf50;margin-bottom:6px">'+_escHtml(d.statusText||'')+'</div>'
       +'<div style="font-size:12px;color:#7a9a7a;margin-bottom:10px">'+_escHtml(d.metaText||'')+'</div>'
       +(d.source?'<div style="font-size:12px;color:#7a9a7a;margin-bottom:4px">Source: '+_escHtml(d.source)+'</div>':'')
-      +(d.cible?'<div style="font-size:12px;color:#7a9a7a;margin-bottom:8px">Cible: '+_escHtml(d.cible)+'</div>':'')
+      +(d.cible?'<div style="font-size:12px;color:#7a9a7a;margin-bottom:8px">Destinataire(s): '+_escHtml(d.cible)+'</div>':'')
       +'<div style="background:#0f1f0f;border:1px solid #2a4a2a;border-radius:8px;padding:10px;font-size:12px;color:#ccc">'+_escHtml(d.note||'')+'</div>'
     +'</div>'
     +'<div class="modal-foot">'
-      +(d.canPdf?'<button class="btn-sec" onclick="exportKpiPDF()">📄 Export PDF</button>':'')
+      +(d.canPdf?'<button class="btn-sec" onclick="exportKpiPDF()">📄 Exporter en PDF</button>':'')
       +'<button class="btn-sec" onclick="S._rapportOpen=false;S._rapportData=null;r()">Fermer</button>'
-      +'<button onclick="_openRapportSource()">Ouvrir la source</button>'
+      +'<button onclick="_openRapportSource()">Ouvrir le module source</button>'
     +'</div>'
     +'</div>'
     +'</div>';
