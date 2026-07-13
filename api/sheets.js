@@ -20,13 +20,25 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const sessionToken = req.headers['x-session-token'];
-  if (!verifySession(sessionToken)) {
+  const sessionPayload = verifySession(sessionToken);
+  if (!sessionPayload) {
     return res.status(401).json({ error: 'Session invalide' });
   }
 
-  const { action, sid, range, values } = req.body || {};
+  const { action, sid, range, values, data, requests } = req.body || {};
   if (!action || !sid || !range) {
-    return res.status(400).json({ error: 'Paramètres manquants' });
+    if (['batchUpdateSpreadsheet', 'batchUpdateValues'].indexOf(action) === -1) {
+      return res.status(400).json({ error: 'Paramètres manquants' });
+    }
+  }
+
+  if (['read', 'append', 'write', 'clear', 'batchUpdateSpreadsheet', 'batchUpdateValues'].indexOf(action) === -1) {
+    return res.status(400).json({ error: 'Action inconnue' });
+  }
+
+  var auth = authorizeSheetsAccess(sessionPayload, sid, range, action, { data: data, requests: requests });
+  if (!auth.ok) {
+    return res.status(403).json({ error: auth.err || 'Accès refusé' });
   }
 
   const token = await getGoogleToken();
@@ -34,9 +46,9 @@ export default async function handler(req, res) {
 
   // ⚠️ Encoder UNIQUEMENT le nom de la feuille, pas la plage A1
   // encodeURIComponent(':') = '%3A' → Sheets API rejette avec "unable to parse range"
-  const parts = range.split('!');
-  const enc = encodeURIComponent(parts[0]) + (parts[1] ? '!' + parts[1] : '');
-  const baseUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/${enc}`;
+  const parts = String(range || '').split('!');
+  const enc = encodeURIComponent(parts[0] || '') + (parts[1] ? '!' + parts[1] : '');
+  const baseUrl = enc ? `https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/${enc}` : '';
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
   try {
@@ -63,8 +75,30 @@ export default async function handler(req, res) {
       data = await response.json();
       return res.status(200).json({ ok: !data.error, error: data.error?.message });
 
-    } else {
-      return res.status(400).json({ error: 'Action inconnue' });
+    } else if (action === 'clear') {
+      response = await fetch(`${baseUrl}:clear`, {
+        method: 'POST', headers,
+        body: '{}',
+      });
+      data = await response.json();
+      return res.status(200).json({ ok: !data.error, error: data.error?.message });
+
+    } else if (action === 'batchUpdateValues') {
+      response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values:batchUpdate?valueInputOption=USER_ENTERED`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ data: data || [] }),
+      });
+      data = await response.json();
+      return res.status(200).json({ ok: !data.error, error: data.error?.message });
+
+    } else if (action === 'batchUpdateSpreadsheet') {
+      response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}:batchUpdate`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ requests: requests || [] }),
+      });
+      data = await response.json();
+      return res.status(200).json({ ok: !data.error, error: data.error?.message });
+
     }
   } catch (e) {
     return res.status(500).json({ error: e.message });
@@ -97,17 +131,121 @@ function b64u(str) { return Buffer.from(str).toString('base64').replace(/\+/g,'-
 
 function verifySession(token) {
   const secret = process.env.SESSION_SECRET;
-  if (!secret || secret.length < 32) return false;
-  if (!token) return false;
+  if (!secret || secret.length < 32) return null;
+  if (!token) return null;
   try {
     const [payloadB64, hmac] = token.split('.');
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64').toString());
-    if (payload.exp < Date.now()) return false;
+    if (payload.exp < Date.now()) return null;
     const expected = createHmac('sha256', secret)
       .update(JSON.stringify(payload)).digest('hex');
-    try { return timingSafeEqual(Buffer.from(hmac), Buffer.from(expected)); }
-    catch { return hmac === expected; }
-  } catch { return false; }
+    try {
+      if (!timingSafeEqual(Buffer.from(hmac), Buffer.from(expected))) return null;
+    } catch {
+      if (hmac !== expected) return null;
+    }
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+var KNOWN_SHEETS = [
+  'Config_Cycle', 'Config_App', 'Config_Passwords',
+  'Fiche_Quotidienne', 'SOP_Check', 'Stock_Nourriture', 'Incidents', 'Pesees', 'Sante_Mortalite',
+  'Hebdomadaire', 'KPI_Mensuels', 'KPI_Hebdo', 'Historique_Cycles', 'SOP_Protocol',
+  'Ventes_Betes', 'Suivi_Marche', 'Suivi_Aliments'
+];
+
+var ROLE_WRITABLE_SHEETS = {
+  fondateur: ['*'],
+  gerant: ['Fiche_Quotidienne', 'SOP_Check', 'Stock_Nourriture', 'Incidents', 'Pesees', 'Sante_Mortalite', 'Hebdomadaire', 'KPI_Mensuels', 'KPI_Hebdo'],
+  rga: ['SOP_Check', 'Incidents', 'Sante_Mortalite', 'Hebdomadaire', 'Config_Cycle'],
+  fallou: ['Suivi_Marche', 'Suivi_Aliments', 'Ventes_Betes']
+};
+
+function normalizeRole(role) {
+  if (role === 'commerciale') return 'fallou';
+  return role;
+}
+
+function getAllowedSidsForRole(role) {
+  var r = normalizeRole(role);
+  if (r === 'fondateur') {
+    return [process.env.SID_FONDATEUR, process.env.SID_GERANT, process.env.SID_FALLOU].filter(Boolean);
+  }
+  if (r === 'gerant') {
+    return [process.env.SID_GERANT, process.env.SID_FONDATEUR].filter(Boolean);
+  }
+  if (r === 'rga') {
+    return [process.env.SID_RGA, process.env.SID_GERANT, process.env.SID_FONDATEUR].filter(Boolean);
+  }
+  if (r === 'fallou') {
+    return [process.env.SID_FALLOU, process.env.SID_FONDATEUR].filter(Boolean);
+  }
+  return [];
+}
+
+function extractSheetName(range) {
+  var s = String(range || '');
+  var parts = s.split('!');
+  return (parts[0] || '').trim();
+}
+
+function canWriteSheet(role, sheet) {
+  var writable = ROLE_WRITABLE_SHEETS[role] || [];
+  return writable.indexOf('*') >= 0 || writable.indexOf(sheet) >= 0;
+}
+
+function parseAddSheetRequests(reqs) {
+  return (reqs || []).map(function(r) {
+    return r && r.addSheet && r.addSheet.properties && r.addSheet.properties.title;
+  }).filter(Boolean);
+}
+
+function authorizeSheetsAccess(payload, sid, range, action, extra) {
+  extra = extra || {};
+  var role = normalizeRole(payload && payload.role);
+  if (!role) return { ok: false, err: 'Session sans rôle' };
+
+  var allowedSids = getAllowedSidsForRole(role);
+  if (allowedSids.indexOf(String(sid)) === -1) {
+    return { ok: false, err: 'SID non autorisé pour ce rôle' };
+  }
+
+  if (action === 'batchUpdateSpreadsheet') {
+    var addTitles = parseAddSheetRequests(extra.requests);
+    if (!addTitles.length) return { ok: false, err: 'batchUpdate non autorisé' };
+    for (var i = 0; i < addTitles.length; i++) {
+      var t = addTitles[i];
+      if (KNOWN_SHEETS.indexOf(t) === -1) return { ok: false, err: 'Feuille non autorisée' };
+      if (!canWriteSheet(role, t)) return { ok: false, err: 'Écriture non autorisée pour ce rôle' };
+    }
+    return { ok: true };
+  }
+
+  if (action === 'batchUpdateValues') {
+    var arr = extra.data || [];
+    if (!arr.length) return { ok: false, err: 'Données batch manquantes' };
+    for (var j = 0; j < arr.length; j++) {
+      var rg = arr[j] && arr[j].range;
+      var sh = extractSheetName(rg);
+      if (!sh || KNOWN_SHEETS.indexOf(sh) === -1) return { ok: false, err: 'Feuille non autorisée' };
+      if (!canWriteSheet(role, sh)) return { ok: false, err: 'Écriture non autorisée pour ce rôle' };
+    }
+    return { ok: true };
+  }
+
+  var sheet = extractSheetName(range);
+  if (!sheet || KNOWN_SHEETS.indexOf(sheet) === -1) {
+    return { ok: false, err: 'Feuille non autorisée' };
+  }
+
+  if (action === 'append' || action === 'write' || action === 'clear') {
+    if (!canWriteSheet(role, sheet)) return { ok: false, err: 'Écriture non autorisée pour ce rôle' };
+  }
+
+  return { ok: true };
 }
 
 function isAllowedOrigin(origin) {

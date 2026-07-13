@@ -29,29 +29,45 @@ export default async function handler(req, res) {
   const { founderPassword, role, newPassword, newLogin } = req.body || {};
 
   // 2. Vérifier champs
+  const roleAlias = { commerciale: 'fallou' };
+  const normalizedRole = roleAlias[role] || role;
   const validRoles = ['fondateur', 'gerant', 'rga', 'fallou'];
-  if (!role || !validRoles.includes(role)) return res.status(400).json({ error: 'Rôle invalide' });
+  if (!normalizedRole || !validRoles.includes(normalizedRole)) return res.status(400).json({ error: 'Rôle invalide' });
   if (!newPassword && !newLogin) return res.status(400).json({ error: 'Saisir un nouvel identifiant et/ou un nouveau mot de passe' });
   if (newPassword && newPassword.length < 6) return res.status(400).json({ error: 'Nouveau mot de passe trop court (6 car. min)' });
   if (newLogin && !/^[a-z0-9_]{3,}$/.test(newLogin)) return res.status(400).json({ error: 'Identifiant invalide (3+ caractères, minuscules/chiffres/_)' });
   if (!founderPassword) return res.status(400).json({ error: 'Mot de passe fondateur requis' });
 
-  // 3. Re-vérifier le mot de passe fondateur (comparaison en temps constant — protection timing attack)
-  const _fpExpected = process.env.PWD_FONDATEUR || '';
-  const _fpB1 = Buffer.from(String(founderPassword));
-  const _fpB2 = Buffer.from(String(_fpExpected));
-  const _fpMax = Math.max(_fpB1.length, _fpB2.length);
-  const _fpPad1 = Buffer.concat([_fpB1, Buffer.alloc(_fpMax - _fpB1.length)]);
-  const _fpPad2 = Buffer.concat([_fpB2, Buffer.alloc(_fpMax - _fpB2.length)]);
-  const _fpMatch = timingSafeEqual(_fpPad1, _fpPad2) && _fpB1.length === _fpB2.length;
-  if (!_fpMatch) {
-    return res.status(401).json({ error: 'Mot de passe fondateur incorrect' });
-  }
-
   try {
     const token = await getGoogleToken();
     const SID_FONDATEUR = process.env.SID_FONDATEUR;
     const sheetEnc = encodeURIComponent('Config_Passwords');
+
+    // 3. Re-vérifier le mot de passe fondateur (env + override Config_Passwords si défini)
+    var founderExpected = process.env.PWD_FONDATEUR || '';
+    try {
+      const founderReadRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID_FONDATEUR}/values/${sheetEnc}!A:D`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const founderReadData = await founderReadRes.json();
+      const founderRows = (founderReadData.values || []).filter(r => r[0] && r[0] !== 'role');
+      const founderOverride = founderRows.find(r => r[0] === 'fondateur');
+      if (founderOverride && founderOverride[1]) {
+        founderExpected = Buffer.from(founderOverride[1], 'base64').toString();
+      }
+    } catch(e) {
+      // Fallback silencieux sur variable d'environnement
+    }
+
+    const _fpB1 = Buffer.from(String(founderPassword));
+    const _fpB2 = Buffer.from(String(founderExpected));
+    const _fpMax = Math.max(_fpB1.length, _fpB2.length);
+    const _fpPad1 = Buffer.concat([_fpB1, Buffer.alloc(_fpMax - _fpB1.length)]);
+    const _fpPad2 = Buffer.concat([_fpB2, Buffer.alloc(_fpMax - _fpB2.length)]);
+    const _fpMatch = timingSafeEqual(_fpPad1, _fpPad2) && _fpB1.length === _fpB2.length;
+    if (!_fpMatch) {
+      return res.status(401).json({ error: 'Mot de passe fondateur incorrect' });
+    }
 
     // Auto-créer la feuille Config_Passwords si absente
     const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SID_FONDATEUR}?fields=sheets.properties.title`, {
@@ -83,7 +99,7 @@ export default async function handler(req, res) {
     let existingPwdEncoded = '';
     let existingLoginOverride = '';
     rows.forEach((row, i) => {
-      if (row[0] === role) {
+      if (row[0] === normalizedRole) {
         targetSheetRow = i + 2; // +1 index base-1, +1 en-tête
         existingPwdEncoded = row[1] || '';
         existingLoginOverride = row[3] || '';
@@ -93,7 +109,7 @@ export default async function handler(req, res) {
     const timestamp = new Date().toISOString();
     const pwdEncoded = newPassword ? Buffer.from(newPassword).toString('base64') : existingPwdEncoded;
     const loginOverride = newLogin !== undefined ? newLogin : existingLoginOverride;
-    const rowData = [role, pwdEncoded, timestamp, loginOverride];
+    const rowData = [normalizedRole, pwdEncoded, timestamp, loginOverride];
 
     if (targetSheetRow >= 0) {
       // Mise à jour ligne existante (PUT exact)
@@ -115,7 +131,7 @@ export default async function handler(req, res) {
     const parts = [];
     if (newPassword) parts.push('mot de passe mis à jour');
     if (newLogin)    parts.push(`identifiant → ${newLogin}`);
-    return res.status(200).json({ ok: true, message: `${role} : ${parts.join(' + ')}` });
+    return res.status(200).json({ ok: true, message: `${normalizedRole} : ${parts.join(' + ')}` });
 
   } catch (e) {
     return res.status(500).json({ error: 'Erreur serveur : ' + e.message });
