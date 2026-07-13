@@ -6674,12 +6674,15 @@ function renderRapports(){
 
   function navBtn(r, label, icon){
     var nav=rapNav[r.id];
-    var act = '<button onclick="_openRapportPreview('+JSON.stringify(r.id)+')">'+icon+' Voir</button>';
+    var _idEsc = String(r.id||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    var act = '<button onclick="_openRapportPreview(\''+_idEsc+'\')">'+icon+' Voir</button>';
     if(r.id==='rapport_wa'){
       return act + '<button onclick="_sendRapportWA()">📤 Envoyer</button>';
     }
     if(nav){
-      var onclick='chTab('+JSON.stringify(nav.tab)+');'+(nav.sub?'chSub('+JSON.stringify(nav.sub)+');':'')+'r()';
+      var _tabEsc = String(nav.tab||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      var _subEsc = String(nav.sub||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      var onclick='chTab(\''+_tabEsc+'\');'+(nav.sub?'chSub(\''+_subEsc+'\');':'')+'r()';
       return act + '<button onclick="'+onclick+'">📂 Ouvrir source</button>';
     }
     return act;
