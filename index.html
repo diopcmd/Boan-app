@@ -358,6 +358,16 @@ body.light .badge{background:#d0e8d0;color:#1a4a1a}
 body.light .sim-row span{color:#334433}
 body.light .sim-num-input{background:#f8faf8;border-color:#b8ccb8;color:#1a2e1a}
 body.light .sim-row span:first-child{color:#557755}
+body.light .simu-wrap .sim-row{border-bottom-color:#d8e6d8}
+body.light .simu-wrap .sim-input-row input[type=range]::-webkit-slider-runnable-track{background:#b8ccb8}
+body.light .simu-wrap .sim-input-row input[type=range]::-webkit-slider-thumb{background:#2d6a2d}
+body.light .simu-wrap [style*="background:#0a150a"]{background:#f8faf8 !important;border-color:#c8dcc8 !important}
+body.light .simu-wrap [style*="background:#0f1f0f"]{background:#edf5ed !important;color:#1a2e1a !important}
+body.light .simu-wrap [style*="background:#111f11"],body.light .simu-wrap [style*="background:linear-gradient(135deg,#111f11"]{background:linear-gradient(135deg,#e8f5e8,#d6ead6) !important;color:#1a2e1a !important}
+body.light .simu-wrap [style*="border:1px solid #2a4a2a"],body.light .simu-wrap [style*="border:1px solid #1a2e1a"]{border-color:#c8dcc8 !important}
+body.light .simu-wrap [style*="color:#eee"],body.light .simu-wrap [style*="color:#fff"]{color:#1a2e1a !important}
+body.light .simu-wrap [style*="color:#88aa88"],body.light .simu-wrap [style*="color:#7a9a7a"]{color:#557755 !important}
+body.light .simu-wrap button[style*="background:transparent"],body.light .simu-wrap button[style*="background: transparent"]{background:#f8faf8 !important;border-color:#b8ccb8 !important;color:#1a2e1a !important}
 body.light .mkt{background:#fff;border-color:#c8dcc8;color:#1a2e1a}
 body.light .mkt div div:first-child{color:#2d6a2d;font-weight:600}
 body.light .mkt div div:last-child{color:#557755}
@@ -10147,7 +10157,8 @@ function viewMarche(){
       +'</div>'
       +'</div>';
 
-    view = _depRealBanner
+    view = '<div class="simu-wrap">'
+    + _depRealBanner
 
     // Badge bêtes vendues (si applicable)
     + (LIVE.sold && LIVE.sold.length
@@ -10267,6 +10278,7 @@ function viewMarche(){
     +     ' · ROI : ' + sign(roi) + roi + '%'
     +   '</div>'
     +   '<div style="font-size:11px;margin-top:6px;opacity:.7;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px">Seuil de rentabilité : <strong>' + fmt(pxSeuil) + ' FCFA/kg</strong></div>'
+    + '</div>'
     + '</div>';
   } else {
     // ── Recommandations par bête + signal global achat/vente ──
