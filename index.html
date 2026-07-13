@@ -2007,6 +2007,7 @@ var S = {
   _resetPwdOpen:false, _resetPwd:'', _resetPwdError:'', _resetGoCheck:false,
   _pwdMgrOpen:false, _pwdMgrStep:'auth', _pwdMgrError:'', _pwdMgrSuccess:'',
   _pwdMgrCurrent:'', _pwdMgrRole:'', _pwdMgrNew:'', _pwdMgrConfirm:'', _pwdMgrNewLogin:'',
+  _rapportOpen:false, _rapportData:null, _rapportIndex:{},
   _guideOpen: false,
   _aiOpen:false, _aiLoading:false, _aiResult:'', _aiError:'', _aiQuestion:'',
   _clotureOpen: false, _clotureData: null,
@@ -2074,7 +2075,7 @@ function _renderNow() {
   }
   // Verrou scroll : bloque le défilement du fond quand un overlay est actif (iOS/Android)
   var _ov = SB.open || MODAL.open || CONFIRM.open ||
-    S._resetPwdOpen || S._aiOpen || S._pwdMgrOpen || S._guideOpen || S._clotureOpen;
+    S._resetPwdOpen || S._aiOpen || S._pwdMgrOpen || S._guideOpen || S._clotureOpen || S._rapportOpen;
   document.body.style.overflow = _ov ? 'hidden' : '';
   var html;
   if (S.page==='login') {
@@ -2092,6 +2093,7 @@ function _renderNow() {
       if (S._resetPwdOpen) html += pageResetPwd();
       if (S._aiOpen) html += pageAI();
       if (S._pwdMgrOpen) html += pagePwdManager();
+      if (S._rapportOpen) html += pageRapportPreview();
       if (S._guideOpen)   html += pageGuide();
       if (S._clotureOpen) html += pageClotureCycle();
     } catch(e) {
@@ -6514,6 +6516,7 @@ function renderRapports(){
   var role=S.user;
   var entrants=RAPPORTS.entrants[role]||[];
   var sortants=RAPPORTS.sortants[role]||[];
+  S._rapportIndex = {};
   var _today=today();
   var _sem=String(calcSemaine());
 
@@ -6572,6 +6575,8 @@ function renderRapports(){
     if(id==='rap_jour' || id==='fiche_insp'){
       var doneFiche = ficheDejaSoumise();
       return {
+        statusText: doneFiche?'Fiche quotidienne disponible':'En attente fiche du jour',
+        metaText: 'Dernière fiche: '+(_lastFiche||'—'),
         status: _statusLine(doneFiche, doneFiche?'Fiche quotidienne disponible':'En attente fiche du jour'),
         meta: _metaLine('Dernière fiche: '+(_lastFiche||'—'))
       };
@@ -6579,6 +6584,8 @@ function renderRapports(){
     if(id==='fiche_stock'){
       var doneStock = (CYCLE._lastStockDate===_today) || HISTORY.some(function(h){ return h.type==='stock' && h.date===_today; });
       return {
+        statusText: doneStock?'Stock du jour disponible':'Stock du jour non saisi',
+        metaText: 'Dernier stock: '+(_lastStock||'—'),
         status: _statusLine(doneStock, doneStock?'Stock du jour disponible':'Stock du jour non saisi'),
         meta: _metaLine('Dernier stock: '+(_lastStock||'—'))
       };
@@ -6586,6 +6593,8 @@ function renderRapports(){
     if(id==='rapport_wa'){
       var readyWa = ficheDejaSoumise();
       return {
+        statusText: readyWa?'Prêt à envoyer sur WhatsApp':'Attente des données du jour',
+        metaText: 'Semaine '+_sem+' · canal WhatsApp',
         status: _statusLine(readyWa, readyWa?'Prêt à envoyer sur WhatsApp':'Attente des données du jour', !readyWa),
         meta: _metaLine('Semaine '+_sem+' · canal WhatsApp')
       };
@@ -6593,6 +6602,8 @@ function renderRapports(){
     if(id==='rap_hebdo' || id==='bilan_hebdo'){
       var doneBil = bilanDejaFaitCetteSemaine();
       return {
+        statusText: doneBil?'Bilan hebdo disponible':'Bilan hebdo en attente (sem. '+_sem+')',
+        metaText: 'Dernier bilan: '+(_lastBilan||'—'),
         status: _statusLine(doneBil, doneBil?'Bilan hebdo disponible':'Bilan hebdo en attente (sem. '+_sem+')'),
         meta: _metaLine('Dernier bilan: '+(_lastBilan||'—'))
       };
@@ -6601,6 +6612,8 @@ function renderRapports(){
       var hasKpi = !!MOCK.kpiDate;
       var stale = hasKpi && _kpiAgeDays!==null && _kpiAgeDays>30;
       return {
+        statusText: hasKpi ? ('Dernier KPI: '+MOCK.kpiDate+(stale?' (à rafraîchir)':'')) : 'Aucune mise à jour KPI',
+        metaText: 'Source: KPI_Mensuels',
         status: _statusLine(hasKpi && !stale, hasKpi ? ('Dernier KPI: '+MOCK.kpiDate+(stale?' (à rafraîchir)':'')) : 'Aucune mise à jour KPI', hasKpi && stale),
         meta: _metaLine('Source: KPI_Mensuels')
       };
@@ -6609,6 +6622,8 @@ function renderRapports(){
       var nV=(LIVE.ventes||[]).length;
       var tot=(LIVE.ventes||[]).reduce(function(s,v){ return s+(v.total||0); },0);
       return {
+        statusText: nV>0 ? (nV+' vente(s) enregistrée(s)') : 'Aucune vente enregistrée',
+        metaText: _lastVente ? ('Dernière vente: '+(_lastVente.date||'—')+' · '+fmt(Math.round(_lastVente.total||0))+' FCFA · Total cycle: '+fmt(Math.round(tot))+' FCFA') : 'Total cycle: 0 FCFA',
         status: _statusLine(nV>0, nV>0 ? (nV+' vente(s) enregistrée(s)') : 'Aucune vente enregistrée'),
         meta: _metaLine(_lastVente ? ('Dernière vente: '+(_lastVente.date||'—')+' · '+fmt(Math.round(_lastVente.total||0))+' FCFA · Total cycle: '+fmt(Math.round(tot))+' FCFA') : 'Total cycle: 0 FCFA')
       };
@@ -6616,6 +6631,8 @@ function renderRapports(){
     if(id==='rap_marche' || id==='cours_marche'){
       var okPrix = !!_lastPrix;
       return {
+        statusText: okPrix?'Cours marché disponible':'Cours marché non reçu',
+        metaText: _marcheInfo,
         status: _statusLine(okPrix, okPrix?'Cours marché disponible':'Cours marché non reçu'),
         meta: _metaLine(_marcheInfo)
       };
@@ -6623,11 +6640,15 @@ function renderRapports(){
     if(id==='rap_feedback'){
       var hasFeedbackBase = !!_lastFiche;
       return {
+        statusText: hasFeedbackBase?'Dernière base de feedback disponible':'Aucune fiche source pour feedback',
+        metaText: 'Source: fiche quotidienne + KPI',
         status: _statusLine(hasFeedbackBase, hasFeedbackBase?'Dernière base de feedback disponible':'Aucune fiche source pour feedback'),
         meta: _metaLine('Source: fiche quotidienne + KPI')
       };
     }
     return {
+      statusText: r.status==='ready'?'Disponible':'En préparation',
+      metaText: 'Fréquence: '+(r.frequence||'—'),
       status: _statusLine(r.status==='ready', r.status==='ready'?'Disponible':'En préparation', r.status!=='ready'),
       meta: _metaLine('Fréquence: '+(r.frequence||'—'))
     };
@@ -6653,14 +6674,15 @@ function renderRapports(){
 
   function navBtn(r, label, icon){
     var nav=rapNav[r.id];
+    var act = '<button onclick="_openRapportPreview('+JSON.stringify(r.id)+')">'+icon+' Voir</button>';
     if(r.id==='rapport_wa'){
-      return '<button onclick="_sendRapportWA()">'+icon+' '+label+'</button>';
+      return act + '<button onclick="_sendRapportWA()">📤 Envoyer</button>';
     }
     if(nav){
       var onclick='chTab('+JSON.stringify(nav.tab)+');'+(nav.sub?'chSub('+JSON.stringify(nav.sub)+');':'')+'r()';
-      return '<button onclick="'+onclick+'">'+icon+' '+label+'</button>';
+      return act + '<button onclick="'+onclick+'">📂 Ouvrir source</button>';
     }
-    return '';
+    return act;
   }
 
   var html='<div class="cnt"><h2 style="margin-bottom:16px">📊 Mes Rapports</h2>';
@@ -6671,6 +6693,12 @@ function renderRapports(){
   }else{
     entrants.forEach(function(r){
       var _rtIn=_reportRuntime(r);
+      S._rapportIndex[r.id] = {
+        id:r.id, titre:r.titre||'', frequence:r.frequence||'', format:r.format||'',
+        source:r.source||'', cible:r.cible||'',
+        statusText:_rtIn.statusText||'', metaText:_rtIn.metaText||'',
+        nav: rapNav[r.id] || null
+      };
       html+='<div class="rapport-card"><div class="rapport-title">'+r.titre+'</div>'
         +'<div class="rapport-meta"><span>'+r.frequence+'</span><span>De: '+r.source+'</span></div>'
         +_rtIn.status
@@ -6686,6 +6714,12 @@ function renderRapports(){
   }else{
     sortants.forEach(function(r){
       var _rtOut=_reportRuntime(r);
+      S._rapportIndex[r.id] = {
+        id:r.id, titre:r.titre||'', frequence:r.frequence||'', format:r.format||'',
+        source:r.source||'', cible:r.cible||'',
+        statusText:_rtOut.statusText||'', metaText:_rtOut.metaText||'',
+        nav: rapNav[r.id] || null
+      };
       html+='<div class="rapport-card"><div class="rapport-title">'+r.titre+'</div>'
         +'<div class="rapport-meta"><span>'+r.frequence+'</span><span>Vers: '+r.cible+'</span></div>'
         +_rtOut.status
@@ -6696,6 +6730,83 @@ function renderRapports(){
   html+='</div></div>';
   return html;
 }
+
+function _openRapportPreview(id){
+  var d = (S._rapportIndex && S._rapportIndex[id]) ? S._rapportIndex[id] : null;
+  if(!d){ S.msg='err:Rapport introuvable'; r(); return; }
+  var f = String(d.format || '').toLowerCase();
+  var hasPdf = f.indexOf('pdf') >= 0;
+  var kind = hasPdf ? 'PDF' : 'Texte / App';
+  var note = hasPdf
+    ? 'Ce rapport est prévu en PDF (ou email) selon le module source.'
+    : 'Ce rapport est opérationnel dans l\'application (texte/tableau/notification).';
+  S._rapportData = {
+    id:d.id,
+    titre:d.titre,
+    frequence:d.frequence,
+    format:d.format,
+    source:d.source,
+    cible:d.cible,
+    statusText:d.statusText,
+    metaText:d.metaText,
+    nav:d.nav,
+    kind:kind,
+    note:note,
+    canPdf:(id==='rap_monthly' || id==='p_and_l')
+  };
+  S._rapportOpen = true;
+  r();
+}
+
+function _openRapportSource(){
+  var d=S._rapportData;
+  if(!d) return;
+  S._rapportOpen=false;
+  if(d.id==='rapport_wa'){
+    _sendRapportWA();
+    return;
+  }
+  if(d.nav && d.nav.tab){
+    chTab(d.nav.tab);
+    if(d.nav.sub) chSub(d.nav.sub);
+    S.msg='ok:Source du rapport ouverte';
+    r();
+    return;
+  }
+  S.msg='err:Aucun module source configuré pour ce rapport';
+  r();
+}
+
+function pageRapportPreview(){
+  if(!S._rapportOpen || !S._rapportData) return '';
+  var d=S._rapportData;
+  return '<div class="modal-overlay" onclick="if(event.target===this){S._rapportOpen=false;S._rapportData=null;r();}">'
+    +'<div class="modal">'
+    +'<div class="modal-head">'
+      +'<div>'
+        +'<div style="font-size:16px;font-weight:700">📄 Aperçu rapport</div>'
+        +'<div style="font-size:12px;color:#88aa88;margin-top:2px">'+_escHtml(d.titre||'Rapport')+'</div>'
+      +'</div>'
+      +'<button onclick="S._rapportOpen=false;S._rapportData=null;r()" style="background:none;border:none;color:#7a9a7a;font-size:24px;line-height:1;cursor:pointer">×</button>'
+    +'</div>'
+    +'<div class="modal-body">'
+      +'<div style="font-size:12px;color:#88aa88;margin-bottom:6px">Fréquence: '+_escHtml(d.frequence||'—')+'</div>'
+      +'<div style="font-size:12px;color:#88aa88;margin-bottom:6px">Format attendu: <strong style="color:#C8A06A">'+_escHtml(d.kind||'—')+'</strong> · Canal: '+_escHtml(d.format||'app')+'</div>'
+      +'<div style="font-size:12px;color:#4caf50;margin-bottom:6px">'+_escHtml(d.statusText||'')+'</div>'
+      +'<div style="font-size:12px;color:#7a9a7a;margin-bottom:10px">'+_escHtml(d.metaText||'')+'</div>'
+      +(d.source?'<div style="font-size:12px;color:#7a9a7a;margin-bottom:4px">Source: '+_escHtml(d.source)+'</div>':'')
+      +(d.cible?'<div style="font-size:12px;color:#7a9a7a;margin-bottom:8px">Cible: '+_escHtml(d.cible)+'</div>':'')
+      +'<div style="background:#0f1f0f;border:1px solid #2a4a2a;border-radius:8px;padding:10px;font-size:12px;color:#ccc">'+_escHtml(d.note||'')+'</div>'
+    +'</div>'
+    +'<div class="modal-foot">'
+      +(d.canPdf?'<button class="btn-sec" onclick="exportKpiPDF()">📄 Export PDF</button>':'')
+      +'<button class="btn-sec" onclick="S._rapportOpen=false;S._rapportData=null;r()">Fermer</button>'
+      +'<button onclick="_openRapportSource()">Ouvrir la source</button>'
+    +'</div>'
+    +'</div>'
+    +'</div>';
+}
+
 function _sendRapportWA(){
   var nb=CYCLE.nbBetes||4;
   var gmq=LIVE.gmq||(MOCK.gmq||0);
