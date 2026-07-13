@@ -10,11 +10,17 @@ export default async function handler(req, res) {
   }
 
   const USERS = {
-    fondateur: { name:'Direction',      pwd: process.env.PWD_FONDATEUR, tabs:['dashboard','saisie','livrables','marche','guide'], sid: process.env.SID_FONDATEUR },
-    gerant:    { name:'Gerant terrain', pwd: process.env.PWD_GERANT,    tabs:['dashboard','saisie','guide'],                      sid: process.env.SID_GERANT    },
-    rga:       { name:'RGA',            pwd: process.env.PWD_RGA,       tabs:['dashboard','livrables','guide'],                   sid: process.env.SID_RGA       },
-    fallou:    { name:'Commerciale',    pwd: process.env.PWD_FALLOU,    tabs:['dashboard','marche','guide'],                      sid: process.env.SID_FALLOU    },
+    fondateur: { name:'Direction',      pwd: process.env.PWD_FONDATEUR, tabs:['dashboard','saisie','livrables','marche','rapports','guide'], sid: process.env.SID_FONDATEUR },
+    gerant:    { name:'Gerant terrain', pwd: process.env.PWD_GERANT,    tabs:['dashboard','saisie','rapports','guide'],                      sid: process.env.SID_GERANT    },
+    rga:       { name:'RGA',            pwd: process.env.PWD_RGA,       tabs:['dashboard','livrables','rapports','guide'],                   sid: process.env.SID_RGA       },
+    fallou:    { name:'Commerciale',    pwd: process.env.PWD_FALLOU,    tabs:['dashboard','marche','rapports','guide'],                      sid: process.env.SID_FALLOU    },
   };
+
+  function normalizeRoleKey(v) {
+    if (!v) return v;
+    var k = String(v).trim().toLowerCase();
+    return (k === 'commerciale') ? 'fallou' : k;
+  }
 
   // R-03 : restreindre CORS — autoriser les domaines Vercel légitimes + localhost dev
   // Les appels same-origin (depuis le front Vercel vers /api/auth) n'ont pas de header Origin
@@ -39,8 +45,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok:false, error: 'Identifiants manquants' });
     }
 
-    let role = login;
-    let user = USERS[login];
+    const loginKey = normalizeRoleKey(login);
+    let role = loginKey;
+    let user = USERS[loginKey];
     let expectedPwd = user ? user.pwd : null;
 
     // Lire Config_Passwords (overrides login + password)
@@ -55,16 +62,16 @@ export default async function handler(req, res) {
         const rows = (d.values || []).filter(row => row[0] && row[0] !== 'role');
 
         if (!user) {
-          const overrideRow = rows.find(row => row[3] && row[3] === login);
+          const overrideRow = rows.find(row => row[3] && normalizeRoleKey(row[3]) === loginKey);
           if (overrideRow) {
-            role = overrideRow[0];
+            role = normalizeRoleKey(overrideRow[0]);
             user = USERS[role];
             if (!user) return res.status(401).json({ ok:false, error: 'Identifiant inconnu' });
             expectedPwd = user.pwd;
             if (overrideRow[1]) expectedPwd = Buffer.from(overrideRow[1], 'base64').toString();
           }
         } else {
-          const override = rows.find(row => row[0] === login);
+          const override = rows.find(row => normalizeRoleKey(row[0]) === loginKey);
           if (override && override[1]) {
             expectedPwd = Buffer.from(override[1], 'base64').toString();
           }
@@ -96,7 +103,7 @@ export default async function handler(req, res) {
     }
 
     // Générer session token
-    const payload = JSON.stringify({ login, role, exp: Date.now() + 8 * 3600 * 1000 });
+    const payload = JSON.stringify({ login: loginKey, role, exp: Date.now() + 8 * 3600 * 1000 });
     const hmac = createHmac('sha256', sessionSecret)
       .update(payload).digest('hex');
     const sessionToken = Buffer.from(payload).toString('base64') + '.' + hmac;
@@ -134,7 +141,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       sessionToken,
-      user: { login, role: returnRole, name: user.name, tabs: user.tabs },
+      user: { login: loginKey, role: returnRole, name: user.name, tabs: user.tabs },
       sid,
     });
 
