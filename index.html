@@ -6514,6 +6514,124 @@ function renderRapports(){
   var role=S.user;
   var entrants=RAPPORTS.entrants[role]||[];
   var sortants=RAPPORTS.sortants[role]||[];
+  var _today=today();
+  var _sem=String(calcSemaine());
+
+  function _frTs(d){
+    if(!d || typeof d!=='string') return 0;
+    var p=d.split('/');
+    if(p.length!==3) return 0;
+    return new Date(parseInt(p[2],10), parseInt(p[1],10)-1, parseInt(p[0],10)).getTime() || 0;
+  }
+  function _latestHistory(types){
+    var arr=(types||[]);
+    var best=null, bestTs=0;
+    HISTORY.forEach(function(h){
+      if(arr.indexOf(h.type)===-1) return;
+      var ts=_frTs(h.date);
+      if(ts>=bestTs){ best=h; bestTs=ts; }
+    });
+    return best;
+  }
+  function _statusLine(ok, text, warn){
+    var col=ok?'#4caf50':(warn?'#ff9800':'#f44336');
+    var ico=ok?'✅':(warn?'⚠️':'⏳');
+    return '<div style="font-size:11px;color:'+col+'">'+ico+' '+text+'</div>';
+  }
+  function _metaLine(text){
+    return '<div style="font-size:11px;color:#7a9a7a">'+text+'</div>';
+  }
+
+  var _lastFiche = CYCLE._lastFicheDate || ((_latestHistory(['fiche'])||{}).date || '');
+  var _lastStock = CYCLE._lastStockDate || ((_latestHistory(['stock'])||{}).date || '');
+  var _lastBilan = (_latestHistory(['bilan'])||{}).date || '';
+  var _lastVente = (function(){
+    var best=null, bestTs=0;
+    (LIVE.ventes||[]).forEach(function(v){
+      var ts=_frTs(v.date);
+      if(ts>=bestTs){ best=v; bestTs=ts; }
+    });
+    return best;
+  })();
+
+  var _lastPrix=_livePrixMax();
+  var _marcheInfo=_lastPrix
+    ? ('Dernière saisie: '+(_lastPrix.date||'—')+' · '+(_lastPrix.foi||'—')+' · '+fmt(Math.round(_lastPrix.moy||_lastPrix.bas||0))+' FCFA/kg')
+    : 'Aucune saisie marché reçue pour le cycle en cours';
+  var _kpiAgeDays=(function(){
+    if(!MOCK.kpiDate) return null;
+    var ts=_frTs(MOCK.kpiDate);
+    if(!ts) return null;
+    var n=_nowDakar();
+    var nowTs=new Date(n.year,n.month-1,n.day).getTime();
+    return Math.max(0, Math.round((nowTs-ts)/86400000));
+  })();
+
+  function _reportRuntime(r){
+    var id=r.id;
+    if(id==='rap_jour' || id==='fiche_insp'){
+      var doneFiche = ficheDejaSoumise();
+      return {
+        status: _statusLine(doneFiche, doneFiche?'Fiche quotidienne disponible':'En attente fiche du jour'),
+        meta: _metaLine('Dernière fiche: '+(_lastFiche||'—'))
+      };
+    }
+    if(id==='fiche_stock'){
+      var doneStock = (CYCLE._lastStockDate===_today) || HISTORY.some(function(h){ return h.type==='stock' && h.date===_today; });
+      return {
+        status: _statusLine(doneStock, doneStock?'Stock du jour disponible':'Stock du jour non saisi'),
+        meta: _metaLine('Dernier stock: '+(_lastStock||'—'))
+      };
+    }
+    if(id==='rapport_wa'){
+      var readyWa = ficheDejaSoumise();
+      return {
+        status: _statusLine(readyWa, readyWa?'Prêt à envoyer sur WhatsApp':'Attente des données du jour', !readyWa),
+        meta: _metaLine('Semaine '+_sem+' · canal WhatsApp')
+      };
+    }
+    if(id==='rap_hebdo' || id==='bilan_hebdo'){
+      var doneBil = bilanDejaFaitCetteSemaine();
+      return {
+        status: _statusLine(doneBil, doneBil?'Bilan hebdo disponible':'Bilan hebdo en attente (sem. '+_sem+')'),
+        meta: _metaLine('Dernier bilan: '+(_lastBilan||'—'))
+      };
+    }
+    if(id==='rap_monthly' || id==='p_and_l'){
+      var hasKpi = !!MOCK.kpiDate;
+      var stale = hasKpi && _kpiAgeDays!==null && _kpiAgeDays>30;
+      return {
+        status: _statusLine(hasKpi && !stale, hasKpi ? ('Dernier KPI: '+MOCK.kpiDate+(stale?' (à rafraîchir)':'')) : 'Aucune mise à jour KPI', hasKpi && stale),
+        meta: _metaLine('Source: KPI_Mensuels')
+      };
+    }
+    if(id==='rap_ventes' || id==='suivi_ventes' || id==='rapport_ventes'){
+      var nV=(LIVE.ventes||[]).length;
+      var tot=(LIVE.ventes||[]).reduce(function(s,v){ return s+(v.total||0); },0);
+      return {
+        status: _statusLine(nV>0, nV>0 ? (nV+' vente(s) enregistrée(s)') : 'Aucune vente enregistrée'),
+        meta: _metaLine(_lastVente ? ('Dernière vente: '+(_lastVente.date||'—')+' · '+fmt(Math.round(_lastVente.total||0))+' FCFA · Total cycle: '+fmt(Math.round(tot))+' FCFA') : 'Total cycle: 0 FCFA')
+      };
+    }
+    if(id==='rap_marche' || id==='cours_marche'){
+      var okPrix = !!_lastPrix;
+      return {
+        status: _statusLine(okPrix, okPrix?'Cours marché disponible':'Cours marché non reçu'),
+        meta: _metaLine(_marcheInfo)
+      };
+    }
+    if(id==='rap_feedback'){
+      var hasFeedbackBase = !!_lastFiche;
+      return {
+        status: _statusLine(hasFeedbackBase, hasFeedbackBase?'Dernière base de feedback disponible':'Aucune fiche source pour feedback'),
+        meta: _metaLine('Source: fiche quotidienne + KPI')
+      };
+    }
+    return {
+      status: _statusLine(r.status==='ready', r.status==='ready'?'Disponible':'En préparation', r.status!=='ready'),
+      meta: _metaLine('Fréquence: '+(r.frequence||'—'))
+    };
+  }
 
   // Mapping id rapport → {tab, sub} pour la navigation
   var rapNav={
@@ -6552,8 +6670,11 @@ function renderRapports(){
     html+='<div style="color:#88aa88;padding:12px">Aucun rapport entrant</div>';
   }else{
     entrants.forEach(function(r){
+      var _rtIn=_reportRuntime(r);
       html+='<div class="rapport-card"><div class="rapport-title">'+r.titre+'</div>'
         +'<div class="rapport-meta"><span>'+r.frequence+'</span><span>De: '+r.source+'</span></div>'
+        +_rtIn.status
+        +_rtIn.meta
         +'<div class="rapport-actions">'+navBtn(r,'Voir','👁')+'</div></div>';
     });
   }
@@ -6564,8 +6685,11 @@ function renderRapports(){
     html+='<div style="color:#88aa88;padding:12px">Aucun rapport à envoyer</div>';
   }else{
     sortants.forEach(function(r){
+      var _rtOut=_reportRuntime(r);
       html+='<div class="rapport-card"><div class="rapport-title">'+r.titre+'</div>'
         +'<div class="rapport-meta"><span>'+r.frequence+'</span><span>Vers: '+r.cible+'</span></div>'
+        +_rtOut.status
+        +_rtOut.meta
         +'<div class="rapport-actions">'+navBtn(r,'Ouvrir','✏️')+'</div></div>';
     });
   }
@@ -6616,7 +6740,7 @@ function pageApp(){
   if(S.tab==='dashboard')content=viewDash();
   else if(S.tab==='saisie')content=viewSaisie();
   else if(S.tab==='livrables')content=viewLiv();
-  else if(S.tab==='rapports')content=renderRapports();
+  else if(S.tab==='rapports'){ setTimeout(loadPrix, 50); content=renderRapports(); }
   else content=S.tab==='guide'?viewGuide():viewMarche();
 
   // Sidebar
