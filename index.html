@@ -126,6 +126,9 @@ button,.tab,.stab,.rb,.ddi,.sb-shortcut{transition:transform .14s ease,backgroun
 .prog-bar{background:#2a4a2a;border-radius:4px;height:6px;flex:1;margin:0 10px}
 .prog-fill{background:#4caf50;border-radius:4px;height:6px}
 .ubtn{background:#2d5a2d;border:none;color:#fff;padding:8px 14px;border-radius:20px;cursor:pointer;font-size:13px;width:auto;font-family:inherit}
+.hdr-title{font-size:18px;font-weight:700;color:#fff}
+.hdr-meta{font-size:11px;color:#88bb88;display:flex;align-items:center;gap:4px}
+.ddi-desc{font-size:11px;color:#88bb88}
 .sim-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #1a2a1a;font-size:13px}
 .sim-input-row{display:flex;align-items:center;gap:8px;margin-top:4px}
 .sim-input-row input[type=range]{flex:1;min-width:0}
@@ -242,10 +245,12 @@ body.light .act div div[style*="color:#555"]{color:#778877 !important}
 .sparkline-wrap{margin-top:6px}
 /* MODE CLAIR */
 body.light{background:#f0f5f0;color:#1a2e1a}
-body.light .hdr{background:#2d6a2d}
+body.light .hdr{background:#f3f8f3;border-bottom:1px solid #c8dcc8}
 body.light .logo-b{background:#1a4a1a;color:#fff}
+body.light .hdr-title{color:#1a2e1a}
+body.light .hdr-meta{color:#557755}
 body.light .tabs{background:#e8f0e8;border-color:#c8dcc8}
-body.light .hdr.hdr-compact{background:rgba(45,106,45,0.88) !important;border-color:#7fb07f !important;box-shadow:0 8px 18px rgba(45,106,45,0.18)}
+body.light .hdr.hdr-compact{background:rgba(243,248,243,0.96) !important;border-color:#b8d0b8 !important;box-shadow:0 8px 18px rgba(45,106,45,0.12)}
 body.light .tabs.tabs-compact{background:rgba(232,240,232,0.94) !important;border-color:#b8d0b8 !important;box-shadow:0 6px 14px rgba(45,106,45,0.12)}
 body.light .tab{color:#2a6a2a}
 body.light .tab.on{color:#fff;border-bottom-color:#fff;background:rgba(45,106,45,0.14)}
@@ -303,7 +308,8 @@ body.light .dd{background:#fff;border-color:#c8dcc8}
 body.light .ddi{border-color:#e8f0e8;color:#1a2e1a}
 body.light .ddi:hover{background:linear-gradient(180deg,#e8f0e8,#d8ead8);color:#1a2e1a}
 body.light .ddi.on{background:#2d6a2d;color:#fff}
-body.light .ddi span{color:#557755 !important}
+body.light .ddi-desc{color:#557755 !important}
+body.light .ddi.on .ddi-desc{color:#e8ffe8 !important}
 body.light .act .dot{background:#2d6a2d}
 body.light .sep{background:#c8dcc8}
 body.light .day-banner{background:#fff8ee;border-color:#c87800;color:#7a4800}
@@ -312,8 +318,8 @@ body.light .btn-sec{background:#e8f0e8;color:#1a2e1a;border-color:#c8dcc8}
 body.light .stab{color:#2a6a2a;border-color:#a8c8a8;background:#f0faf0;box-shadow:inset 0 1px 0 rgba(160,200,160,.12)}
 body.light .stab:hover{border-color:#2d6a2d;color:#1a4a1a;background:#e8f5e8}
 body.light .stab.on{background:#2d6a2d;color:#fff;border-color:#1a4a1a;box-shadow:0 4px 12px rgba(45,106,45,.22),inset 0 1px 0 rgba(210,240,210,.16)}
-body.light .ubtn{background:#1e5a1e}
-body.light .hbg{color:#fff}
+body.light .ubtn{background:#e3efe3;color:#1a2e1a;border:1px solid #b8ccb8;box-shadow:none}
+body.light .hbg{color:#1a2e1a}
 body.light .dd{background:#fff;border-color:#c8dcc8}
 body.light .ddi{background:linear-gradient(180deg,#f8faf8,#f0f5f0);color:#1a2e1a;border-bottom-color:#e8f0e8}
 body.light .ddi:hover{background:linear-gradient(180deg,#e8f0e8,#d8ead8);color:#1a2e1a}
@@ -6878,7 +6884,7 @@ function pageApp(){
     if(S.user==='fondateur'){
       Object.keys(USERS).forEach(function(k){
         ddHtml+='<div class="ddi '+(S.user===k?'on':'')+'" onclick="swUser(\''+k+'\')">'
-          +USERS[k].name+'<br><span style="font-size:11px;color:#88bb88">'+USERS[k].tabs.join(' · ')+'</span></div>';
+          +USERS[k].name+'<br><span class="ddi-desc">'+USERS[k].tabs.join(' · ')+'</span></div>';
       });
     }
     ddHtml+='<div class="ddi" style="color:#ff7070" onclick="S.page=\'login\';S.user=null;S.dd=false;r()">Déconnexion</div></div>';
@@ -7004,8 +7010,8 @@ function pageApp(){
   return '<div onclick="if(S.dd&&!event.target.closest(\'.ubtn\')&&!event.target.closest(\'.dd\')){S.dd=false;r()}">'
     +'<div class="hdr">'
     +'<div class="logo"><div class="logo-b">B</div>'
-    +'<div><div style="font-size:18px;font-weight:700">BOANR</div>'
-    +'<div style="font-size:11px;color:#88bb88;display:flex;align-items:center;gap:4px">Cycle '+(CYCLE.numCycle||1)+' \u2014 Sem. '+calcSemaine()
+    +'<div><div class="hdr-title">BOANR</div>'
+    +'<div class="hdr-meta">Cycle '+(CYCLE.numCycle||1)+' \u2014 Sem. '+calcSemaine()
     +(LIVE.source==='loading'
       ? '<span style="color:#5ab4ff" title="Chargement...">&#9203;</span>'
       : LIVE.source==='live'
