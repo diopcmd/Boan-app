@@ -11,9 +11,9 @@ export default async function handler(req, res) {
 
   const USERS = {
     fondateur: { name:'Direction',      pwd: process.env.PWD_FONDATEUR, tabs:['dashboard','saisie','livrables','marche','rapports','guide'], sid: process.env.SID_FONDATEUR },
-    gerant:    { name:'Gerant terrain', pwd: process.env.PWD_GERANT,    tabs:['dashboard','saisie','rapports','guide'],                      sid: process.env.SID_GERANT    },
+    gerant:    { name:'Gerant terrain', pwd: process.env.PWD_GERANT,    tabs:['dashboard','saisie','guide'],                                 sid: process.env.SID_GERANT    },
     rga:       { name:'RGA',            pwd: process.env.PWD_RGA,       tabs:['dashboard','livrables','rapports','guide'],                   sid: process.env.SID_RGA       },
-    fallou:    { name:'Commerciale',    pwd: process.env.PWD_FALLOU,    tabs:['dashboard','marche','rapports','guide'],                      sid: process.env.SID_FALLOU    },
+    fallou:    { name:'Commerciale',    pwd: process.env.PWD_FALLOU,    tabs:['dashboard','marche','guide'],                                 sid: process.env.SID_FALLOU    },
   };
 
   function normalizeRoleKey(v) {
