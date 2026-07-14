@@ -185,9 +185,11 @@ Boan-app/
 │   └── commerciale.html    Guide PDF imprimable — Commerciale
 │
 ├── docs/
+│   ├── BOAN_APP_DOCUMENTATION.md   Documentation complete produit/fonctionnelle
 │   ├── DOCUMENTATION_TECHNIQUE.md   Architecture et référence développeur
 │   ├── AI_RESUMPTION_PROMPT.md      Prompt de reprise IA (contexte session)
-│   └── NOTIFICATIONS_ROADMAP.md     Roadmap notifications CNAAS + vétérinaire
+│   ├── NOTIFICATIONS_ROADMAP.md     Roadmap notifications CNAAS + vétérinaire
+│   └── NOTIFICATIONS_RUNBOOK.md     Runbook validation + hardening notifications
 │
 └── scripts/
     └── boan_sheets_format.gs        Script Google Apps Script (mise en forme Sheets)
