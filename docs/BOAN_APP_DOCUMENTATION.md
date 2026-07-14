@@ -1,6 +1,6 @@
 # BOAN — Documentation Complète de l'Application
-> Version 1.2 — Mise à jour Mai 2026 (commits `8728afb`→`6a4d8d6`)
-> Commit HEAD : `6a4d8d6` · App en prod : `https://boan-app-9u5e.vercel.app`
+> Version 1.3 — Mise à jour Juillet 2026 (notifications CNAAS immédiates + cron)
+> Branche de référence : `main` · App en prod : `https://boan-app-9u5e.vercel.app`
 > Codebase : `index.html` ~9 600 lignes · ES5 strict (`var`, pas `const`/`let`/arrow)
 
 ---
@@ -828,7 +828,8 @@ function flushQueue() {
 | Mode standalone | ✅ |
 | Offline basic | ✅ (page en cache + localStorage) |
 | Offline saisie | ✅ (OFFLINE_QUEUE → flush au retour) |
-| Push notifications | ❌ Non implémenté |
+| Push notifications navigateur | ❌ Non implémenté |
+| Notifications email CNAAS | ✅ `notify-immediate` + `cron` (SendGrid) |
 | Background sync | ❌ Non implémenté |
 | Vibration (haptic) | ✅ `navigator.vibrate()` |
 
@@ -1100,12 +1101,22 @@ if (!S.fp.poids || S.fp.poids <= 0) { S.msg = 'err:Poids invalide'; r(); return;
 | `SESSION_SECRET` | tous les endpoints | Secret HMAC-SHA256 pour session tokens |
 | `ANTHROPIC_API_KEY` | ai.js | Clé API Anthropic Claude |
 
-### 15.2 Futures (système notifications)
+### 15.2 Notifications CNAAS (état réel)
 
 | Variable | Description |
 |---|---|
 | `SENDGRID_API_KEY` | Clé API SendGrid (emails) |
-| `CRON_SECRET` | Secret pour sécuriser les appels cron |
+| `SENDGRID_FROM_EMAIL` | Expéditeur vérifié SendGrid |
+| `SENDGRID_TO_FONDATEUR` | Destinataire(s) fondateur (CSV possible) |
+| `SENDGRID_TO_RGA` | Destinataire(s) RGA (CSV possible) |
+| `NOTIFY_TO` | Destinataires additionnels (CSV) |
+| `SENDGRID_TO` | Alias global optionnel (CSV) |
+| `CRON_SECRET` | Secret pour sécuriser `/api/cron` |
+
+Endpoints en place :
+- `/api/notify-immediate` : envoi immédiat (vente → alerte CNAAS)
+- `/api/cron` : digest CNAAS en retard (>=24h), protégé par `CRON_SECRET`
+- `/api/_notify` : helpers mutualisés SendGrid/destinataires
 
 ### 15.3 GitHub Secrets (futurs)
 
@@ -1197,7 +1208,7 @@ GitHub main → Vercel auto-deploy → https://boan-app-ur3x.vercel.app
 
 | # | Risque | Sévérité | Description |
 |---|---|---|---|
-| U-01 | Pas de push notifications | ⚠️ Moyen | Le gérant doit ouvrir l'app pour voir les alertes |
+| U-01 | Pas de push notifications navigateur | ⚠️ Moyen | Le gérant doit ouvrir l'app; relai email CNAAS déjà en place |
 | U-02 | Pas de mode offline complet | ⚠️ Moyen | Lecture Sheets impossible hors ligne — uniquement les données cachées |
 | U-03 | Pas de multi-cycle simultané | ⚠️ Faible | Un seul cycle actif à la fois |
 | U-04 | Pas de gestion utilisateurs | ⚠️ Faible | 4 rôles fixes, pas d'ajout/suppression |

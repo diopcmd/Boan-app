@@ -1,6 +1,6 @@
 ﻿# BOAN — Roadmap Notifications & Sinistres
-> **Version 3.6 — Circuits revus panel experts: décès / vol / SOP / vente — 08 Juillet 2026**
-> Statut : **BLOQUÉ — Prérequis métier non satisfaits** (voir section 0)
+> **Version 3.7 — Mise à jour terrain/code — 14 Juillet 2026**
+> Statut : **EN COURS — socle notifications CNAAS vente en production** (voir section 9)
 > 
 > **Panel d'experts confirmant cette version** :
 >   🚔 Adj. Chef Mbaye — Gendarmerie Brigade Thiès
@@ -19,8 +19,8 @@
 > **Consensus d'expert** : Fondateur = spectateur passif (email info), RGA = exécution, Gérant = terrain.
 > Email J+0 immédiat (Option 1 < 1s fire-and-forget) + Idempotence Reference_ID prévient double-send.
 >
-> **Référence code** : `index.html` ~9 600 lignes, ES5 strict (`var`, pas `const`/`let`/arrow).
-> Commit HEAD : `3890d8a`. App en prod : `https://boan-app-9u5e.vercel.app`
+> **Référence code** : `index.html` (ES5 strict) + `api/notify-immediate.js` + `api/cron.js` + `api/_notify.js`
+> Branche : `main` · App en prod : `https://boan-app-9u5e.vercel.app`
 
 ---
 
@@ -32,7 +32,7 @@
 | 1 | [Schémas de données](#1-schémas-de-données-google-sheets) | Structure `Notifications_Log` + `Sinistres_CNAAS` | Développeur |
 | 2 | [Processus métier](#2-processus-métier-bout-en-bout) | Flux complets décès / VOL / SOP vétérinaire / vente | Tous |
 | 3 | [Interface utilisateur](#3-interface-utilisateur---modifications-indexhtml) | Modifications `index.html` | Développeur |
-| 4 | [API serveur](#4-api-serveur) | Code `/api/cron.js` + `/api/notify.js` | Développeur |
+| 4 | [API serveur](#4-api-serveur) | Code `/api/notify-immediate.js` + `/api/cron.js` + `_notify.js` | Développeur |
 | 5 | [Templates emails](#5-templates-emails-plain-text-strict) | Textes emails prêts à intégrer | Développeur |
 | 6 | [Templates WhatsApp](#6-templates-whatsapp) | Messages WA pré-remplis | Développeur |
 | 7 | [Pièces CNAAS](#7-pièces-cnaas---table-de-référence) | Checklist documents dossier | Fondateur · RGA |
@@ -2061,47 +2061,55 @@ Ferme BOAN — [lsGet('cfg_contact_gerant_tel')]
 
 ## 9. Statut actuel
 
-### Prérequis métier (BLOC A)
+### 9.1 Vue synthèse (réalité code au 14/07/2026)
+
+| Bloc | Statut | Commentaire |
+|---|---|---|
+| Notification immédiate vente CNAAS | ✅ En production | `/api/notify-immediate.js` + hook frontend `_notifyImmediate('vente_bete', ...)` |
+| Rappels CNAAS en retard (>=24h) | ✅ En production | `/api/cron.js` + planification Vercel Cron (`vercel.json`) |
+| Centre d'actions RGA (Appeler/Fait) | ✅ En production | Dashboard RGA + Livrables/Ventes avec persistance `Ventes_CNAAS` |
+| Push navigateur natif | ⬛ Non implémenté | Pas de Web Push service worker |
+| Bloc sinistres décès/vol avancé | ⬛ Partiel | Socle posé, mais timeline/relances J+7/J+14 et UX dédiée non finalisées |
+
+### 9.2 Prérequis métier / opérationnels (BLOC A)
 
 | Item | Statut | Notes |
 |---|---|---|
-| Vétérinaire contractualisé (Thiès) | ⛔ Non fait — **bloquant absolu** | |
-| Contrat CNAAS + N° police | ⛔ Non fait — **bloquant absolu** | **✅ Infos officielles reçues (Aicha Gueye, CNAAS Dakar 10/06/2026)** — délai 48h, franchise 20%/60%/20%, paiement 30j max |
-| Email/tel CNAAS + grille indemnisation | ⛔ Non fait | Grille franchise (section 7bis) : bovin métis 20% 1er/60% 2e+, local 20% fixe |
-| Compte SendGrid | ⛔ Non fait | |
-| Variables Vercel + GitHub Secrets | ⛔ Non fait | |
-| `Notifications_Log` + `Sinistres_CNAAS` | ⬛ Auto-créés au 1er run cron (section 4.1) | Ranges : A2:I + A2:Q200 (16 colonnes) |
+| Vétérinaire contractualisé (Thiès) | ⛔ À confirmer terrain | Pré-requis critique hors code |
+| Contrat CNAAS + N° police | ⛔ À confirmer terrain | Pré-requis critique hors code |
+| Coordonnées CNAAS opérationnelles | ⚠️ Partiel | Contact éditable dans l'app (`Livrables > Contacts`) |
+| Compte SendGrid + sender vérifié | ⚠️ À finaliser | Code prêt, dépend des variables prod |
+| Variables secrètes Vercel (`SENDGRID_*`, `CRON_SECRET`) | ⚠️ À valider | Sans elles: mode simulation/fallback |
 
-### Code frontend — BLOC B (index.html)
+### 9.3 Code frontend (index.html)
 
 | Item | Statut | Détail |
 |---|---|---|
-| `CYCLE.numCnaas` | ✅ **Implémenté** | Modal init + Config_App + Go/No-Go (commit `9766040`) |
-| `CYCLE.veterinaire` | ✅ **Implémenté** | Config_Cycle col I + Go/No-Go |
-| `CYCLE.dateDebut` format ISO | ✅ **Déjà YYYY-MM-DD** | Aucune conversion nécessaire |
-| Sous-onglet « Contacts & Assurance » | ⬛ **Non implémenté** | Aucun champ `cfg_contact_*` dans le code |
-| `safeTextClient()` | ⬛ **Non implémenté** | Fonction absente de index.html |
-| Bannière ⛔ NE PAS ABATTRE dans saisie santé | ⬛ **Non implémenté** | Actuellement : alerte rouge basique + bouton G3 |
-| Alerte photo + alerte N° police absent | ⬛ **Non implémenté** | |
-| `doSubmit('sante')` enrichi (décès=OUI) | ⬛ **Non implémenté** | Pas de `sinistres_ouverts`, `deces_pending`, `online` listener |
-| Modal post-submit décès (boutons tél/WA) | ⬛ **Non implémenté** | Actuellement : simple `showConfirm` |
-| VOL : `beteMultiSelect()` + N° PV bloquant | ⬛ **Non implémenté** | Fonction absente |
-| Dashboard bannière ⛔ sinistre ouvert | ⬛ **Non implémenté** | `lsGet('sinistres_ouverts')` non utilisé |
-| `_checkVetJ1Banners()` + `_checkDecesVetBanners()` | ⬛ **Non implémenté** | Fonctions absentes |
-| `LIVE.sinistres` + `LIVE.notifLog` (Vague 2) | ⬛ **Non implémenté** | Pas dans `loadLiveData()` |
-| `_reconcileSinistresOuverts()` | ⬛ **Non implémenté** | Fonction absente |
-| `viewLiv()` incidents enrichi (section 3.6) | ⬛ **Non implémenté** | Timeline / checkboxes / statut CNAAS absents |
-| `viewLiv()` SOP Véto — bouton « Vét a confirmé » | ⬛ **Non implémenté** | |
-| Badge numérique onglet Livrables | ⬛ **Non implémenté** | |
+| `CYCLE.numCnaas` / `CYCLE.veterinaire` | ✅ Implémenté | Config cycle + Go/No-Go + contacts |
+| Tâches vente CNAAS (`_getVenteCnaasTasks`) | ✅ Implémenté | Fusion local+Sheets, idempotence par clé tâche |
+| Marquage traité (`_markVenteCnaasDone`) | ✅ Implémenté | Update Sheets + fallback persist, statut `DONE` |
+| Action `Appeler` CNAAS | ✅ Implémenté | `tel:` direct depuis dashboard RGA + Livrables |
+| Action `Fait` CNAAS | ✅ Implémenté | Ferme la notif (y compris fallback task) |
+| `LIVE.sinistres` + `LIVE.notifLog` (vague décès/vol) | ⬛ Non implémenté | Chargeur `loadLiveData()` non enrichi sur ce volet |
+| Flux décès/vol détaillé (timeline CNAAS) | ⬛ Non implémenté | Reste dans le backlog roadmap |
 
-### Code serveur — BLOC C (API) + BLOC D (GitHub Actions)
+### 9.4 Code serveur (API) et orchestration
 
-| Fichier | Statut |
-|---|---|
-| `/api/cron.js` | ⬛ **Absent** |
-| `/api/notify.js` | ⬛ **Absent** |
-| `.github/workflows/cron-notifications.yml` | ⬛ **Absent** (répertoire `.github` inexistant) |
-| `/api/ai.js`, `/api/auth.js`, `/api/token.js`, `/api/sheets.js`, `/api/change-password.js` | ✅ **Présents** — réutilisables |
+| Fichier / composant | Statut | Notes |
+|---|---|---|
+| `/api/notify-immediate.js` | ✅ Présent | Event immédiat `vente_bete`, envoi SendGrid ou simulation |
+| `/api/cron.js` | ✅ Présent | Digest CNAAS en retard, endpoint protégé `CRON_SECRET` |
+| `/api/_notify.js` | ✅ Présent | Helpers destinataires + envoi SendGrid |
+| `/api/notify.js` (générique) | ⬛ Non implémenté | Optionnel si stratégie reste `notify-immediate + cron` |
+| `vercel.json` cron planifié | ✅ Présent | `0 7 * * *` sur `/api/cron` |
+| GitHub Actions cron | ⬛ Non implémenté | Non requis avec Vercel Cron actif |
+
+### 9.5 Priorités restantes (roadmap enrichie)
+
+1. Finaliser les prérequis prod SendGrid + destinataires + secrets.
+2. Implémenter le bloc sinistres décès/vol (timeline, relances J+7/J+14, statut dossier CNAAS).
+3. Ajouter journalisation métier étendue (`LIVE.notifLog`) pour audit complet en interface.
+4. Standardiser tests de validation notification (immédiat + cron + idempotence) dans un protocole QA.
 
 ---
 

@@ -5,7 +5,7 @@ Pilotage à distance multi-rôles : direction, gérant terrain, RGA, commerciale
 
 **Production** → https://boan-app-9u5e.vercel.app  
 **Stack** : Vanilla JS ES5 · Vercel Serverless · Google Sheets API v4  
-**État** : commit `6a4d8d6` — ~9 600 lignes — Mai 2026
+**État** : mis à jour Juillet 2026 (branche `main`) — notifications CNAAS immédiates + cron actif
 
 ---
 
@@ -39,10 +39,26 @@ Ce commit aligne l’application sur la philosophie produit en corrigeant deux p
 
 | Rôle | Identifiant | Onglets | Description |
 |---|---|---|---|
-| Fondateur / Direction | `fondateur` | Dashboard · Saisie · Livrables · Marché · Guide | Lecture/écriture total, configuration, clôture cycle |
+| Fondateur / Direction | `fondateur` | Dashboard · Saisie · Livrables · Marché · Rapports · Guide | Lecture/écriture total, configuration, clôture cycle |
 | Gérant terrain | `gerant` | Dashboard · Saisie · Guide | Saisies quotidiennes terrain |
-| RGA | `rga` | Dashboard · Livrables · Marché · Guide | Analyse, contrôle, recommandations |
+| RGA | `rga` | Dashboard · Livrables · Rapports · Guide | Analyse, contrôle, recommandations |
 | Commerciale | `commerciale` | Dashboard · Marché · Guide | Veille prix foirail et aliments, **saisie des ventes de bêtes** |
+
+---
+
+## Statut notifications (Juillet 2026)
+
+### Livré
+- Notification immédiate serveur à la vente (`/api/notify-immediate`) avec fallback simulation si SendGrid non configuré.
+- Pipeline CNAAS en UI: tâche post-vente, bannière RGA, actions `Appeler` + `Fait`.
+- Cron sécurisé (`/api/cron`) planifié par Vercel (`vercel.json`) pour relances CNAAS >= 24h.
+- Helpers mutualisés SendGrid (`/api/_notify.js`) avec destinataires consolidés (`SENDGRID_TO_*`, `NOTIFY_TO`).
+
+### Restant (roadmap)
+- Bloc sinistres avancé (décès/vol): timeline complète, relances J+7/J+14, `LIVE.sinistres`, `LIVE.notifLog`.
+- Endpoint générique `/api/notify.js` (le projet utilise aujourd'hui `notify-immediate` + `cron`).
+- Workflow GitHub Actions optionnel (non requis si Vercel Cron conservé).
+- Finalisation opérationnelle des prérequis métier/infra (contrat CNAAS, checklist terrain, variables prod).
 
 ---
 

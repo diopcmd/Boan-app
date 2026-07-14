@@ -1,7 +1,7 @@
 ﻿# DOCUMENTATION TECHNIQUE — BOAN App
 
 Référence développeur pour l'application de gestion d'élevage **BOAN**.  
-**Commit HEAD** : `479f073` — ~9 800 lignes — Juillet 2026
+**Branche de référence** : `main` — ~11k lignes — Juillet 2026
 
 ---
 
@@ -11,9 +11,9 @@ Référence développeur pour l'application de gestion d'élevage **BOAN**.
 
 ```javascript
 var USERS = {
-  fondateur:      {name:'Direction',              tabs:['dashboard','saisie','livrables','marche','guide']},
+  fondateur:      {name:'Direction',              tabs:['dashboard','saisie','livrables','marche','rapports','guide']},
   gerant:         {name:'Gerant terrain',         tabs:['dashboard','saisie','guide']},
-  rga:            {name:'RGA — Gestion Admin',    tabs:['dashboard','livrables','guide']},
+  rga:            {name:'RGA — Gestion Admin',    tabs:['dashboard','livrables','rapports','guide']},
   commerciale:    {name:'Commerciale',            tabs:['dashboard','marche','guide']},
 };
 ```
@@ -29,7 +29,7 @@ var USERS = {
 | **Fiche_Quotidienne** | ✅ R | ✅ R/W | ✅ R | ❌ - | SID.gerant |
 | **Incidents** | ✅ R | ✅ R/W | ✅ R | ❌ - | SID.gerant |
 | **Sante_Mortalite** | ✅ R | ✅ R/W | ✅ R | ❌ - | SID.gerant |
-| **Ventes_Betes** | ✅ R | ✅ R/W | ✅ R | ❌ - | SID.gerant + fondateur fallback |
+| **Ventes_Betes** | ✅ R | ❌ - | ✅ R | ✅ R/W | Saisie commerciale/fondateur, suivi CNAAS côté RGA |
 | **Suivi_Marche** | ✅ R/W | ❌ - | ⚠️ R | ✅ W | Fondateur read, Commerciale write, RGA read |
 | **Suivi_Aliments** | ✅ R | ❌ - | ⚠️ R | ✅ W | Fondateur read, Commerciale write, RGA read |
 
@@ -47,8 +47,16 @@ var USERS = {
 |---|---|---|---|
 | **Fondateur** | Tous onglets | Config, cycle | Direction : vue complète, gestion stratégique |
 | **Gérant** | Dashboard + Saisie | Pesée, Fiche, Stock, Incidents, Santé | Terrain : données quotidiennes |
-| **RGA** | Dashboard + Livrables | Config cycles (clone) | Admin : rapports clôture, archivage |
+| **RGA** | Dashboard + Livrables + Rapports | Contrôle CNAAS, validation | Admin : conformité et pilotage |
 | **Commerciale** | Dashboard + Marché | Prix foirail, prix aliments | Commercial : stratégie prix |
+
+### Notifications (état réel)
+
+- `index.html` : `_notifyImmediate('vente_bete', payload)` au submit vente.
+- `api/notify-immediate.js` : envoi immédiat (ou simulation si SendGrid non configuré).
+- `api/cron.js` : digest des ventes CNAAS en retard (>=24h), endpoint protégé (`CRON_SECRET`).
+- `api/_notify.js` : résolution destinataires + envoi SendGrid.
+- `vercel.json` : cron planifié quotidiennement sur `/api/cron`.
 
 ---
 

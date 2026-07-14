@@ -12,7 +12,7 @@ Tu travailles sur **BOANR**, une application web mobile de gestion d'élevage bo
 - **GitHub** : https://github.com/diopcmd/Boan-app (branche `main`)
 - **Dossier local** : clone local de travail du dépôt
 - **Langue** : Tout en français (code, UI, communications)
-- **Dernier commit** : `6a4d8d6` — fix: SOP véto — fenêtre matching ±3j→±7j + sopLabel pesée SOP persisté — Mai 2026
+- **État courant** : branche `main` (Juillet 2026) — notifications CNAAS immédiates + cron + workflow Appeler/Fait RGA
 - **Webhook Vercel** : actif → auto-déploiement sur push `main`
 
 ---
@@ -45,7 +45,10 @@ Boan-app/
 │   ├── token.js            RS256 JWT → access_token Google OAuth2
 │   ├── sheets.js           Proxy CRUD Sheets
 │   ├── change-password.js  Override mots de passe/identifiants (fondateur)
-│   └── ai.js               Proxy Anthropic Claude
+│   ├── ai.js               Proxy Anthropic Claude
+│   ├── notify-immediate.js Notification immédiate (vente -> CNAAS)
+│   ├── cron.js             Relances CNAAS (digest >=24h)
+│   └── _notify.js          Helpers SendGrid/destinataires
 ├── guides/
 │   ├── fondateur.html
 │   ├── gerant.html
@@ -70,6 +73,13 @@ SA_PRIVATE_KEY        (clé RSA avec \n escapés en \\n)
 SA_CLIENT_EMAIL
 SESSION_SECRET        (>= 32 chars)
 ANTHROPIC_API_KEY     (optionnel — fonctionnalité IA)
+CRON_SECRET
+SENDGRID_API_KEY
+SENDGRID_FROM_EMAIL
+SENDGRID_TO_FONDATEUR
+SENDGRID_TO_RGA
+NOTIFY_TO
+SENDGRID_TO
 ```
 
 ---
@@ -78,10 +88,10 @@ ANTHROPIC_API_KEY     (optionnel — fonctionnalité IA)
 
 | Rôle | Identifiant | Onglets | SID reçu au login |
 |---|---|---|---|
-| Fondateur / Direction | `fondateur` | Dashboard, Saisie, Livrables, Marché | `{fondateur, gerant, fallou}` |
+| Fondateur / Direction | `fondateur` | Dashboard, Saisie, Livrables, Marché, Rapports, Guide | `{fondateur, gerant, fallou}` |
 | Gérant terrain | `gerant` | Dashboard, Saisie | `{gerant, fondateur}` |
-| RGA | `rga` | Dashboard, Livrables, Marché | `{rga, gerant, fondateur}` |
-| Commerciale | `fallou` | Dashboard, Marché (+ fiche commerciale) | `{fallou, fondateur}` |
+| RGA | `rga` | Dashboard, Livrables, Rapports, Guide | `{rga, gerant, fondateur}` |
+| Commerciale | `fallou` | Dashboard, Marché, Guide (+ fiche commerciale) | `{fallou, fondateur}` |
 
 > **Renommage** : le rôle `fallou` s'appelle désormais "commerciale" dans l'UI et les variables internes (`_sigComm`, guard `u==='fallou'` inchangé). Identifiants Vercel/Sheets inchangés.
 
