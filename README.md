@@ -189,7 +189,8 @@ Boan-app/
 │   ├── DOCUMENTATION_TECHNIQUE.md   Architecture et référence développeur
 │   ├── AI_RESUMPTION_PROMPT.md      Prompt de reprise IA (contexte session)
 │   ├── NOTIFICATIONS_ROADMAP.md     Roadmap notifications CNAAS + vétérinaire
-│   └── NOTIFICATIONS_RUNBOOK.md     Runbook validation + hardening notifications
+│   ├── NOTIFICATIONS_RUNBOOK.md     Runbook validation + hardening notifications
+│   └── VERCEL_ENV_CHECK_3MIN.md     Checklist express des variables Vercel
 │
 └── scripts/
     └── boan_sheets_format.gs        Script Google Apps Script (mise en forme Sheets)
