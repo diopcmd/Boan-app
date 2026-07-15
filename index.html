@@ -6364,9 +6364,11 @@ function saveCycle(){
     }).then(function() {
       // 5. Rechargement complet depuis Sheets — Config_App est définitivement à jour
       _clearSheetReadCache(); // [fix] garantit relecture fraîche Config_Cycle + Stock_Nourriture
+      _syncSopProtocol(); // [fix] recalcule les dates SOP avec la nouvelle dateDebut
       loadLiveData();
     }).catch(function() {
       _clearSheetReadCache();
+      _syncSopProtocol(); // [fix] recalcule même en cas d'erreur Sheets
       loadLiveData();
     });
   });
