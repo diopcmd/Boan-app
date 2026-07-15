@@ -573,6 +573,23 @@ body.light .rapport-card{background:#f8faf8;border-color:#d8ead8}
 body.light .rapport-title{color:#1a2e1a}
 body.light .rapport-meta span{color:#557755}
 body.light .rapport-note{color:#557755}
+/* ── Modal init cycle — fonds sombres step 1+4 non couverts en mode clair ── */
+body.light .modal-body [style*="background:#1a2e1a"]{background:#f0f5f0 !important}
+body.light .modal-body [style*="background:#0f2a0f"]{background:#e8f5e8 !important}
+body.light .modal-body [style*="background:#0a150a"]{background:#f0f5f0 !important}
+body.light .modal-body [style*="background:#1a4a1a"]{background:#c8e6c9 !important}
+body.light .modal-body [style*="background:#1a2a4a"]{background:#bbdefb !important}
+body.light .modal-body [style*="background:#0f1a2a"]{background:#e3f2fd !important}
+body.light .modal-body [style*="background:#1a1a0a"]{background:#f5f5e0 !important}
+/* ── Simulateur — fonds sombres et textes pâles non couverts en mode clair ── */
+body.light .simu-wrap [style*="background:linear-gradient(135deg,#0f1f0f"]{background:#eef5ee !important}
+body.light .simu-wrap [style*="background:linear-gradient(135deg,#111f11"]{background:#eef5ee !important}
+body.light .simu-wrap [style*="background:#1a2e1a"]{background:#f0f5f0 !important}
+body.light .simu-wrap [style*="background:#1a3a1a"]{background:#d8f0d8 !important}
+body.light .simu-wrap .sim-row span{color:#1a2e1a !important}
+body.light .simu-wrap [style*="color:#88aa88"]{color:#557755 !important}
+body.light .simu-wrap [style*="color:#7a9a7a"]{color:#4a7a4a !important}
+body.light .simu-wrap [style*="color:#eee"]{color:#1a2e1a !important}
 </style>
 </head>
 <body>
@@ -6277,9 +6294,12 @@ function saveCycle(){
       CYCLE.numCycle || 1                    // col S (index 18) — numéro de cycle
     ];
     var allSids = [SID.fondateur, SID.gerant, SID.rga, SID.commerciale].filter(Boolean);
-    allSids.forEach(function(sid){
-      sheetsProxyWriteMatrix(sid, 'Config_Cycle!A1', [vals]);
+    // [fix] Inclure l'écriture Config_Cycle dans la chaîne de promesses pour garantir
+    // que loadLiveData lise la nouvelle dateDebut (et non l'ancienne via cache ou race condition).
+    var clearPromises = allSids.map(function(sid){
+      return sheetsProxyWriteMatrix(sid, 'Config_Cycle!A1', [vals]);
     });
+    _clearSheetReadCache(); // [fix] invalider immédiatement le cache — evite relecture périmée
 
     // 2. Vider les onglets de saisie dans les sheets gérant ET fondateur (lignes 4+)
     //    Les 3 premières lignes (en-têtes/légendes/formatage) sont préservées
@@ -6296,7 +6316,6 @@ function saveCycle(){
       'KPI_Mensuels!A4:Z50',
       'KPI_Hebdo!A4:Z50',
     ];
-    var clearPromises = [];
     // Vider données dans sheet gérant + fondateur
     [SID.gerant, SID.fondateur].filter(Boolean).forEach(function(sid) {
       dataOnglets.forEach(function(range) {
@@ -6344,8 +6363,10 @@ function saveCycle(){
       return _syncConfigApp();
     }).then(function() {
       // 5. Rechargement complet depuis Sheets — Config_App est définitivement à jour
+      _clearSheetReadCache(); // [fix] garantit relecture fraîche Config_Cycle + Stock_Nourriture
       loadLiveData();
     }).catch(function() {
+      _clearSheetReadCache();
       loadLiveData();
     });
   });
@@ -10513,7 +10534,7 @@ function viewMarche(){
     function simRow(lbl, val, col, big) {
       return '<div class="sim-row">'
         + '<span style="font-size:13px;color:#88aa88">' + lbl + '</span>'
-        + '<span style="font-size:' + (big?'17':'13') + 'px;font-weight:' + (big?800:500) + ';color:' + (col||'#ccc') + '">' + val + '</span>'
+        + '<span style="font-size:' + (big?'17':'13') + 'px;font-weight:' + (big?800:500) + (col ? ';color:' + col : '') + '">' + val + '</span>'
         + '</div>';
     }
     function sign(v) { return v >= 0 ? '+' : ''; }
@@ -11159,7 +11180,7 @@ function viewMarche(){
     var _cRow = function(lbl, val, col) {
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #0f1f0f">'
         + '<span style="font-size:13px;color:#88aa88">'+lbl+'</span>'
-        + '<span style="font-size:14px;font-weight:700;color:'+(col||'#ccc')+'">'+val+'</span>'
+        + '<span style="font-size:14px;font-weight:700'+(col ? ';color:'+col : '')+'">'+val+'</span>'
         + '</div>';
     };
     view = '<div class="stitle">🛒 Fiche commerciale</div>'
