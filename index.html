@@ -2744,32 +2744,59 @@ function loadLiveData() {
     (arr || []).forEach(function(s){ if (s && out.indexOf(s) === -1) out.push(s); });
     return out;
   }
-  function _readStep1FromAny(range, needNonEmpty) {
+  function _readStep1All(range) {
     var list = _uniqSidsLocal([sidFondateur, sidGerant, sidRga, sidCommerciale]);
-    if (!list.length) return Promise.resolve(null);
-    var i = 0;
-    function next(lastRows) {
-      if (i >= list.length) return Promise.resolve(lastRows || null);
-      var sid = list[i++];
-      return readSheet(sid, range).then(function(rows){
-        if (!needNonEmpty) return rows;
-        if (rows && rows.length) return rows;
-        return next(rows || []);
-      }).catch(function(){
-        return next(lastRows || null);
-      });
-    }
-    return next(null);
+    if (!list.length) return Promise.resolve([]);
+    return Promise.all(list.map(function(sid){
+      return readSheet(sid, range).catch(function(){ return null; });
+    }));
   }
 
   // ── ÉTAPE 1 — Config_Cycle + Config_App (bloquante) ──
   // Lire depuis n'importe quel SID disponible pour synchroniser CYCLE sur tout appareil
   var step1 = Promise.all([
-        _readStep1FromAny('Config_Cycle!A1:S1', true),
-        _readStep1FromAny('Config_App!A:B', true)
+        _readStep1All('Config_Cycle!A1:S1'),
+        _readStep1All('Config_App!A:B')
       ]).then(function(res) {
-        var rows    = res[0];
-        var appRows = res[1];
+        var rowsBySid    = res[0] || [];
+        var appRowsBySid = res[1] || [];
+
+        // Fusion Config_Cycle multi-SID : garder le cycle le plus récent
+        var _bestRow = null;
+        rowsBySid.forEach(function(rows){
+          if (!(rows && rows[0] && rows[0][0])) return;
+          var row = rows[0];
+          if (!_bestRow) { _bestRow = row; return; }
+          var _bestNum = parseInt(_bestRow[18]) || 0;
+          var _rowNum  = parseInt(row[18]) || 0;
+          var _bestDate = normalizeCycleDate(_bestRow[0]) || '';
+          var _rowDate  = normalizeCycleDate(row[0]) || '';
+          if (_rowNum > _bestNum) { _bestRow = row; return; }
+          if (_rowNum === _bestNum && _rowDate && _rowDate !== _bestDate && pickLatestCycleDate(_bestDate, _rowDate) === _rowDate) {
+            _bestRow = row;
+          }
+        });
+        var rows = _bestRow ? [_bestRow] : null;
+
+        // Fusion Config_App multi-SID : cycleDebut = plus récente, autres clés = première valeur non vide
+        var _appMap = {};
+        appRowsBySid.forEach(function(rows){
+          (rows || []).forEach(function(r){
+            if (!r || !r[0]) return;
+            var k = r[0], v = r[1];
+            if (k === 'cycleDebut') {
+              var _old = '';
+              var _new = '';
+              try { _old = JSON.parse(_appMap[k] || '""') || ''; } catch(e) { _old = ''; }
+              try { _new = JSON.parse(v || '""') || ''; } catch(e) { _new = ''; }
+              _appMap[k] = JSON.stringify(pickLatestCycleDate(_old, _new) || _old || _new || '');
+              return;
+            }
+            var _empty = (_appMap[k] === undefined || _appMap[k] === null || _appMap[k] === '' || _appMap[k] === 'null' || _appMap[k] === '""');
+            if (_empty && v !== undefined && v !== null && v !== '') _appMap[k] = v;
+          });
+        });
+        var appRows = Object.keys(_appMap).map(function(k){ return [k, _appMap[k]]; });
 
         // ── Config_Cycle ──
         if (rows && rows[0] && rows[0][0]) {
