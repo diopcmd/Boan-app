@@ -2924,6 +2924,45 @@ function loadLiveData() {
           });
         }
 
+        // Réconciliation finale (sans hardcode): consolider dateDebut + numCycle depuis signaux locaux/distants
+        // pour éviter qu'une copie Sheets obsolète réimpose un ancien cycle.
+        (function(){
+          var _bestDate = normalizeCycleDate(CYCLE.dateDebut) || '';
+          var _bestNum = parseInt(CYCLE.numCycle) || 1;
+
+          // Signaux locaux persistés
+          var _lc = lsGet('cycle') || {};
+          _bestDate = pickLatestCycleDate(_bestDate, _lc.dateDebut || _bestDate) || _bestDate;
+          _bestNum = Math.max(_bestNum, parseInt(_lc.numCycle) || 0);
+
+          // Historique local: entrée "cycle démarré" porte une date FR fiable
+          (HISTORY || []).forEach(function(h){
+            if (!h || h.type !== 'cycle') return;
+            if (h.date) _bestDate = pickLatestCycleDate(_bestDate, h.date) || _bestDate;
+            if (h.numCycle) _bestNum = Math.max(_bestNum, parseInt(h.numCycle) || 0);
+          });
+
+          // Mouvements stock: cycleDebut est propagé lors des saisies
+          (STOCK_MVTS || []).forEach(function(m){
+            if (m && m.cycleDebut) _bestDate = pickLatestCycleDate(_bestDate, m.cycleDebut) || _bestDate;
+          });
+
+          var _curDate = normalizeCycleDate(CYCLE.dateDebut) || '';
+          var _curNum = parseInt(CYCLE.numCycle) || 1;
+          var _changed = false;
+          if (_bestDate && _bestDate !== _curDate) { CYCLE.dateDebut = _bestDate; _changed = true; }
+          if (_bestNum && _bestNum !== _curNum) { CYCLE.numCycle = _bestNum; _changed = true; }
+
+          if (_changed) {
+            lsSet('cycle', CYCLE);
+            // Auto-heal non bloquant: republier la config canonique si rôle autorisé
+            if (['fondateur', 'rga'].indexOf(S.user) !== -1) {
+              _syncCycle();
+              _syncConfigApp();
+            }
+          }
+        })();
+
         lsSet('cycle', CYCLE);
       }).catch(function() { /* Sheets inaccessible → garder CYCLE local existant */ });
 
@@ -3994,7 +4033,7 @@ function _syncConfigApp() {
 }
 
 // ── SYNC CONFIG_CYCLE → SHEETS (fondateur/rga uniquement) ──
-// Écrit toute la ligne Config_Cycle!A1:O1 — seul le fondateur et RGA peuvent modifier
+// Écrit toute la ligne Config_Cycle!A1:S1 — seul le fondateur et RGA peuvent modifier
 // (gérant et commerciale lisent uniquement)
 function _syncCycle() {
   // Protection rôle : seul fondateur + RGA peuvent écrire Config_Cycle
@@ -4009,7 +4048,8 @@ function _syncCycle() {
       JSON.stringify(CYCLE.stockLines||[]),
       CYCLE.dureeMois,                          // col P (index 15)
       JSON.stringify(CYCLE.simCharges||{}),     // col Q (index 16) — charges simulateur
-      CYCLE.prixAlim || 0                       // col R (index 17) — prix aliment FCFA/kg
+      CYCLE.prixAlim || 0,                      // col R (index 17) — prix aliment FCFA/kg
+      CYCLE.numCycle || 1                       // col S (index 18) — numéro du cycle
     ];
     var allSids = [SID.fondateur, SID.gerant, SID.rga, SID.commerciale].filter(Boolean);
     allSids.forEach(function(sid) {
