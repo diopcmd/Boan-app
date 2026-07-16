@@ -2736,13 +2736,37 @@ function loadLiveData() {
 
   var sidGerant   = SID.gerant;
   var sidFondateur = SID.fondateur;
+  var sidRga = SID.rga;
+  var sidCommerciale = SID.commerciale;
+
+  function _uniqSidsLocal(arr) {
+    var out = [];
+    (arr || []).forEach(function(s){ if (s && out.indexOf(s) === -1) out.push(s); });
+    return out;
+  }
+  function _readStep1FromAny(range, needNonEmpty) {
+    var list = _uniqSidsLocal([sidFondateur, sidGerant, sidRga, sidCommerciale]);
+    if (!list.length) return Promise.resolve(null);
+    var i = 0;
+    function next(lastRows) {
+      if (i >= list.length) return Promise.resolve(lastRows || null);
+      var sid = list[i++];
+      return readSheet(sid, range).then(function(rows){
+        if (!needNonEmpty) return rows;
+        if (rows && rows.length) return rows;
+        return next(rows || []);
+      }).catch(function(){
+        return next(lastRows || null);
+      });
+    }
+    return next(null);
+  }
 
   // ── ÉTAPE 1 — Config_Cycle + Config_App (bloquante) ──
-  // Lire depuis SID.fondateur pour synchroniser CYCLE sur tout appareil
-  var step1 = sidFondateur
-    ? Promise.all([
-        readSheet(sidFondateur, 'Config_Cycle!A1:S1'),
-        readSheet(sidFondateur, 'Config_App!A:B')
+  // Lire depuis n'importe quel SID disponible pour synchroniser CYCLE sur tout appareil
+  var step1 = Promise.all([
+        _readStep1FromAny('Config_Cycle!A1:S1', true),
+        _readStep1FromAny('Config_App!A:B', true)
       ]).then(function(res) {
         var rows    = res[0];
         var appRows = res[1];
@@ -2874,8 +2898,7 @@ function loadLiveData() {
         }
 
         lsSet('cycle', CYCLE);
-      }).catch(function() { /* Sheets inaccessible → garder CYCLE local existant */ })
-    : Promise.resolve();
+      }).catch(function() { /* Sheets inaccessible → garder CYCLE local existant */ });
 
   step1.then(function() {
     // ── ÉTAPE 2 — Vagues 1+2 fusionnées (parallèle, optimisé) ──
