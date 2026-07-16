@@ -708,9 +708,33 @@ function normalizeCycleDate(v) {
   if (!v) return '';
   var s = String(v).trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (m) return m[3] + '-' + m[2] + '-' + m[1];
+  // Support formats FR souples: d/m/yyyy, dd/mm/yyyy, séparateurs / . -
+  var m = s.match(/^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})$/);
+  if (m) {
+    var d = parseInt(m[1], 10), mo = parseInt(m[2], 10), y = parseInt(m[3], 10);
+    if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12) {
+      return y + '-' + (mo<10?'0':'') + mo + '-' + (d<10?'0':'') + d;
+    }
+  }
+  // Support format US éventuel: mm/dd/yyyy (si ambiguïtés tranchables)
+  var us = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (us) {
+    var mm = parseInt(us[1], 10), dd = parseInt(us[2], 10), yy = parseInt(us[3], 10);
+    if (dd > 12 && mm >= 1 && mm <= 12 && dd <= 31) {
+      return yy + '-' + (mm<10?'0':'') + mm + '-' + (dd<10?'0':'') + dd;
+    }
+  }
+  // Support ISO datetime: yyyy-mm-ddTHH:mm:ss...
+  var iso = s.match(/^(\d{4}-\d{2}-\d{2})T/);
+  if (iso) return iso[1];
   return '';
+}
+function pickLatestCycleDate(a, b) {
+  var aa = normalizeCycleDate(a), bb = normalizeCycleDate(b);
+  var da = aa ? parseISO(aa) : null;
+  var db = bb ? parseISO(bb) : null;
+  if (da && db) return (db > da) ? bb : aa;
+  return bb || aa || '';
 }
 // parseISO : parse une date ISO YYYY-MM-DD en Date locale (évite le décalage UTC midnight)
 function parseISO(iso) { if(!iso) return null; var p=iso.split('-'); return new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2])); }
@@ -2727,7 +2751,7 @@ function loadLiveData() {
         if (rows && rows[0] && rows[0][0]) {
           var row = rows[0];
           var updates = {};
-          if (row[0])  updates.dateDebut      = normalizeCycleDate(row[0]) || CYCLE.dateDebut;
+          if (row[0])  updates.dateDebut      = pickLatestCycleDate(CYCLE.dateDebut, row[0]) || CYCLE.dateDebut;
           if (row[1])  updates.nbBetes        = parseInt(row[1])   || CYCLE.nbBetes;
           if (row[2])  updates.poidsDepart    = parseInt(row[2])   || CYCLE.poidsDepart;
           if (row[3])  updates.race           = row[3];
@@ -2827,7 +2851,7 @@ function loadLiveData() {
               if (key === 'gonogo'      && val && typeof val === 'object') CYCLE.gonogo = Object.assign(CYCLE.gonogo||{}, val);
               // cycleDebut dans Config_App = source de vérité de secours si Config_Cycle est en retard
               if (key === 'cycleDebut' && val && val.length) {
-                var _cfgDebut = normalizeCycleDate(val) || CYCLE.dateDebut;
+                var _cfgDebut = pickLatestCycleDate(CYCLE.dateDebut, val) || CYCLE.dateDebut;
                 var _curDebut = normalizeCycleDate(CYCLE.dateDebut) || CYCLE.dateDebut;
                 if (_cfgDebut && _cfgDebut !== _curDebut) {
                   CYCLE.dateDebut = _cfgDebut;
