@@ -756,18 +756,59 @@ if (CYCLE.capital  && MOCK.treso === 680000) MOCK.treso = CYCLE.capital;
 
 // Protocole SOP vétérinaire standard — utilisé si CYCLE.sopProtocol === null
 var SOP_PROTOCOL_DEFAULT = [
-  {j:1,   ico:'\ud83d\udc89', label:'Vitamine AD3E — intégration',      type:'sante', note:'Injection IM le jour d\'arrivée — renforce immunité + réduit stress de transit'},
-  {j:7,   ico:'\ud83d\udc8a', label:'Déparasitage interne',             type:'sante', note:'Ivermectine ou Albendazole PO'},
-  {j:14,  ico:'\ud83e\ude7a', label:'Contrôle stress de transit',       type:'sante', note:'Observation générale — appétit, selles, comportement'},
-  {j:30,  ico:'\u2696\ufe0f', label:'1ère pesée + bilan santé',         type:'pesee', note:'Peser chaque bête + noter état corporel + BCS'},
-  {j:45,  ico:'\ud83d\udc89', label:'Vaccination PPCB (1ère dose)',     type:'sante', note:'Péripneumonie Contagieuse Bovine — obligatoire Sénégal. Contacter vétérinaire agréé'},
-  {j:60,  ico:'\ud83e\udeb2', label:'Déparasitage externe',             type:'sante', note:'Bain ou pour-on contre tiques et mouches'},
-  {j:90,  ico:'\u2696\ufe0f', label:'2ème pesée — point mi-cycle',      type:'pesee', note:'Calcul GMQ intermédiaire + ajustement ration si besoin'},
-  {j:120, ico:'\ud83d\udc89', label:'Rappel vaccin PPCB + vitamines',   type:'sante', note:'PPCB 2ème dose + vitamines AD3E rappel + FMD zones à risque'},
-  {j:150, ico:'\u2696\ufe0f', label:'3ème pesée',                       type:'pesee', note:'Vérifier les bêtes à risque stagnation'},
-  {j:180, ico:'\ud83d\udc8a', label:'Déparasitage interne (rappel)',     type:'sante', note:'2ème pass antiparasitaire interne'},
-  {j:210, ico:'\ud83d\udccb', label:'Bilan pré-vente + pesée finale',   type:'pesee', note:'Évaluation état d\'engraissement + décision commerciale'}
+  {id:'sop_std_ad3e_j1',        j:1,   ico:'\ud83d\udc89', label:'Vitamine AD3E — intégration',      type:'sante', note:'Injection IM le jour d\'arrivée — renforce immunité + réduit stress de transit'},
+  {id:'sop_std_depar_int_j7',   j:7,   ico:'\ud83d\udc8a', label:'Déparasitage interne',             type:'sante', note:'Ivermectine ou Albendazole PO'},
+  {id:'sop_std_stress_j14',     j:14,  ico:'\ud83e\ude7a', label:'Contrôle stress de transit',       type:'sante', note:'Observation générale — appétit, selles, comportement'},
+  {id:'sop_std_pesee1_j30',     j:30,  ico:'\u2696\ufe0f', label:'1ère pesée + bilan santé',         type:'pesee', note:'Peser chaque bête + noter état corporel + BCS'},
+  {id:'sop_std_ppcb1_j45',      j:45,  ico:'\ud83d\udc89', label:'Vaccination PPCB (1ère dose)',     type:'sante', note:'Péripneumonie Contagieuse Bovine — obligatoire Sénégal. Contacter vétérinaire agréé'},
+  {id:'sop_std_depar_ext_j60',  j:60,  ico:'\ud83e\udeb2', label:'Déparasitage externe',             type:'sante', note:'Bain ou pour-on contre tiques et mouches'},
+  {id:'sop_std_pesee2_j90',     j:90,  ico:'\u2696\ufe0f', label:'2ème pesée — point mi-cycle',      type:'pesee', note:'Calcul GMQ intermédiaire + ajustement ration si besoin'},
+  {id:'sop_std_ppcb2_j120',     j:120, ico:'\ud83d\udc89', label:'Rappel vaccin PPCB + vitamines',   type:'sante', note:'PPCB 2ème dose + vitamines AD3E rappel + FMD zones à risque'},
+  {id:'sop_std_pesee3_j150',    j:150, ico:'\u2696\ufe0f', label:'3ème pesée',                       type:'pesee', note:'Vérifier les bêtes à risque stagnation'},
+  {id:'sop_std_depar_int2_j180',j:180, ico:'\ud83d\udc8a', label:'Déparasitage interne (rappel)',    type:'sante', note:'2ème pass antiparasitaire interne'},
+  {id:'sop_std_pesee_fin_j210', j:210, ico:'\ud83d\udccb', label:'Bilan pré-vente + pesée finale',   type:'pesee', note:'Évaluation état d\'engraissement + décision commerciale'}
 ];
+
+function _sopCreateId() {
+  return 'sop_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+}
+function _sopFallbackId(evt, idx) {
+  var raw = String((evt && evt.type) || 'sante') + '_' + String((evt && evt.j) || (idx+1)) + '_' + String((evt && evt.label) || ('etape_'+idx));
+  var slug = raw.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return 'sop_' + (slug || ('step_' + idx));
+}
+function _normalizeSopProtocol(proto) {
+  if (!Array.isArray(proto)) return [];
+  var used = {};
+  return proto.map(function(e, idx){
+    var id = (e && e.id) ? String(e.id) : _sopFallbackId(e, idx);
+    while (used[id]) id = id + '_dup';
+    used[id] = true;
+    return {
+      id: id,
+      j: parseInt(e && e.j) || 1,
+      ico: (e && e.ico) || ((e && e.type)==='pesee' ? '\u2696\ufe0f' : '\ud83d\udc89'),
+      label: String((e && e.label) || 'Étape'),
+      type: ((e && e.type) === 'pesee') ? 'pesee' : 'sante',
+      note: String((e && e.note) || '')
+    };
+  });
+}
+function _getSopProtocol() {
+  return _normalizeSopProtocol(CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT);
+}
+function _sopEntryMatchesEvent(h, evt, targetDate, windowDays) {
+  if (!h || !evt) return false;
+  var sid = String((evt.id || '')).trim();
+  if (sid && String((h.sopId || '')).trim() === sid) return true;
+  var slbl = String((evt.label || '')).trim();
+  if (slbl && String((h.sopLabel || '')).trim() === slbl) return true;
+  if (!targetDate || !h.date) return false;
+  var p = String(h.date).split('/'); if (p.length !== 3) return false;
+  var hd = new Date(p[2], p[1]-1, p[0]);
+  var wd = windowDays || 3;
+  return Math.abs(hd - targetDate) <= wd * 86400000;
+}
 
 // Calcul semaine depuis date début
 // Libellé adaptatif GMQ : "Gain inter-pesée moyen" si peseeFreq > 7 jours, sinon "GMQ moyen"
@@ -1774,7 +1815,15 @@ function peseeDejaFaite(id) {
 
 // Jours écoulés depuis la dernière saisie d'un type donné (depuis HISTORY)
 function joursSince(type) {
-  var h = HISTORY.filter(function(x){ return x.type === type; });
+  var h = HISTORY.filter(function(x){
+    if (!x) return false;
+    if (x.type === type) return true;
+    // SOP Vet: considérer aussi les actes santé/pesée liés au protocole SOP.
+    if (type === 'sop' && x.sopLabel !== undefined && x.sopLabel !== null && String(x.sopLabel).trim() !== '') {
+      return true;
+    }
+    return false;
+  });
   var lastDate = null;
   if (h.length) {
     lastDate = h[0].date; // HISTORY trié desc — premièr = le plus récent
@@ -1893,7 +1942,7 @@ function resetInc() {
 }
 function resetSante() {
   var td = todayISO();
-  S.fsa = {date:td,id:'',sym:'',tra:'',cout:'',res:'',dec:'',bcs:'',muq:'',sopLabel:''};
+  S.fsa = {date:td,id:'',sym:'',tra:'',cout:'',res:'',dec:'',bcs:'',muq:'',sopLabel:'',sopId:''};
   r();
 }
 function resetStock() {
@@ -2066,7 +2115,7 @@ var S = {
   fst:{date:'',mvts:[],stockInput:'',stockKg:'',rat:''},
   fin:{date:'',id:'',type:'',grav:'1',desc:'',act:'',clos:''},
   fp:{date:'',id:'',race:'',raceCustom:'',poids:'',prev:'',datePrev:'',_autoFilled:false,_autoFilledId:''},
-  fsa:{date:'',id:'',sym:'',tra:'',cout:'',res:'',dec:'',bcs:'',muq:'',sopLabel:''},
+  fsa:{date:'',id:'',sym:'',tra:'',cout:'',res:'',dec:'',bcs:'',muq:'',sopLabel:'',sopId:''},
   fb:{sem:'',nb:'',nou:'',stk:'',inc:'',poi:'',msg:''},
   fm:{date:'',foi:'Thiès',foiCustom:'',bas:'',moy:'',haut:''},
   falim:{date:'',type:'',prix:''},
@@ -2767,7 +2816,7 @@ function loadLiveData() {
               if (key === '_mktUpdated'  && val) CYCLE._mktUpdated = val;
               if (key === 'sopProtocol') {
                 if (val === null) CYCLE.sopProtocol = null;                     // reset explicite depuis _sopReset()
-                else if (Array.isArray(val) && val.length) CYCLE.sopProtocol = val;
+                else if (Array.isArray(val) && val.length) CYCLE.sopProtocol = _normalizeSopProtocol(val);
               }
               if (key === 'sopResetAt') {
                 if (val && val.length) CYCLE._sopResetAt = val;
@@ -3143,15 +3192,18 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   (santes || []).forEach(function(r) {
     if (!r[0]) return;
     var id = r[1] || '—'; var sym = r[2] || '—';
-    // sopLabel : si sym correspond à un label SOP connu, l'associer pour le comptage SOP vet
-    var _sopLbl = (function(){
-      var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
-      for(var _si=0;_si<_proto.length;_si++){ if(_proto[_si].label===sym) return sym; }
-      return undefined;
+    // sopLabel/sopId : si sym correspond à un label SOP santé connu, l'associer
+    var _sopMeta = (function(){
+      var _proto = _getSopProtocol();
+      for (var _si=0; _si<_proto.length; _si++) {
+        if (_proto[_si].type === 'sante' && _proto[_si].label === sym) {
+          return { sopLabel: sym, sopId: _proto[_si].id || '' };
+        }
+      }
+      return { sopLabel: undefined, sopId: '' };
     })();
-    // id ET _id : _id pour la déduplication Sheets, id pour la reconnaissance SOP
     entries.push({ type:'sante', label:(id==='__tous__'?'Troupeau \u2014 '+sym:id+' \u2014 '+sym), icon:icons.sante,
-      date:r[0], time:'—', id:id, _id:id, _sym:sym, sopLabel:_sopLbl, _src:'sheets' });
+      date:r[0], time:'—', id:id, _id:id, _sym:sym, sopLabel:_sopMeta.sopLabel, sopId:_sopMeta.sopId, _src:'sheets' });
   });
 
   // Hebdomadaire [sem, nb, nou, stk, inc, poi, al, msg]
@@ -3167,13 +3219,13 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
   (pesees || []).forEach(function(r) {
     if (!r[0]) return;
     var id = r[1] || '\u2014'; var poids = r[3] || '\u2014';
-    var _peseeSopLabel = (function(){
-      var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+    var _peseeSopMeta = (function(){
+      var _proto = _getSopProtocol();
       var _deb = parseISO(CYCLE.dateDebut);
-      if (!_deb) return undefined;
+      if (!_deb) return {sopLabel:undefined, sopId:''};
       var _rowDate = parseFR(r[0]);
-      if (!_rowDate) return undefined;
-      var _best = null;
+      if (!_rowDate) return {sopLabel:undefined, sopId:''};
+      var _bestEvt = null;
       var _bestDiff = Infinity;
       _proto.forEach(function(evt){
         if (evt.type !== 'pesee') return;
@@ -3181,14 +3233,14 @@ function buildHistoryFromSheets(fiches, incidents, santes, bilans, pesees, sops,
         var _diff = Math.abs(_rowDate - _evtDate);
         if (_diff <= 7*86400000 && _diff < _bestDiff) {
           _bestDiff = _diff;
-          _best = evt.label;
+          _bestEvt = evt;
         }
       });
-      return _best;
+      return _bestEvt ? {sopLabel:_bestEvt.label, sopId:_bestEvt.id||''} : {sopLabel:undefined, sopId:''};
     })();
     // id ET _id pour cohérence avec les entrées locales (SOP pesée)
     entries.push({ type:'pesee', label:id+' \u2014 '+poids+'kg', icon:icons.pesee,
-      date:r[0], time:'\u2014', id:id, _id:id, _src:'sheets', sopLabel:_peseeSopLabel });
+      date:r[0], time:'\u2014', id:id, _id:id, _src:'sheets', sopLabel:_peseeSopMeta.sopLabel, sopId:_peseeSopMeta.sopId });
   });
 
   // SOP_Check [date, net, des, rat, eau, stk, san, prob]
@@ -3368,11 +3420,11 @@ function doSubmit(type) {
   }
 
   if (type==='sop' && typeof S.fs.sopStep === 'number' && S.fs.sopStep >= 0) {
-    var _evt = (CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT)[S.fs.sopStep];
+    var _evt = _getSopProtocol()[S.fs.sopStep];
     if (_evt) {
       var _continueProtocole = function() {
         if (_evt.type === 'pesee') {
-          S._sopCtx = {label: _evt.label, j: _evt.j};
+          S._sopCtx = {label: _evt.label, sopId: _evt.id || '', j: _evt.j};
           S.sub = 'pesee';
           r();
           return;
@@ -3380,6 +3432,7 @@ function doSubmit(type) {
         if (_evt.type === 'sante') {
           S.sub = 'sante';
           S.fsa.sopLabel = _evt.label;
+          S.fsa.sopId = _evt.id || '';
           if (!S.fsa.sym) S.fsa.sym = _evt.label;
           if (!S.fsa.tra && _evt.note) S.fsa.tra = _evt.note;
           r();
@@ -3737,8 +3790,8 @@ function _submitActual(type) {
       // Métas pour anti-doublons
       var _meta = {};
       if(type==='inc')   _meta = {_id: S.fin.id, _typeInc: S.fin.type};
-      if(type==='sante') _meta = {id: S.fsa.id, _id: S.fsa.id, _sym: S.fsa.sym, sopLabel: S.fsa.sopLabel};
-      if(type==='pesee' && S._sopCtx) _meta.sopLabel = S._sopCtx.label; // ancre pesée SOP au protocole
+      if(type==='sante') _meta = {id: S.fsa.id, _id: S.fsa.id, _sym: S.fsa.sym, sopLabel: S.fsa.sopLabel, sopId: S.fsa.sopId||''};
+      if(type==='pesee' && S._sopCtx) { _meta.sopLabel = S._sopCtx.label; _meta.sopId = S._sopCtx.sopId || ''; } // ancre pesée SOP au protocole
       if(type==='bilan') _meta._sem = String(calcSemaine()); // pour bilanDejaFaitCetteSemaine() via h._sem
       // Capturer ID bête avant reset formulaire (pour tracker les bêtes déjà traitées)
       var _beteIdSubmit = type==='pesee' ? S.fp.id : type==='sante' ? S.fsa.id : type==='inc' ? S.fin.id : '';
@@ -3769,7 +3822,7 @@ function _submitActual(type) {
       if(type==='inc')   S.fin={date:td,id:'',type:'',grav:'1',desc:'',act:'',clos:''};
       if(type==='pesee') S.fp={date:td,id:'',race:'',raceCustom:'',poids:'',prev:'',datePrev:'',_autoFilled:false,_autoFilledId:''};
       if(type==='pesee') { S._sopCtx = null; }
-      if(type==='sante') S.fsa={date:td,id:'',sym:'',tra:'',cout:'',res:'',dec:'',bcs:'',muq:'',sopLabel:''};
+      if(type==='sante') S.fsa={date:td,id:'',sym:'',tra:'',cout:'',res:'',dec:'',bcs:'',muq:'',sopLabel:'',sopId:''};
       if(type==='bilan') S.fb={sem:String(calcSemaine()),nb:'',nou:'',stk:'',inc:'',poi:'',msg:''};
       if(type==='marche')S.fm={date:td,foi:S.fm.foi||'Thiès',foiCustom:S.fm.foiCustom||'',bas:'',moy:'',haut:''}
       if(type==='alim')  S.falim={date:td,type:S.falim.type||'',prix:''};
@@ -5053,7 +5106,7 @@ function buildAIContext() {
 
   // Compliance SOP véto
   var _sopCompliance = 'Non évaluable (cycle non démarré)';
-  var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+  var _proto = _getSopProtocol();
   if (CYCLE.dateDebut && _proto && _proto.length) {
     var _nd = _nowDakar();
     var _nowMs = new Date(_nd.year, _nd.month-1, _nd.day).getTime();
@@ -5065,12 +5118,9 @@ function buildAIContext() {
         if (_echeMs <= _nowMs + 7 * 86400000) {
           _sopTotal++;
           var _fait = HISTORY.some(function(h){
-            if (acte.type === 'pesee' && h.type === 'pesee') return true;
-            if (acte.type === 'sante' && h.type === 'sante') {
-              var _hi = parseISO(h.date);
-              return _hi && Math.abs(_hi.getTime() - _echeMs) / 86400000 <= 21;
-            }
-            return false;
+            if (h.type !== acte.type) return false;
+            var _target = new Date(_echeMs);
+            return _sopEntryMatchesEvent(h, acte, _target, 21);
           });
           if (_fait) _sopFaits++;
         }
@@ -8274,7 +8324,20 @@ function viewSaisie(){
     var prog=formProgress(countFilled([f.date]),1);
     form='<div class="card">'+prog
       +(function(){
-        var dernSop = (function(){ var h=HISTORY.filter(function(x){return x.type==='sop';}); if(!h.length)return null; var p=h[0].date.split('/'); return p.length===3?new Date(p[2],p[1]-1,p[0]):null; })();
+        var dernSop = (function(){
+          var h=HISTORY.filter(function(x){
+            if(!x) return false;
+            if(x.type==='sop') return true;
+            return x.sopLabel !== undefined && x.sopLabel !== null && String(x.sopLabel).trim() !== '';
+          });
+          if(!h.length){
+            var fb = CYCLE._lastSopDate || '';
+            var pf = fb.split('/');
+            return pf.length===3?new Date(pf[2],pf[1]-1,pf[0]):null;
+          }
+          var p=(h[0].date||'').split('/');
+          return p.length===3?new Date(p[2],p[1]-1,p[0]):null;
+        })();
         var joursDepuis = dernSop ? (function(){var _nd=_nowDakar();return Math.floor((new Date(_nd.year,_nd.month-1,_nd.day)-dernSop)/86400000);})() : null;
         var fait = sopDejaFait();
         var msg = fait
@@ -8692,7 +8755,7 @@ function viewSaisie(){
       +'})()" style="background:#1a2e3a;border:1px solid #2a4e5a;color:#88ccdd;width:100%;margin-top:8px">📤 Partager le bilan (WhatsApp / SMS)</button>'
       +msgHtml()+'</div>';
   } else if(S.sub==='protocole'){
-    var _pdProto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+    var _pdProto = _getSopProtocol();
     var _pdDeb   = parseISO(CYCLE.dateDebut);
     var _ndPd    = _nowDakar();
     var _pdToday = new Date(_ndPd.year, _ndPd.month-1, _ndPd.day);
@@ -8718,13 +8781,11 @@ function viewSaisie(){
         HISTORY.forEach(function(h){
           if(h.type !== evt.type) return;
           if(!_sopEntryAfterReset(h)) return; // antérieur au dernier reset — ignorer
-          // Si l'entrée porte un label SOP, ne l'associer qu'à cette étape précise
-          if(h.sopLabel !== undefined && h.sopLabel !== null && h.sopLabel !== evt.label) return;
           var _p = h.date.split('/'); if(_p.length !== 3) return;
           var _hd = new Date(_p[2], _p[1]-1, _p[0]);
-          // Entrées avec sopLabel explicite = liées définitivement à cette étape (quelle que soit la date)
-          // Entrées sans sopLabel = heuristique par proximité ±7j (cohérent avec garde 7j avant date prévue)
-          var _inWindow = (h.sopLabel === evt.label) || (Math.abs(_hd - _td) <= 7*86400000);
+          // Entrées avec sopId/sopLabel explicite = liées définitivement à cette étape
+          // Entrées legacy sans marqueur = heuristique par proximité ±7j
+          var _inWindow = _sopEntryMatchesEvent(h, evt, _td, 7);
           if(_inWindow){
             var _hid = h.id || h._id || '';
             if(_hid === '__tous__'){
@@ -8832,12 +8893,12 @@ function viewSaisie(){
 }
 
 function _sopEdit(i){
-  var _p = (CYCLE.sopProtocol||SOP_PROTOCOL_DEFAULT)[i];
-  S._sopEd = {idx:i, j:_p.j, ico:_p.ico, label:_p.label, type:_p.type, note:_p.note};
+  var _p = _getSopProtocol()[i];
+  S._sopEd = {idx:i, id:_p.id||'', j:_p.j, ico:_p.ico, label:_p.label, type:_p.type, note:_p.note};
   r();
 }
 function _sopDel(i){
-  if(!CYCLE.sopProtocol) CYCLE.sopProtocol = SOP_PROTOCOL_DEFAULT.map(function(e){return {j:e.j,ico:e.ico,label:e.label,type:e.type,note:e.note};});
+  if(!CYCLE.sopProtocol) CYCLE.sopProtocol = _getSopProtocol();
   CYCLE.sopProtocol.splice(i,1);
   lsSet('cycle', CYCLE);
   S._sopEd = null;
@@ -8846,12 +8907,14 @@ function _sopDel(i){
 }
 function _sopSave(isNew){
   if(!S._sopEd) return;
-  if(!CYCLE.sopProtocol) CYCLE.sopProtocol = SOP_PROTOCOL_DEFAULT.map(function(e){return {j:e.j,ico:e.ico,label:e.label,type:e.type,note:e.note};});
+  if(!CYCLE.sopProtocol) CYCLE.sopProtocol = _getSopProtocol();
   var ico = S._sopEd.type==='pesee' ? '\u2696\ufe0f' : '\ud83d\udc8a';
-  var entry = {j:parseInt(S._sopEd.j)||1, ico:ico, label:S._sopEd.label||'Étape', type:S._sopEd.type||'sante', note:S._sopEd.note||''};
+  var old = (!isNew && CYCLE.sopProtocol[S._sopEd.idx]) ? CYCLE.sopProtocol[S._sopEd.idx] : null;
+  var entry = {id:(S._sopEd.id || (old && old.id) || _sopCreateId()), j:parseInt(S._sopEd.j)||1, ico:ico, label:S._sopEd.label||'Étape', type:S._sopEd.type||'sante', note:S._sopEd.note||''};
   if(isNew) CYCLE.sopProtocol.push(entry);
   else CYCLE.sopProtocol[S._sopEd.idx] = entry;
   CYCLE.sopProtocol.sort(function(a,b){return a.j-b.j;});
+  CYCLE.sopProtocol = _normalizeSopProtocol(CYCLE.sopProtocol);
   lsSet('cycle', CYCLE);
   S._sopEd = null;
   _syncSopProtocol();
@@ -8885,7 +8948,7 @@ function _syncSopProtocol() {
   var _validSids = [SID.gerant, SID.fondateur, SID.rga].filter(Boolean);
   if (!_validSids.length) return;
 
-  var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+  var _proto = _getSopProtocol();
   var _pdDeb  = parseISO(CYCLE.dateDebut);
   var _ndPd   = _nowDakar();
   var _pdToday = new Date(_ndPd.year, _ndPd.month-1, _ndPd.day);
@@ -8906,10 +8969,9 @@ function _syncSopProtocol() {
       HISTORY.forEach(function(h) {
         if (h.type !== evt.type) return;
         if (!_sopEntryAfterReset(h)) return; // antérieur au dernier reset — ignorer
-        if (h.sopLabel !== undefined && h.sopLabel !== null && h.sopLabel !== evt.label) return;
         var _p = h.date.split('/'); if (_p.length !== 3) return;
         var _hd = new Date(_p[2], _p[1]-1, _p[0]);
-        var _inW = (h.sopLabel === evt.label) || (Math.abs(_hd - _td) <= 3*86400000);
+        var _inW = _sopEntryMatchesEvent(h, evt, _td, 3);
         if (_inW) {
           var _hid = h.id || h._id || '';
           if (_hid === '__tous__') _betesDone = _beteIds.slice();
@@ -8928,7 +8990,7 @@ function _syncSopProtocol() {
       var _last = null;
       HISTORY.forEach(function(h) {
         if (h.type !== evt.type) return;
-        var _isThis = (h.sopLabel === evt.label);
+        var _isThis = _sopEntryMatchesEvent(h, evt, _td, 3);
         if (!_isThis && _td) {
           var _pp = h.date.split('/'); if (_pp.length !== 3) return;
           _isThis = Math.abs(new Date(_pp[2],_pp[1]-1,_pp[0]) - _td) <= 3*86400000;
@@ -8994,7 +9056,7 @@ function _syncSopProtocol() {
   }).catch(function(e){ console.warn('[SOP_Protocol] getTok:', e.message); });
 }
 function _sopValider(idx){
-  var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+  var _proto = _getSopProtocol();
   var evt = _proto[idx];
   if(!evt) return;
   // Guard: block if >21 days past scheduled date
@@ -9007,7 +9069,7 @@ function _sopValider(idx){
     if((_stgt - _stv) > 7*86400000) return;   // Trop tôt — > 7j avant la date prévue
   }
   if(evt.type === 'pesee'){
-    S._sopCtx = {label: evt.label, j: evt.j};
+    S._sopCtx = {label: evt.label, sopId: evt.id || '', j: evt.j};
     S.sub = 'pesee';
   } else {
     S._sopInlineIdx = idx;
@@ -9016,7 +9078,7 @@ function _sopValider(idx){
   r();
 }
 function _sopInlineSave(idx, tous){
-  var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+  var _proto = _getSopProtocol();
   var evt = _proto[idx];
   if(!evt) return;
   if(evt.type !== 'sante') return; // pesée uses its own form
@@ -9051,12 +9113,9 @@ function _sopInlineSave(idx, tous){
   if(_tdTgt){
     HISTORY.forEach(function(h){
       if(h.type !== evt.type) return;
-      // Si l'entrée porte un label SOP, ne compter que pour cette étape précise
-      if(h.sopLabel !== undefined && h.sopLabel !== null && h.sopLabel !== evt.label) return;
       var _p = h.date.split('/'); if(_p.length!==3) return;
       var _hd = new Date(_p[2],_p[1]-1,_p[0]);
-      // Entrées avec sopLabel explicite = liées définitivement (pas de contrainte de date)
-      var _inW = (h.sopLabel === evt.label) || (Math.abs(_hd - _tdTgt) <= 3*86400000);
+      var _inW = _sopEntryMatchesEvent(h, evt, _tdTgt, 3);
       if(_inW){
         var _hid = h.id || h._id || '';
         if(_hid === '__tous__') _doneBetes = _allBetes.slice();
@@ -9072,10 +9131,10 @@ function _sopInlineSave(idx, tous){
     if(_remBetes.length === 0){ S._sopInlineIdx = null; r(); return; }
     // UNE seule entrée __tous__ — évite N×SIDs race conditions dans appendRow parallèles
     // buildHistoryFromSheets reconnaît h.id==='__tous__' et marque toutes les bêtes comme traitées
-    _entries.push({type:'sante',date:td,id:'__tous__',_id:'__tous__',label:'Troupeau \u2014 '+evt.label,icon:'\uD83D\uDC8A',sopLabel:evt.label,sym:evt.label,tra:evt.note||'Acte SOP v\u00e9t.',cout:'',res:d.res||'Gu\u00e9ri',dec:'',bcs:'',muq:''});
+    _entries.push({type:'sante',date:td,id:'__tous__',_id:'__tous__',label:'Troupeau \u2014 '+evt.label,icon:'\uD83D\uDC8A',sopLabel:evt.label,sopId:evt.id||'',sym:evt.label,tra:evt.note||'Acte SOP v\u00e9t.',cout:'',res:d.res||'Gu\u00e9ri',dec:'',bcs:'',muq:''});
   } else {
     if(!d.id){ S.msg='err:Choisir une b\u00eate'; r(); return; }
-    _entries.push({type:'sante',date:td,id:d.id,_id:d.id,label:d.id+' \u2014 '+evt.label,icon:'\uD83D\uDC8A',sopLabel:evt.label,sym:evt.label,tra:evt.note||'Acte SOP v\u00e9t.',cout:'',res:d.res||'Gu\u00e9ri',dec:'',bcs:'',muq:''});
+    _entries.push({type:'sante',date:td,id:d.id,_id:d.id,label:d.id+' \u2014 '+evt.label,icon:'\uD83D\uDC8A',sopLabel:evt.label,sopId:evt.id||'',sym:evt.label,tra:evt.note||'Acte SOP v\u00e9t.',cout:'',res:d.res||'Gu\u00e9ri',dec:'',bcs:'',muq:''});
   }
   // Sauvegarder dans HISTORY
   _entries.forEach(function(e){ HISTORY.push(e); });
@@ -9920,7 +9979,7 @@ function viewLiv(){
   } else if(S.sub==='sopvet'){
     if(S.user==='fondateur'||S.user==='rga'){
       var _ro = false;
-      var _proto = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+      var _proto = _getSopProtocol();
       var _sed = S._sopEd || null;
       var _isCustom = !!CYCLE.sopProtocol;
       var rows = '';
@@ -9997,7 +10056,7 @@ function viewLiv(){
     view = (function(){
       var _cb = parseISO(CYCLE.dateDebut);
       var _cn = _nowDakar(); var _ct = new Date(_cn.year, _cn.month-1, _cn.day);
-      var _cp = CYCLE.sopProtocol || SOP_PROTOCOL_DEFAULT;
+      var _cp = _getSopProtocol();
       var _cc = _cp.map(function(evt){
         if(!_cb) return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #1a2e1a"><div style="font-size:20px;width:32px;text-align:center">'+evt.ico+'</div><div style="flex:1"><div style="font-size:13px;color:#88aa88;font-weight:600">J+'+evt.j+' — '+evt.label+'</div><div style="font-size:10px;color:#7a9a7a">'+evt.note+'</div></div><div style="font-size:11px;color:#2a4a2a">Non démarré</div></div>';
         var _td2 = new Date(_cb.getTime()); _td2.setDate(_td2.getDate()+evt.j);
@@ -10005,10 +10064,8 @@ function viewLiv(){
         var _f = HISTORY.some(function(h){
           if(h.type!==evt.type) return false;
           if(!_sopEntryAfterReset(h)) return false;
-          // Une entrée avec sopLabel explicite valide cette étape même hors fenêtre.
-          if(h.sopLabel !== undefined && h.sopLabel !== null) return h.sopLabel === evt.label;
           var _p=h.date.split('/'); if(_p.length!==3) return false;
-          return Math.abs(new Date(_p[2],_p[1]-1,_p[0])-_td2)<=7*86400000;
+          return _sopEntryMatchesEvent(h, evt, _td2, 7);
         });
         var _dt = Math.round((_td2-_ct)/86400000);
         var _s,_sc,_sb,_sbd;
@@ -10018,7 +10075,7 @@ function viewLiv(){
         else{var _d2=_td2,_ds=('0'+_d2.getDate()).slice(-2)+'/'+('0'+(_d2.getMonth()+1)).slice(-2)+'/'+_d2.getFullYear();_s='📅 '+_ds;_sc='#88aa88';_sb='#0a150a';_sbd='#1a2e1a';}
         return '<div style="background:'+_sb+';border:1px solid '+_sbd+';border-radius:8px;padding:10px 12px;margin-bottom:8px"><div style="display:flex;align-items:center;gap:10px"><div style="font-size:20px;width:32px;text-align:center;flex-shrink:0">'+evt.ico+'</div><div style="flex:1"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px"><div style="font-size:13px;color:#ccc;font-weight:700">J+'+evt.j+' — '+evt.label+'</div><div style="font-size:11px;font-weight:700;color:'+_sc+'">'+_s+'</div></div><div style="font-size:10px;color:#7a9a7a;margin-top:2px">'+evt.note+'</div></div></div></div>';
       }).join('');
-      var _cd = _cp.filter(function(e){ if(!_cb)return false; var _td3=new Date(_cb.getTime()); _td3.setDate(_td3.getDate()+e.j); return HISTORY.some(function(h){ if(h.type!==e.type)return false; if(!_sopEntryAfterReset(h))return false; var _p=h.date.split('/'); if(_p.length!==3)return false; return (h.sopLabel===e.label)||(Math.abs(new Date(_p[2],_p[1]-1,_p[0])-_td3)<=7*86400000); }); }).length;
+      var _cd = _cp.filter(function(e){ if(!_cb)return false; var _td3=new Date(_cb.getTime()); _td3.setDate(_td3.getDate()+e.j); return HISTORY.some(function(h){ if(h.type!==e.type)return false; if(!_sopEntryAfterReset(h))return false; var _p=h.date.split('/'); if(_p.length!==3)return false; return _sopEntryMatchesEvent(h, e, _td3, 7); }); }).length;
       return '<div class="stitle">📅 Calendrier SOP vétérinaire</div>'
         +(!_cb ? '<div style="background:#2e1500;border:1px solid #8a4400;border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:#ff9800">⚠️ Cycle non démarré — saisissez une date de début dans les paramètres.</div>'
           : '<div style="background:#0f1f0f;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11px;color:#7a9a7a">Début cycle</div><div style="font-size:13px;color:#C8A06A;font-weight:700">'+isoToFr(CYCLE.dateDebut)+'</div></div><div style="text-align:right"><div style="font-size:11px;color:#7a9a7a">Complétés</div><div style="font-size:20px;font-weight:800;color:'+(_cd>=_cp.length?'#4caf50':'#C8A06A')+'">' +_cd+' / '+_cp.length+'</div></div></div>')
