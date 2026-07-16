@@ -703,6 +703,15 @@ function todayISO() {
 function nowHeure() { return _nowDakar().hour; }   // remplace nowHeure()
 function nowJour()  { return _nowDakar().weekday; } // remplace nowJour()
 function isoToFr(iso) { if(!iso) return today(); var p=iso.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
+// Normalise les dates cycle en ISO (YYYY-MM-DD) pour éviter les mismatches FR/ISO.
+function normalizeCycleDate(v) {
+  if (!v) return '';
+  var s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return m[3] + '-' + m[2] + '-' + m[1];
+  return '';
+}
 // parseISO : parse une date ISO YYYY-MM-DD en Date locale (évite le décalage UTC midnight)
 function parseISO(iso) { if(!iso) return null; var p=iso.split('-'); return new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2])); }
 
@@ -786,11 +795,14 @@ var HISTORY = lsGet('history') || [];
 // Structure : [{date, type, mode:'ajouter'|'consommer', kg, cycleDebut}]
 var STOCK_MVTS = (function(){
   var mvts = lsGet('stock_mvts') || [];
-  // Garder les mouvements si le cycleDebut correspond au cycle actuel
-  // (ne pas réinitialiser si mvts vides ou si cycleDebut absent)
-  var cycleDebut = CYCLE.dateDebut || '';
-  if(mvts.length > 0 && cycleDebut && mvts[0].cycleDebut !== cycleDebut) {
-    mvts = []; // nouveau cycle détecté — vider
+  // Garder uniquement les mouvements du cycle courant en tolérant les formats FR/ISO.
+  // (ne pas réinitialiser les anciennes lignes si cycleDebut absent dans la ligne)
+  var cycleDebut = normalizeCycleDate(CYCLE.dateDebut || '');
+  if (mvts.length > 0 && cycleDebut) {
+    mvts = mvts.filter(function(m){
+      var d = normalizeCycleDate(m && m.cycleDebut || '');
+      return !d || d === cycleDebut;
+    });
   }
   return mvts;
 })();
@@ -2050,7 +2062,7 @@ var S = {
   lid:'', lpw:'', lerr:'',
   sending:false, msg:'', tok:null, tokexp:0, sessionToken:null,
   fi:{date:'',nb:'',nourris:'',eau:'',enclos:'',incident:'',desc:''},
-  fs:{date:'',net:'',des:'',rat:'',eau:'',stk:'',san:'',prob:''},
+  fs:{date:'',net:'',des:'',rat:'',eau:'',stk:'',san:'',prob:'',sopStep:-1},
   fst:{date:'',mvts:[],stockInput:'',stockKg:'',rat:''},
   fin:{date:'',id:'',type:'',grav:'1',desc:'',act:'',clos:''},
   fp:{date:'',id:'',race:'',raceCustom:'',poids:'',prev:'',datePrev:'',_autoFilled:false,_autoFilledId:''},
@@ -2070,7 +2082,7 @@ var S = {
   _contactsOpen: lsGet('contacts_open') || {CNAAS:true, VETERINAIRE:false, GENDARMERIE:false, URGENCE:false},
   _simOpen: lsGet('sim_open') || {vente:true,achat:true,alim:false,ops:false,extra:false,imprev:false,result:true},
   selectedBete: null,
-  _donePesee:[], _doneSante:[], _doneInc:[],
+  _donePesee:[],
   _sopSyncDone: false,
   fv:{date:'',id:'',race:'',poids:'',prixKg:'',acheteur:'',tel:'',mode:'CASH',ctx:'DIRECT',notes:''}  // formulaire vente
 };
@@ -2666,7 +2678,7 @@ function loadLiveData() {
         if (rows && rows[0] && rows[0][0]) {
           var row = rows[0];
           var updates = {};
-          if (row[0])  updates.dateDebut      = row[0];
+          if (row[0])  updates.dateDebut      = normalizeCycleDate(row[0]) || CYCLE.dateDebut;
           if (row[1])  updates.nbBetes        = parseInt(row[1])   || CYCLE.nbBetes;
           if (row[2])  updates.poidsDepart    = parseInt(row[2])   || CYCLE.poidsDepart;
           if (row[3])  updates.race           = row[3];
@@ -2686,8 +2698,9 @@ function loadLiveData() {
           if (row[17]) updates.prixAlim        = parseFloat(row[17]) || CYCLE.prixAlim; // col R
           if (row[18]) updates.numCycle         = parseInt(row[18])   || CYCLE.numCycle;  // col S
           // Détection changement de cycle — wipe immédiat sur l'appareil des autres acteurs
-          var _prevDateDebut = CYCLE.dateDebut;
+          var _prevDateDebut = normalizeCycleDate(CYCLE.dateDebut);
           Object.assign(CYCLE, updates);
+          CYCLE.dateDebut = normalizeCycleDate(CYCLE.dateDebut) || CYCLE.dateDebut;
           // fix: synchroniser MOCK depuis CYCLE immédiatement après lecture Config_Cycle
           // (avant Vague 2 — évite MOCK.betes=4 si aucune saisie santé ce cycle)
           // Soustraire décès ET ventes déjà connus (cache localStorage)
@@ -2695,7 +2708,7 @@ function loadLiveData() {
           if (CYCLE.capital && MOCK.treso === 680000) MOCK.treso = CYCLE.capital;
           // Toujours persister après sync Sheets — fix: sans ça le cache vide ne se repeuple jamais
           lsSet('cycle', CYCLE);
-          if (updates.dateDebut && _prevDateDebut && updates.dateDebut !== _prevDateDebut) {
+          if (updates.dateDebut && _prevDateDebut && normalizeCycleDate(updates.dateDebut) !== _prevDateDebut) {
             // Nouveau cycle détecté par un acteur non-fondateur (ou fondateur après sync)
             HISTORY = []; lsSet('history', []);
             lsSet('last_fiche', null); // effacer le marqueur fiche du jour
@@ -2791,27 +2804,51 @@ function loadLiveData() {
     // Lancer TOUS les readSheet en parallèle — wave1 (critique) + wave2 (historique)
     // → Aucune dépendance entre les waves (cache est isolé par clé)
     // → Fusion = gain ~500-1000ms de latence
-    var sidDataSource = sidGerant || sidFondateur;
-    var sidVentes = sidFondateur || SID.commerciale || SID.rga || sidDataSource;
-    var sidHisto = sidGerant || sidFondateur;
+    function _uniqSids(arr) {
+      var out = [];
+      (arr || []).forEach(function(s){ if (s && out.indexOf(s) === -1) out.push(s); });
+      return out;
+    }
+    function _readFromAny(range, sids, needNonEmpty) {
+      var list = _uniqSids(sids);
+      if (!list.length) return Promise.resolve(null);
+      var i = 0;
+      function next(lastRows) {
+        if (i >= list.length) return Promise.resolve(lastRows || null);
+        var sid = list[i++];
+        return readSheet(sid, range).then(function(rows){
+          if (!needNonEmpty) return rows;
+          if (rows && rows.length) return rows;
+          return next(rows || []);
+        }).catch(function(){
+          return next(lastRows || null);
+        });
+      }
+      return next(null);
+    }
+    var _sidPesees = _uniqSids([SID.gerant, SID.fondateur]);
+    var _sidStock = _uniqSids([SID.gerant, SID.fondateur]);
+    var _sidSante = _uniqSids([SID.gerant, SID.fondateur]);
+    var _sidVentes = _uniqSids([SID.fondateur, SID.commerciale, SID.rga, SID.gerant]);
+    var _sidFiches = _uniqSids([SID.gerant, SID.fondateur]);
+    var _sidIncidents = _uniqSids([SID.gerant, SID.fondateur, SID.rga]);
+    var _sidHebdo = _uniqSids([SID.gerant, SID.fondateur, SID.rga]);
+    var _sidSop = _uniqSids([SID.gerant, SID.fondateur, SID.rga]);
     
     return Promise.all([
       // ── Wave 1 : données critiques pour le dashboard ──
-      sidDataSource  ? readSheet(sidDataSource,  'Pesees!A4:G200')           : Promise.resolve(null),
-      sidDataSource  ? readSheet(sidDataSource,  'Stock_Nourriture!A4:F200') : Promise.resolve(null),
+      _readFromAny('Pesees!A4:G200', _sidPesees, false),
+      _readFromAny('Stock_Nourriture!A4:F200', _sidStock, false),
       sidFondateur   ? readSheet(sidFondateur,   'KPI_Mensuels!A4:K50')      : Promise.resolve(null),
-      sidDataSource  ? readSheet(sidDataSource,  'Sante_Mortalite!A4:G200')  : Promise.resolve(null),
-      sidVentes      ? readSheet(sidVentes,       'Ventes_Betes!A4:K200')     : Promise.resolve(null),
+      _readFromAny('Sante_Mortalite!A4:G200', _sidSante, false),
+      _readFromAny('Ventes_Betes!A4:K200', _sidVentes, false),
       sidFondateur   ? readSheet(sidFondateur,   'Ventes_CNAAS!A4:I500')     : Promise.resolve(null),
       sidFondateur   ? readSheet(sidFondateur,   'Contacts_Refs!A4:N500')    : Promise.resolve(null),
       // ── Wave 2 : historique pour la sidebar (lancé en parallèle) ──
-      sidHisto ? readSheet(sidHisto, 'Fiche_Quotidienne!A4:G500')  : Promise.resolve(null),
-      sidHisto ? readSheet(sidHisto, 'Incidents!A4:G200')          : Promise.resolve(null),
-      (sidHisto ? readSheet(sidHisto,'Hebdomadaire!A4:H200').then(function(rows){
-        if(rows&&rows.length) return rows;
-        return (sidFondateur&&sidFondateur!==sidHisto)?readSheet(sidFondateur,'Hebdomadaire!A4:H200'):(rows||[]);
-      }) : Promise.resolve(null)),
-      sidHisto ? readSheet(sidHisto, 'SOP_Check!A4:H200')          : Promise.resolve(null),
+      _readFromAny('Fiche_Quotidienne!A4:G500', _sidFiches, false),
+      _readFromAny('Incidents!A4:G200', _sidIncidents, false),
+      _readFromAny('Hebdomadaire!A4:H200', _sidHebdo, true),
+      _readFromAny('SOP_Check!A4:H200', _sidSop, false),
     ]).then(function(results) {
       var rowsPesees = results[0];
       var rowsStock  = results[1];
@@ -2972,7 +3009,7 @@ function loadLiveData() {
             // Reconstituer STOCK_MVTS depuis Sheets uniquement si Sheets a plus de données que le local
             // (evite d'écraser le local qui vient d'être écrit ou les stockLines initiales du cycle)
             if (!STOCK_MVTS || STOCK_MVTS.length === 0 || rowsStock.length >= STOCK_MVTS.length) {
-              var cycleDebut = CYCLE.dateDebut || todayISO();
+              var cycleDebut = normalizeCycleDate(CYCLE.dateDebut || todayISO()) || todayISO();
               STOCK_MVTS = [];
               rowsStock.forEach(function(row) {
                 if (!row[0] || !row[1]) return;
@@ -3544,7 +3581,7 @@ function _submitActual(type) {
   } else if(type==='stock'){
     var f=S.fst; var td=isoToFr(f.date);
     var mvts = f.mvts || [];
-    var cycleDebut = CYCLE.dateDebut || todayISO();
+    var cycleDebut = normalizeCycleDate(CYCLE.dateDebut || todayISO()) || todayISO();
     // Fallback ration depuis CYCLE si non saisie
     var rat = parseFloat(f.rat) || Math.round((CYCLE.ration||12) * (CYCLE.nbBetes||4));
     if(!f.rat && rat) { f.rat = String(rat); S.fst.rat = f.rat; }
@@ -6178,6 +6215,7 @@ function saveCycle(){
   if (_prevCycleSnap && _prevCycleSnap.dateDebut) lsSet('_cycleToArchive', _prevCycleSnap);
   S._clotureData = null; // [fix] données de clôture capturées dans _prevCycleSnap — ne pas polluer le prochain cycle
   CYCLE = Object.assign(CYCLE, MODAL.data, {initialized:true});
+  CYCLE.dateDebut = normalizeCycleDate(CYCLE.dateDebut || todayISO()) || todayISO();
   // ── Reset des variables qui ne doivent PAS persister du cycle précédent ──
   CYCLE.gonogo     = {cash:false, betes:false, contrats:false, infra:false, securite:false}; // [fix] cases Go/No-Go manuelles remises à 0
   CYCLE.simCharges = {};        // [fix] charges simulateur spécifiques au cycle sortant
@@ -6206,7 +6244,7 @@ function saveCycle(){
   }
   // Initialiser STOCK_MVTS avec les stocks initiaux comme ajouts de départ
   if ((CYCLE.stockLines||[]).length > 0) {
-    var cycleDebut = CYCLE.dateDebut || todayISO();
+    var cycleDebut = normalizeCycleDate(CYCLE.dateDebut || todayISO()) || todayISO();
     STOCK_MVTS = [];
     CYCLE.stockLines.forEach(function(s) {
       var kg = parseFloat(s.kg) || 0;
