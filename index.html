@@ -2825,8 +2825,12 @@ function loadLiveData() {
               if (key === 'numCycle'    && val && parseInt(val) > 0) CYCLE.numCycle = parseInt(val);
               if (key === 'numCnaas'    && val !== null && val !== undefined) CYCLE.numCnaas = val;
               if (key === 'gonogo'      && val && typeof val === 'object') CYCLE.gonogo = Object.assign(CYCLE.gonogo||{}, val);
-              // cycleDebut dans Config_App = détection changement de cycle indépendante de Config_Cycle
-              if (key === 'cycleDebut' && val && val.length && val !== CYCLE.dateDebut) {
+              // cycleDebut dans Config_App = source de vérité de secours si Config_Cycle est en retard
+              if (key === 'cycleDebut' && val && val.length) {
+                var _cfgDebut = normalizeCycleDate(val) || CYCLE.dateDebut;
+                var _curDebut = normalizeCycleDate(CYCLE.dateDebut) || CYCLE.dateDebut;
+                if (_cfgDebut && _cfgDebut !== _curDebut) {
+                  CYCLE.dateDebut = _cfgDebut;
                 HISTORY = []; lsSet('history', []);
                 lsSet('last_fiche', null);
                 LIVE.incidents = []; LIVE.pesees = []; LIVE.beteIds = []; LIVE.deceased = []; LIVE.sold = []; LIVE.ventes = [];
@@ -2839,6 +2843,7 @@ function loadLiveData() {
                 STOCK_MVTS=[]; saveMvts();
                 // [fix] Injecter l'entrée "Cycle démarré" après wipe Config_App
                 addHistory('cycle', 'Cycle '+(CYCLE.numCycle||1)+' démarré — '+(CYCLE.nbBetes||0)+' bête(s)', {numCycle: CYCLE.numCycle||1});
+                }
               }
             } catch(e) {}
           });
